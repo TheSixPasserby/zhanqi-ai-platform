@@ -6,6 +6,7 @@
 #     stop.bat       →  deploy.ps1 stop       停止服务
 #     status.bat     →  deploy.ps1 status     查看运行状态与各端地址
 #     rebuild.bat    →  deploy.ps1 rebuild    重新编译后端（改了 Java 代码后才需要）
+#     reset.bat      →  deploy.ps1 reset      清空业务数据并重灌演示数据（需输入 YES 确认）
 #
 #  设计原则（来自实测教训，请勿随意简化）：
 #    1. 任何一步失败都给「人话 + 怎么修」，绝不让用户对着黑窗口发呆；
@@ -17,7 +18,7 @@
 
 param(
   [Parameter(Position = 0)]
-  [ValidateSet('start', 'stop', 'status', 'rebuild', 'restart')]
+  [ValidateSet('start', 'stop', 'status', 'rebuild', 'restart', 'reset')]
   [string]$Action = 'start',
 
   # 手工指定 MySQL 口令（一般用不到，自动探测覆盖了绝大多数场景）
@@ -313,7 +314,10 @@ function Wait-Health($port, $timeoutSec) {
   return $false
 }
 
-function Write-LocalConfig($password, $port) {
+function Write-LocalConfig($password, $port, $resetOnStart = 'false') {
+  # $resetOnStart 只有 Do-Reset 会传 'true'，且成功/失败后都会立刻拨回 'false'。
+  # 不要试图教用户手改配置文件里的这个开关 —— 本函数每次启动都会重写整份配置，
+  # 手改在 java 启动前就被覆盖了（这个断头路真实存在过，靠 reset 动作修掉）。
   if (-not (Test-Path $ConfigDir)) { New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null }
 
   $dbHost = $env:DB_HOST; if (-not $dbHost) { $dbHost = Get-ConfigValue 'host' '127.0.0.1' 'database' }
@@ -349,9 +353,9 @@ app:
     name: $dbName
     user: $dbUser
     password: $pwdYaml
-    # 清空全部业务表并重灌演示数据。演示前想恢复干净状态时临时改成 true，
-    # 启动一次后记得改回 false，否则每次启动都会把已有数据清掉。
-    reset-on-start: false
+    # 清空全部业务表并重灌演示数据的开关。此文件由部署脚本每次启动时重写，
+    # 手改这里无效 —— 想重置演示数据请双击 reset.bat（macOS/Linux 用 ./reset.sh）。
+    reset-on-start: $resetOnStart
 
   ai:
     # 大模型接口建议留空，到 PC 管理后台「服务器管理 → AI 设置」里填写更直观，改完立刻生效
@@ -802,6 +806,50 @@ function Do-Rebuild {
   Say ''
 }
 
+function Do-Reset {
+  Title '战旗云 · 重置演示数据'
+
+  Say '  此操作会【清空全部业务数据】（含所有订单）并重灌演示数据，不可恢复。' 'Yellow'
+  Say ''
+  # 必须显式输入 YES：这是全项目唯一的毁灭性操作，绝不能被脚本静默触发。
+  # 自动化场景可以用管道喂入（echo YES | ...），但必须是明确写出来的 YES。
+  $answer = Read-Host '  确认重置请输入 YES（输入其他任何内容 = 取消）'
+  if ($answer -cne 'YES') {
+    Warn '已取消，数据未做任何改动'
+    Say ''
+    return
+  }
+
+  $javaExe = Assert-Java
+  Assert-MySql | Out-Null
+
+  $port = Get-ServicePort
+  $password = $env:DB_PASSWORD
+  if (-not $password) { $password = Get-ConfigValue 'password' '' 'database' }
+
+  Step '写入一次性的重置配置（reset-on-start: true）…'
+  Write-LocalConfig $password $port 'true'
+
+  Start-ServiceServer $javaExe $port | Out-Null
+  $healthy = Wait-Health $port $HealthTimeoutSec
+
+  # 无论成败都立刻把开关拨回 false：这份 true 只允许生效这一次，
+  # 留在磁盘上会让之后每一次普通启动都清一遍库。
+  Write-LocalConfig $password $port 'false'
+
+  if ($healthy) {
+    Ok '演示数据已重置，开关已自动拨回 false'
+    Show-Banner $port (Get-DbSummary $port)
+    return
+  }
+
+  Fail '重置启动后健康检查未通过（开关已拨回 false，不会重复清库）。'
+  Show-LastError
+  Say '  请排查 logs\server.log 后重新执行本操作。' 'Yellow'
+  Say ''
+  exit 1
+}
+
 # ------------------------------------------------------------------ 入口
 
 switch ($Action) {
@@ -810,5 +858,6 @@ switch ($Action) {
   'status'  { Do-Status }
   'rebuild' { Do-Rebuild }
   'restart' { Do-Stop; Do-Start }
+  'reset'   { Do-Reset }
   default   { Say "未知动作：$Action" 'Red'; exit 1 }
 }

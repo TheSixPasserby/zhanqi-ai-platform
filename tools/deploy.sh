@@ -7,6 +7,7 @@
 #     ./stop.sh      →  tools/deploy.sh stop       停止服务
 #     ./status.sh    →  tools/deploy.sh status     查看运行状态与各端地址
 #     ./rebuild.sh   →  tools/deploy.sh rebuild    重新编译后端（改了 Java 代码后才需要）
+#     ./reset.sh     →  tools/deploy.sh reset      清空业务数据并重灌演示数据（需输入 YES 确认）
 #
 #  它是 tools/deploy.ps1（Windows 版）的行为对等移植。两边必须保持一致：
 #  改了任何一边的逻辑，必须同步改另一边（AGENTS.md 第二节有此要求）。
@@ -235,7 +236,11 @@ wait_health() {
 }
 
 write_local_config() {
-  # $1 口令  $2 端口
+  # $1 口令  $2 端口  $3 reset-on-start 开关（可省，默认 false）
+  # $3 只有 do_reset 会传 true，且成功/失败后都会立刻拨回 false。
+  # 不要试图教用户手改配置文件里的这个开关 —— 本函数每次启动都会重写整份配置，
+  # 手改在 java 启动前就被覆盖了（这个断头路真实存在过，靠 reset 动作修掉）。
+  local reset_flag="${3:-false}"
   mkdir -p "$CONFIG_DIR"
   local db_host db_port db_name db_user pwd_yaml
   db_host="${DB_HOST:-$(get_config_value 'host' '127.0.0.1')}"
@@ -271,9 +276,9 @@ app:
     name: $db_name
     user: $db_user
     password: "$pwd_yaml"
-    # 清空全部业务表并重灌演示数据。演示前想恢复干净状态时临时改成 true，
-    # 启动一次后记得改回 false，否则每次启动都会把已有数据清掉。
-    reset-on-start: false
+    # 清空全部业务表并重灌演示数据的开关。此文件由部署脚本每次启动时重写，
+    # 手改这里无效 —— 想重置演示数据请运行 ./reset.sh（Windows 用 reset.bat）。
+    reset-on-start: $reset_flag
 
   ai:
     # 大模型接口建议留空，到 PC 管理后台「服务器管理 → AI 设置」里填写更直观，改完立刻生效
@@ -653,6 +658,53 @@ do_rebuild() {
   say ''
 }
 
+do_reset() {
+  title '战旗云 · 重置演示数据'
+
+  say '  此操作会【清空全部业务数据】（含所有订单）并重灌演示数据，不可恢复。' "$C_YELLOW"
+  say ''
+  # 必须显式输入 YES：这是全项目唯一的毁灭性操作，绝不能被脚本静默触发。
+  # 自动化场景可以用管道喂入（echo YES | ...），但必须是明确写出来的 YES。
+  printf '  确认重置请输入 YES（输入其他任何内容 = 取消）：'
+  local answer=''
+  IFS= read -r answer || true
+  if [ "$answer" != "YES" ]; then
+    warn '已取消，数据未做任何改动'
+    say ''
+    return 0
+  fi
+
+  assert_java
+  assert_mysql
+
+  local port password
+  port="$(get_service_port)"
+  password="${DB_PASSWORD:-$(get_config_value 'password' '')}"
+
+  step '写入一次性的重置配置（reset-on-start: true）…'
+  write_local_config "$password" "$port" 'true'
+
+  start_server "$port"
+  local healthy=0
+  if wait_health "$port" "$HEALTH_TIMEOUT_SEC"; then healthy=1; fi
+
+  # 无论成败都立刻把开关拨回 false：这份 true 只允许生效这一次，
+  # 留在磁盘上会让之后每一次普通启动都清一遍库。
+  write_local_config "$password" "$port" 'false'
+
+  if [ "$healthy" -eq 1 ]; then
+    ok '演示数据已重置，开关已自动拨回 false'
+    show_banner "$port"
+    return 0
+  fi
+
+  fail '重置启动后健康检查未通过（开关已拨回 false，不会重复清库）。'
+  show_last_error
+  say '  请排查 logs/server.log 后重新执行本操作。' "$C_YELLOW"
+  say ''
+  exit 1
+}
+
 # ------------------------------------------------------------------ 入口
 
 case "$ACTION" in
@@ -661,5 +713,6 @@ case "$ACTION" in
   status)  do_status ;;
   rebuild) do_rebuild ;;
   restart) do_stop; do_start ;;
-  *)       say "未知动作：${ACTION}（可用：start / stop / status / rebuild / restart）" "$C_RED"; exit 1 ;;
+  reset)   do_reset ;;
+  *)       say "未知动作：${ACTION}（可用：start / stop / status / rebuild / restart / reset）" "$C_RED"; exit 1 ;;
 esac

@@ -29,6 +29,7 @@
 ./stop.sh        # 停止服务
 ./status.sh      # 查看运行状态与各端地址
 ./rebuild.sh     # 重新编译后端（需要 Maven，改了 Java 代码才需要）
+./reset.sh       # 清空业务数据并重灌演示数据（需输入 YES 确认，不可恢复）
 ```
 
 > 如果提示没有执行权限，先执行 `chmod +x *.sh tools/deploy.sh`，或直接用 `bash deploy.sh`。
@@ -69,7 +70,8 @@
 | `stop.bat` | 停止服务（Windows） |
 | `status.bat` | 查看进程状态、健康检查结果与各端地址（Windows） |
 | `rebuild.bat` | 重新编译后端（改了 Java 代码后才需要，需要 Maven，Windows） |
-| `deploy.sh` / `stop.sh` / `status.sh` / `rebuild.sh` | 上述四个脚本的 macOS / Linux 版，行为完全对等 |
+| `reset.bat` | 清空业务数据并重灌演示数据（需输入 YES 确认，Windows） |
+| `deploy.sh` / `stop.sh` / `status.sh` / `rebuild.sh` / `reset.sh` | 上述脚本的 macOS / Linux 版，行为完全对等 |
 | `tools/deploy.ps1` | Windows 批处理的实际逻辑（可直接阅读，注释很详细） |
 | `tools/deploy.sh` | macOS / Linux 脚本的实际逻辑，与 deploy.ps1 保持行为对等 |
 | `tools/build.ps1` | 编译后端并把产物同步到 `dist/`（Windows） |
@@ -424,7 +426,10 @@ npm run build:h5     # 产物在 dist/build/h5
 重置密码会同时清掉该账号的快捷登录令牌，对应卡片会立即失效。
 
 **想清空演示数据重新开始？**
-把 `config/application.yml` 里的 `app.database.reset-on-start` 改成 `true`，重启一次服务，再改回 `false`。
+双击 **`reset.bat`**（macOS / Linux 执行 `./reset.sh`），按提示输入 `YES` 确认即可。
+脚本会用一次性的重置配置重启服务、清空全部业务数据（含订单）并重灌演示数据，完成后自动把开关拨回，不会重复清库。
+
+> 注意：`config/application.yml` 里的 `reset-on-start` 由部署脚本自动管理，**手工改它无效**——每次启动脚本都会重写这份配置。
 这会清空全部业务表并重灌种子数据。
 
 **想换端口？**
