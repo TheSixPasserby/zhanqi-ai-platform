@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>战旗云 · 商户工作台</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+  <link rel="stylesheet" href="../vendors/element-ui.css">
+  <link rel="stylesheet" href="../assets/css/app.css">
+  <link rel="stylesheet" href="./css/merchant.css">
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- ==================== 登录 / 注册 ==================== -->
+  <div v-if="!user" class="m-login">
+    <div class="m-login-bg">
+      <div class="blob b1"></div>
+      <div class="blob b2"></div>
+    </div>
+
+    <div class="m-login-box anim-up">
+      <div class="brand-line">
+        <div class="mark">坊</div>
+        <div>
+          <h1>{{ site.shortName || '战旗云' }} · 商户工作台</h1>
+          <div class="dim">上架商品、接单核销、看营收，一个页面管完</div>
+        </div>
+      </div>
+
+      <el-tabs v-model="authTab" stretch>
+        <el-tab-pane label="登录" name="login">
+          <el-form :model="loginForm" :rules="loginRules" ref="loginForm" label-position="top"
+                   @submit.native.prevent="doLogin">
+            <el-form-item label="商家账号" prop="account">
+              <el-input v-model="loginForm.account" prefix-icon="el-icon-user" placeholder="请输入商家账号"
+                        @keyup.enter.native="doLogin"></el-input>
+            </el-form-item>
+            <el-form-item label="密码" prop="password">
+              <el-input v-model="loginForm.password" type="password" prefix-icon="el-icon-lock"
+                        show-password placeholder="请输入密码" @keyup.enter.native="doLogin"></el-input>
+            </el-form-item>
+            <el-button type="primary" style="width:100%" :loading="loading" @click="doLogin">登录工作台</el-button>
+          </el-form>
+
+          <div class="quick">
+            <div class="quick-head"><span>快捷登录</span><span class="dim">只显示登录过的账号</span></div>
+            <div v-if="knownMerchants.length" class="quick-list">
+              <div v-for="(a, i) in knownMerchants" :key="a.account" class="quick-item anim-up"
+                   :style="{ '--i': i }" @click="quickLogin(a)">
+                <span class="avatar" :style="{ background: a.color }">{{ a.name.slice(0, 1) }}</span>
+                <div class="flex-1">
+                  <div class="name">{{ a.name }}</div>
+                  <div class="dim">{{ a.account }} · {{ a.type || '商家' }}</div>
+                </div>
+                <i class="el-icon-right"></i>
+              </div>
+            </div>
+            <div v-else class="quick-empty">还没有可快捷登录的商家账号</div>
+          </div>
+
+          <div class="hint-box">
+            演示账号：<b class="mono">zhangmm / 123456</b>（战旗米坊）、<b class="mono">lims / 123456</b>（唐昌布鞋工坊）
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="注册商家账号" name="register" v-if="allowRegister">
+          <el-form :model="regForm" label-position="top" @submit.native.prevent="doRegister">
+            <el-form-item label="登录账号">
+              <el-input v-model="regForm.account" placeholder="字母开头，4–20 位字母数字下划线"></el-input>
+            </el-form-item>
+            <el-form-item label="密码">
+              <el-input v-model="regForm.password" type="password" show-password placeholder="至少 6 位"></el-input>
+            </el-form-item>
+            <el-form-item label="确认密码">
+              <el-input v-model="regForm.confirm" type="password" show-password placeholder="再输一次"></el-input>
+            </el-form-item>
+            <el-form-item label="店铺名称">
+              <el-input v-model="regForm.shopName" placeholder="如：战旗米坊"></el-input>
+            </el-form-item>
+            <el-form-item label="联系人姓名">
+              <el-input v-model="regForm.name" placeholder="如：张桂芬"></el-input>
+            </el-form-item>
+            <el-form-item label="经营类型">
+              <el-select v-model="regForm.shopType" style="width:100%">
+                <el-option v-for="t in merchantTypes" :key="t" :label="t" :value="t"></el-option>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="联系电话">
+              <el-input v-model="regForm.phone" placeholder="选填，11 位手机号"></el-input>
+            </el-form-item>
+            <el-button type="primary" style="width:100%" :loading="loading" @click="doRegister">提交注册</el-button>
+          </el-form>
+          <div class="hint-box">店铺账号也可以由平台管理员在 PC 管理后台直接开通。</div>
+        </el-tab-pane>
+      </el-tabs>
+    </div>
+  </div>
+
+  <!-- ==================== 工作台 ==================== -->
+  <div v-else class="m-shell" :class="{ loading: loading }">
+    <header class="m-top">
+      <div class="m-brand">
+        <div class="mark">坊</div>
+        <div>
+          <div class="title">{{ me.profile.short || me.name }}</div>
+          <div class="sub">{{ me.profile.type || '商家' }} · 商户工作台</div>
+        </div>
+      </div>
+
+      <nav class="m-nav">
+        <a v-for="m in menus" :key="m.key" :class="{ on: tab === m.key }" @click="tab = m.key">
+          <i :class="m.icon"></i>{{ m.name }}
+          <span v-if="m.key === 'orders' && kpi.pendingCount" class="badge">{{ kpi.pendingCount }}</span>
+        </a>
+      </nav>
+
+      <div class="m-user">
+        <el-tag size="mini" type="success" effect="plain">商家</el-tag>
+        <span class="muted">{{ me.name }}</span>
+        <el-dropdown @command="onCommand">
+          <span class="avatar sm" style="background:#BE5230">{{ (me.profile.short || me.name).slice(0, 1) }}</span>
+          <el-dropdown-menu slot="dropdown">
+            <el-dropdown-item command="refresh"><i class="el-icon-refresh"></i> 刷新数据</el-dropdown-item>
+            <el-dropdown-item command="logout" divided><i class="el-icon-switch-button"></i> 退出登录</el-dropdown-item>
+          </el-dropdown-menu>
+        </el-dropdown>
+      </div>
+    </header>
+
+    <main class="m-main">
+      <transition name="fade" mode="out-in">
+        <component :is="'tab-' + tab" :key="tab" :kpi="kpi" @refresh="loadAll" @open-orders="tab = 'orders'"></component>
+      </transition>
+    </main>
+
+    <footer class="m-foot">
+      <span>{{ site.name || '郫都区战旗村 · 川西林盘农商文旅智慧服务平台' }}</span>
+      <span class="dim">商户工作台 · 商品上架 / 订单核销 / 营收统计 / AI 文案</span>
+    </footer>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     视图模板
+     ========================================================================== -->
+
+<script type="text/x-template" id="tpl-tab-home">
+  <div>
+    <div class="kpi mb-16">
+      <div class="kpi-item anim-up" style="--i:0">
+        <div class="kpi-label">累计营收</div>
+        <div class="kpi-value">{{ fmt.money(kpi.revenue) }}</div>
+        <div class="kpi-extra">已确认 + 已核销 {{ kpi.paidCount || 0 }} 笔</div>
+      </div>
+      <div class="kpi-item accent anim-up" style="--i:1">
+        <div class="kpi-label">待处理订单</div>
+        <div class="kpi-value">{{ kpi.pendingCount || 0 }}</div>
+        <div class="kpi-extra">点击「订单管理」接单</div>
+      </div>
+      <div class="kpi-item info anim-up" style="--i:2">
+        <div class="kpi-label">今日订单</div>
+        <div class="kpi-value">{{ kpi.todayOrders || 0 }}</div>
+        <div class="kpi-extra">累计 {{ kpi.orderCount || 0 }} 笔</div>
+      </div>
+      <div class="kpi-item warn anim-up" style="--i:3">
+        <div class="kpi-label">在售商品</div>
+        <div class="kpi-value">{{ kpi.onSaleCount || 0 }}</div>
+        <div class="kpi-extra">共 {{ kpi.productCount || 0 }} 件 · 均价 {{ fmt.money(kpi.avgPrice) }}</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <h3>近 7 日营收走势</h3>
+          <el-radio-group v-model="trendKey" size="mini">
+            <el-radio-button label="amount">金额</el-radio-button>
+            <el-radio-button label="orders">订单数</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="card-body">
+          <zq-line :data="trend" :value-key="trendKey" :money="trendKey === 'amount'"
+                   :unit="trendKey === 'orders' ? ' 笔' : ''"></zq-line>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>待处理订单</h3>
+          <el-button size="mini" type="text" @click="$emit('open-orders')">去处理 <i class="el-icon-right"></i></el-button>
+        </div>
+        <div class="card-body">
+          <div v-if="pendingOrders.length" class="pending-list">
+            <div v-for="(o, i) in pendingOrders" :key="o.id" class="pending-item anim-up" :style="{ '--i': i }">
+              <img :src="o.cover" alt="">
+              <div class="flex-1">
+                <div class="cell-main">{{ o.productName }}</div>
+                <div class="cell-sub">
+                  {{ o.buyerName }} · {{ o.qty }} 件 · {{ fmt.money(o.amount) }}
+                  <span v-if="o.bookDate"> · 预约 {{ o.bookDate }}</span>
+                </div>
+                <div v-if="o.remark" class="remark">备注：{{ o.remark }}</div>
+              </div>
+              <span class="pill pending">待确认</span>
+            </div>
+          </div>
+          <div v-else class="empty">
+            <img src="../assets/img/spot-bookhouse.svg" alt="">
+            <div class="title">暂无待处理订单</div>
+            <div class="desc">新订单进来后会出现在这里</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 mt-16">
+      <div class="card">
+        <div class="card-head"><h3>商品营收排行</h3><span class="hint">按计入营收的订单金额</span></div>
+        <div class="card-body"><zq-bars :items="productRank.slice(0, 6)"></zq-bars></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>分类营收构成</h3></div>
+        <div class="card-body">
+          <zq-donut :items="categoryItems" :size="158"></zq-donut>
+        </div>
+      </div>
+    </div>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-tab-goods">
+  <div>
+    <div class="card mb-16">
+      <div class="card-body flex items-center gap-12" style="flex-wrap:wrap">
+        <el-input v-model="keyword" placeholder="搜索商品名" prefix-icon="el-icon-search" style="width:240px"
+                  clearable @clear="load" @keyup.enter.native="load"></el-input>
+        <el-select v-model="category" placeholder="全部分类" clearable style="width:150px" @change="load">
+          <el-option v-for="(text, key) in categories" :key="key" :label="text" :value="key"></el-option>
+        </el-select>
+        <el-button type="primary" @click="load">查询</el-button>
+        <div class="flex-1"></div>
+        <span class="muted">共 {{ list.length }} 件商品</span>
+        <el-button type="primary" plain icon="el-icon-plus" @click="openForm()">上架新商品</el-button>
+      </div>
+    </div>
+
+    <div class="card">
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
+        <el-table-column label="商品" min-width="280">
+          <template slot-scope="s">
+            <div class="flex items-center gap-8">
+              <img :src="s.row.cover" class="thumb" alt="">
+              <div>
+                <div class="cell-main">{{ s.row.name }}</div>
+                <div class="cell-sub">
+                  <span class="tag brand">{{ s.row.categoryText }}</span>
+                  <span v-for="t in s.row.tags" :key="t" class="tag" style="margin-left:4px">{{ t }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="价格" width="130">
+          <template slot-scope="s"><span class="mono">{{ fmt.money(s.row.price) }}</span> / {{ s.row.unit }}</template>
+        </el-table-column>
+        <el-table-column label="库存" width="110" align="center">
+          <template slot-scope="s">
+            <span :class="{ warnText: s.row.stock <= 5 }">{{ s.row.stock }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="sold" label="已售" width="80" align="center"></el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template slot-scope="s">
+            <span class="tag" :class="s.row.status === 'on' ? 'ok' : ''">
+              {{ s.row.status === 'on' ? '在售' : '已下架' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="230" align="right">
+          <template slot-scope="s">
+            <el-button type="text" @click="openForm(s.row)">编辑</el-button>
+            <el-button type="text" @click="toggle(s.row)">{{ s.row.status === 'on' ? '下架' : '上架' }}</el-button>
+            <el-button type="text" class="danger" @click="remove(s.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <el-dialog :title="form.id ? '编辑商品' : '上架新商品'" :visible.sync="formVisible" width="680px">
+      <el-form :model="form" label-width="96px">
+        <el-form-item label="商品名称">
+          <el-input v-model="form.name" placeholder="如：战旗大米 · 5kg 真空装"></el-input>
+        </el-form-item>
+        <div class="form-row">
+          <el-form-item label="分类">
+            <el-select v-model="form.category" style="width:100%">
+              <el-option v-for="(text, key) in categories" :key="key" :label="text" :value="key"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="计价单位">
+            <el-input v-model="form.unit" placeholder="袋 / 人 / 晚"></el-input>
+          </el-form-item>
+        </div>
+        <div class="form-row">
+          <el-form-item label="价格（元）">
+            <el-input v-model="form.price" type="number"></el-input>
+          </el-form-item>
+          <el-form-item label="库存">
+            <el-input v-model="form.stock" type="number"></el-input>
+          </el-form-item>
+        </div>
+        <el-form-item label="卖点标签">
+          <el-input v-model="tagsText" placeholder="用逗号分隔，如：产地直发，当季新米"></el-input>
+        </el-form-item>
+        <el-form-item label="商品配图">
+          <el-select v-model="form.cover" style="width:100%">
+            <el-option v-for="c in covers" :key="c" :label="c" :value="c"></el-option>
+          </el-select>
+          <img v-if="form.cover" :src="form.cover" class="cover-preview" alt="">
+        </el-form-item>
+        <el-form-item label="商品介绍">
+          <el-input type="textarea" :rows="4" v-model="form.desc"></el-input>
+          <div class="flex items-center gap-8" style="margin-top:8px">
+            <el-button size="mini" type="warning" plain icon="el-icon-magic-stick" @click="askAi">
+              让 AI 帮我写
+            </el-button>
+            <span class="dim" style="font-size:12px">根据商品名、标签与价格生成三段可切换的文案</span>
+          </div>
+        </el-form-item>
+      </el-form>
+
+      <div v-if="aiVariants.length" class="ai-box anim-in">
+        <div class="ai-head">
+          <span><i class="el-icon-magic-stick"></i> AI 生成结果</span>
+          <el-radio-group v-model="aiIndex" size="mini">
+            <el-radio-button :label="0">朴实</el-radio-button>
+            <el-radio-button :label="1">文艺</el-radio-button>
+            <el-radio-button :label="2">简洁</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="ai-body">{{ aiVariants[aiIndex] }}</div>
+        <div class="ai-foot">
+          <span class="dim">生成方式：{{ aiGeneratedBy }}</span>
+          <el-button size="mini" type="primary" @click="applyAi">用这段文案</el-button>
+        </div>
+      </div>
+
+      <span slot="footer">
+        <el-button @click="formVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      </span>
+    </el-dialog>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-tab-orders">
+  <div>
+    <div class="card mb-16">
+      <div class="card-body flex items-center gap-12" style="flex-wrap:wrap">
+        <el-radio-group v-model="status" size="small" @change="load">
+          <el-radio-button label="">全部</el-radio-button>
+          <el-radio-button label="pending">待确认</el-radio-button>
+          <el-radio-button label="confirmed">已确认</el-radio-button>
+          <el-radio-button label="used">已核销</el-radio-button>
+          <el-radio-button label="cancelled">已取消</el-radio-button>
+        </el-radio-group>
+        <div class="flex-1"></div>
+        <span class="muted">共 {{ list.length }} 笔订单</span>
+        <el-button icon="el-icon-refresh" @click="load">刷新</el-button>
+      </div>
+    </div>
+
+    <div class="card">
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
+        <el-table-column label="商品" min-width="260">
+          <template slot-scope="s">
+            <div class="flex items-center gap-8">
+              <img :src="s.row.cover" class="thumb" alt="">
+              <div>
+                <div class="cell-main">{{ s.row.productName }}</div>
+                <div class="cell-sub mono">#{{ s.row.id }} · {{ fmt.time(s.row.createdAt) }}</div>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="买家" width="110" prop="buyerName"></el-table-column>
+        <el-table-column label="数量" width="70" align="center" prop="qty"></el-table-column>
+        <el-table-column label="金额" width="110" align="right">
+          <template slot-scope="s"><span class="mono">{{ fmt.money(s.row.amount) }}</span></template>
+        </el-table-column>
+        <el-table-column label="预约 / 收货" min-width="180">
+          <template slot-scope="s">
+            <span v-if="s.row.bookDate">预约 {{ s.row.bookDate }} · {{ s.row.people || 1 }} 人</span>
+            <span v-else>{{ s.row.address || '—' }}</span>
+            <div v-if="s.row.remark" class="cell-sub">备注：{{ s.row.remark }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100" align="center">
+          <template slot-scope="s"><span class="pill" :class="s.row.status">{{ s.row.statusText }}</span></template>
+        </el-table-column>
+        <el-table-column label="操作" width="200" align="right">
+          <template slot-scope="s">
+            <el-button v-if="s.row.status === 'pending'" type="text" @click="act(s.row, 'confirm')">接单</el-button>
+            <el-button v-if="s.row.status === 'pending' || s.row.status === 'confirmed'" type="text"
+                       @click="act(s.row, 'verify')">核销</el-button>
+            <el-button v-if="s.row.status === 'pending' || s.row.status === 'confirmed'" type="text"
+                       class="danger" @click="act(s.row, 'cancel')">拒绝</el-button>
+            <span v-if="s.row.status === 'used' || s.row.status === 'cancelled'" class="dim">已完成</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <div class="dim mt-12" style="font-size:12.5px">
+      状态流转：待确认 →（接单）已确认 →（核销）已核销；待确认与已确认都能拒绝，拒绝会回滚库存。
+    </div>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-tab-stat">
+  <div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><h3>近 7 日营收走势</h3><span class="hint">口径：已确认 + 已核销</span></div>
+        <div class="card-body">
+          <zq-line :data="trend" value-key="amount" money></zq-line>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>近 7 日订单量</h3></div>
+        <div class="card-body">
+          <zq-line :data="trend" value-key="orders" unit=" 笔" color="#2F6BA8"></zq-line>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 mt-16">
+      <div class="card">
+        <div class="card-head"><h3>商品营收排行</h3></div>
+        <div class="card-body"><zq-bars :items="productRank"></zq-bars></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>分类营收构成</h3></div>
+        <div class="card-body"><zq-donut :items="categoryItems"></zq-donut></div>
+      </div>
+    </div>
+
+    <div class="card mt-16">
+      <div class="card-head"><h3>经营概况</h3></div>
+      <div class="card-body">
+        <el-descriptions :column="3" border size="small">
+          <el-descriptions-item label="累计营收">{{ fmt.money(kpi.revenue) }}</el-descriptions-item>
+          <el-descriptions-item label="订单总数">{{ kpi.orderCount || 0 }}</el-descriptions-item>
+          <el-descriptions-item label="已核销">{{ kpi.useCount || 0 }}</el-descriptions-item>
+          <el-descriptions-item label="计入营收订单">{{ kpi.paidCount || 0 }}</el-descriptions-item>
+          <el-descriptions-item label="客单价">{{ fmt.money(kpi.avgPrice) }}</el-descriptions-item>
+          <el-descriptions-item label="在售 / 全部商品">{{ kpi.onSaleCount || 0 }} / {{ kpi.productCount || 0 }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+    </div>
+  </div>
+</script>
+
+<script src="../vendors/vue.min.js"></script>
+<script src="../vendors/element-ui.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="./js/merchant.js"></script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+# ============================================================================
+#  战旗村农商文旅智慧服务平台 · 服务端配置
+#
+#  【一键部署时不需要改这个文件】
+#  deploy.bat / deploy.sh 会自动探测本机 MySQL 口令，并把结果写进同级目录的
+#  config/application-local.yml（优先级更高、不会被覆盖）。
+#  只有自动探测失败、需要手工指定口令时，才改下面的 password。
+#
+#  也可以用环境变量临时覆盖（换机器最方便）：
+#    ZQ_PORT / DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
+# ============================================================================
+
+server:
+  # 这里只作为「静态托管 / 日志」用的默认值；真正生效的端口由 PortGuard 决定，
+  # 它会优先读 ZQ_PORT 与命令行的 --server.port，并挡住环境变量 SERVER_PORT 的劫持。
+  # 【重要】不要依赖这一行来改端口 —— 运行环境若预置了 SERVER_PORT / SERVER__PORT，
+  # 环境变量优先级高于本文件，会把端口悄悄改掉。详见 config/PortGuard.java 的类注释。
+  port: ${ZQ_PORT:8080}
+  error:
+    whitelabel:
+      enabled: false
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+
+spring:
+  application:
+    name: zhanqi-cloud
+  jackson:
+    default-property-inclusion: always
+  web:
+    resources:
+      static-locations: classpath:/static/
+      cache:
+        period: 0
+  mvc:
+    static-path-pattern: /**
+
+app:
+  # 服务端口（PortGuard 读取的兜底值）。改端口优先用 ZQ_PORT 环境变量或
+  # 命令行 --server.port=9000，不要改 server.port —— 原因见上面 server.port 的注释。
+  port: ${ZQ_PORT:8080}
+
+  # ---------------------------------------------------------------------------
+  # 平台对外信息（PC 管理后台「服务器管理」页可在线修改，改完写入 settings 表）
+  # ---------------------------------------------------------------------------
+  name: 郫都区战旗村 · 川西林盘农商文旅智慧服务平台
+  short-name: 战旗云
+  version: 1.0.0
+
+  # ---------------------------------------------------------------------------
+  # 数据库：程序自己建库、建表、灌演示数据，不依赖 mysql 命令行客户端
+  # ---------------------------------------------------------------------------
+  database:
+    host: ${DB_HOST:127.0.0.1}
+    port: ${DB_PORT:3306}
+    name: ${DB_NAME:zhanqi_cloud}
+    user: ${DB_USER:root}
+    password: ${DB_PASSWORD:}
+    params: useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+    pool-size: 8
+    connection-timeout-ms: 8000
+    # 表里没有数据时自动灌入演示数据（幂等）
+    seed-on-start: true
+
+  session:
+    # 会话有效期（小时）
+    ttl-hours: 8
+
+  ai:
+    # 是否启用第三方大模型。只有 enabled=true 且 base-url / api-key 都有值时才真正调用；
+    # 任一条件不满足就自动回退到「本地知识库检索」模式（零成本、断网可用、不会抛错）
+    enabled: ${AI_ENABLED:false}
+    base-url: ${AI_BASE_URL:}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:deepseek-chat}
+    timeout-seconds: 40
+
+logging:
+  level:
+    root: info
+    com.zhanqi.cloud: info
+  pattern:
+    console: "%d{HH:mm:ss} %-5level %-30.30logger - %msg%n"

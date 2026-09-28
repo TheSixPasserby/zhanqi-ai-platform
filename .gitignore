@@ -1,0 +1,17 @@
+# 构建产物（dist/ 里的预编译 jar 是交付物，刻意保留在仓库中）
+server/target/
+
+# 运行日志
+logs/
+
+# 前端依赖与本地产物
+node_modules/
+uniapp-visitor/unpackage/
+uniapp-visitor/install.log
+
+# 本机专属配置（含数据库口令，由一键部署脚本生成；模板见 application.example.yml）
+config/application.yml
+
+# 系统文件
+.DS_Store
+Thumbs.db

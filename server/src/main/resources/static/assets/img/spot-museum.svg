@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480" role="img" aria-label="战旗村村史馆">
+  <title>战旗村村史馆</title>
+    
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E8F1EC"/>
+      <stop offset="100%" stop-color="#F8F5EE"/>
+    </linearGradient>
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E3EADF"/>
+      <stop offset="100%" stop-color="#D3DECB"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" fill="url(#sky)"/>
+  <circle cx="516" cy="92" r="42" fill="#D9A441" opacity=".28"/>
+  <circle cx="516" cy="92" r="26" fill="#D9A441" opacity=".55"/>
+  <path d="M0 250 L96 194 L176 236 L268 182 L360 240 L448 196 L544 246 L640 206 L640 300 L0 300 Z"
+        fill="#BBD3C6" opacity=".75"/>
+  <path d="M0 286 L84 244 L188 288 L286 246 L392 292 L494 250 L640 296 L640 360 L0 360 Z"
+        fill="#8FB9A3" opacity=".9"/>
+  <rect y="330" width="640" height="150" fill="url(#field)"/>
+    <rect x="38" y="254.5" width="6.8" height="93.5" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="19.3" cy="277.875" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 38 277.875)"/><ellipse cx="19.3" cy="301.25" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 38 301.25)"/><ellipse cx="19.3" cy="324.625" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 38 324.625)"/><rect x="54" y="225.60000000000002" width="6.8" height="122.39999999999999" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="72.7" cy="256.20000000000005" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 54 256.20000000000005)"/><ellipse cx="72.7" cy="286.8" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 54 286.8)"/><ellipse cx="72.7" cy="317.40000000000003" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 54 317.40000000000003)"/><rect x="70" y="254.5" width="6.8" height="93.5" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="51.3" cy="277.875" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 70 277.875)"/><ellipse cx="51.3" cy="301.25" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 70 301.25)"/><ellipse cx="51.3" cy="324.625" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 70 324.625)"/><rect x="86" y="225.60000000000002" width="6.8" height="122.39999999999999" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="104.7" cy="256.20000000000005" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 86 256.20000000000005)"/><ellipse cx="104.7" cy="286.8" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 86 286.8)"/><ellipse cx="104.7" cy="317.40000000000003" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 86 317.40000000000003)"/>
+    <rect x="180" y="228" width="280" height="132" fill="#F6F4EF" stroke="#5C6B65" stroke-width="2"/>
+    <path d="M160 228 L320 172 L480 228 Z" fill="#5C6B65"/>
+    <rect x="208" y="262" width="52" height="52" fill="#E8F1EC" stroke="#5C6B65" stroke-width="2"/>
+    <rect x="294" y="262" width="52" height="52" fill="#E8F1EC" stroke="#5C6B65" stroke-width="2"/>
+    <rect x="380" y="262" width="52" height="52" fill="#E8F1EC" stroke="#5C6B65" stroke-width="2"/>
+    <rect x="300" y="322" width="44" height="38" fill="#9C6B4A"/>
+    <rect y="360" width="640" height="120" fill="#DCE4D6"/>
+    <circle cx="320" cy="206" r="12" fill="#BE5230" opacity=".85"/>
+</svg>

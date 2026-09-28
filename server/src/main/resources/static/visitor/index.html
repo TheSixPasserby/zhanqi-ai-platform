@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#146B57">
+  <meta name="format-detection" content="telephone=no">
+  <title>战旗云 · 游客端</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+  <link rel="stylesheet" href="../assets/css/app.css">
+  <link rel="stylesheet" href="./css/visitor.css">
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- 全局提示放在最外层：登录页还没进入主界面时也要能弹提示，
+       放在登录态判断里面会导致「注册/登录失败没有任何反馈」。 -->
+  <div class="toast-wrap">
+    <div class="toast" v-for="(t, i) in toasts" :key="i">{{ t }}</div>
+  </div>
+
+  <!-- 启动占位：首屏数据没回来之前先显示，避免出现白屏 -->
+  <div v-if="!booted" class="boot">
+    <div class="boot-mark">旗</div>
+    <div class="boot-text">{{ site.shortName || '战旗云' }}</div>
+    <div class="boot-bar"><i></i></div>
+  </div>
+
+  <template v-else>
+    <!--
+      下面这一串是最外层视图切换，顺序不能乱，中间也不要插入注释：
+      Vue 2 靠「前一个兄弟元素」来判断 v-else / v-else-if 属于哪个分支。
+    -->
+    <div v-if="view === 'connect'" class="screen">
+      <header class="topbar">
+        <button class="topbar-back" @click="goBack">‹</button>
+        <div class="topbar-title"><h1>连接服务器</h1><p>填写服务端地址</p></div>
+      </header>
+      <div class="pad-x">
+        <div class="card">
+          <div class="card-title"><i></i>服务端地址</div>
+          <p class="muted small">
+            游客端默认与接口同源，正常访问不需要填这里。
+            只有把本页单独部署到其它域名时才需要指定后端地址。
+          </p>
+          <input class="input" v-model.trim="baseUrlInput" placeholder="例如 http://192.168.1.10:8080">
+          <div class="row gap mt">
+            <button class="btn btn-ghost" @click="testConn">{{ testing ? '测试中…' : '测试连接' }}</button>
+            <button class="btn" @click="saveConn">保存并使用</button>
+          </div>
+          <div v-if="connResult" class="alert" :class="connResult.ok ? 'alert-ok' : 'alert-bad'">
+            {{ connResult.message }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="!user" class="screen login-screen">
+      <div class="login-hero">
+        <div class="blob b1"></div>
+        <div class="blob b2"></div>
+        <div class="login-seal">旗</div>
+        <h1>{{ site.shortName || '战旗云' }} · 游客端</h1>
+        <p>{{ site.name || '郫都区战旗村 · 川西林盘农商文旅智慧服务平台' }}</p>
+      </div>
+
+      <div class="login-sheet">
+        <div class="tabs">
+          <div class="tab" :class="{ on: authTab === 'login' }" @click="authTab = 'login'">登录</div>
+          <div class="tab" :class="{ on: authTab === 'register' }" @click="authTab = 'register'">注册新账号</div>
+        </div>
+
+        <!-- 登录 -->
+        <template v-if="authTab === 'login'">
+          <label class="field"><span>账号</span>
+            <input class="input" v-model.trim="loginForm.account" placeholder="请输入账号" @keyup.enter="doLogin">
+          </label>
+          <label class="field"><span>密码</span>
+            <input class="input" v-model="loginForm.password" type="password" placeholder="请输入密码" @keyup.enter="doLogin">
+          </label>
+          <button class="btn btn-block" :disabled="loading" @click="doLogin">{{ loading ? '登录中…' : '登 录' }}</button>
+
+          <div class="login-links">
+            <a @click="authTab = 'register'">没有账号？注册一个</a>
+          </div>
+
+          <div class="known">
+            <div class="known-head">
+              <strong>快捷登录</strong>
+              <span class="dim" v-if="known.length">点卡片免密进入</span>
+            </div>
+
+            <div v-if="knownLoading" class="sk-list">
+              <div class="sk-line"></div><div class="sk-line"></div>
+            </div>
+
+            <div v-else-if="!known.length" class="empty-box">
+              <b>还没有可快捷登录的账号</b>
+              <p>为了不泄露任何已有账号，这里只显示本机登录过的账号。先注册一个，或用账号密码登录一次。</p>
+            </div>
+
+            <div v-else class="known-list">
+              <div class="known-card" v-for="(a, i) in known" :key="a.account"
+                   :style="{ animationDelay: (i * 50) + 'ms' }" @click="doQuick(a)">
+                <div class="known-avatar" :style="{ background: a.avatarColor || '#146B57' }">{{ first(a.name) }}</div>
+                <div class="known-body">
+                  <b>{{ a.name }}</b>
+                  <span>{{ a.account }} · {{ a.lastLoginText || '最近登录过' }}</span>
+                </div>
+                <div class="known-go">进入 ›</div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 注册 -->
+        <template v-else>
+          <div class="notice">
+            <i>i</i>
+            <span>本端为游客（买家）注册通道。商家账号请在电脑浏览器打开商户工作台注册，或由管理员在 PC 管理后台创建。</span>
+          </div>
+          <label class="field"><span>账号</span>
+            <input class="input" v-model.trim="regForm.account" placeholder="字母开头，4-20 位字母数字下划线">
+          </label>
+          <label class="field"><span>昵称</span>
+            <input class="input" v-model.trim="regForm.name" placeholder="怎么称呼你">
+          </label>
+          <label class="field"><span>手机号 <em>选填</em></span>
+            <input class="input" v-model.trim="regForm.phone" inputmode="numeric" maxlength="11" placeholder="用于接收订单通知">
+          </label>
+          <label class="field"><span>密码</span>
+            <input class="input" v-model="regForm.password" type="password" placeholder="至少 6 位">
+          </label>
+          <label class="field"><span>确认密码</span>
+            <input class="input" v-model="regForm.confirm" type="password" placeholder="再输一次">
+          </label>
+          <button class="btn btn-block" :disabled="loading" @click="doRegister">{{ loading ? '注册中…' : '注 册' }}</button>
+          <div class="login-links"><a @click="authTab = 'login'">已有账号？去登录</a></div>
+        </template>
+      </div>
+
+      <div class="login-foot">登录即表示同意平台服务条款与隐私政策</div>
+    </div>
+    <div v-else class="screen app-screen">
+
+      <!-- ------------------------------ 首页 ------------------------------ -->
+      <section v-show="view === 'home'" class="page-body">
+        <div class="hero">
+          <div class="blob b1"></div><div class="blob b2"></div>
+          <div class="hero-inner">
+            <div class="hero-left">
+              <div class="hero-hello">{{ greeting }}，{{ user.name }}</div>
+              <div class="hero-title">林盘集章进度</div>
+              <div class="hero-num"><b>{{ collected }}</b><span>/ {{ total }} 枚</span></div>
+              <div class="hero-tip">{{ progressText }}</div>
+              <button class="hero-btn" @click="go('spots', true)">继续打卡</button>
+            </div>
+            <div class="hero-ring" :style="ringStyle"><div><i>印</i></div></div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="grid-item" v-for="(e, i) in entries" :key="e.key"
+               :style="{ animationDelay: (i * 45) + 'ms' }" @click="go(e.view, e.tab)">
+            <div class="grid-icon" :style="{ background: e.bg }"><span :style="{ color: e.color }">{{ e.glyph }}</span></div>
+            <div class="grid-text">{{ e.text }}</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title"><i></i>林盘点位</div>
+            <a class="section-more" @click="go('spots', true)">全部 ›</a>
+          </div>
+          <div class="hscroll">
+            <div class="spot-card" v-for="s in spots" :key="s.id" @click="openSpot(s.id)">
+              <div class="spot-cover">
+                <img :src="asset(s.cover)" :alt="s.name" loading="lazy" @error="imgFail">
+                <span class="spot-type">{{ s.type }}</span>
+                <span v-if="s.checked" class="spot-seal">{{ s.stampIcon || '印' }}</span>
+              </div>
+              <b>{{ s.name }}</b>
+              <span>{{ s.location }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-head">
+            <div class="section-title"><i></i>农产文创好物</div>
+            <a class="section-more" @click="go('shop', true)">去商城 ›</a>
+          </div>
+          <div class="pad-x">
+            <div v-if="!goods.length" class="empty-box"><b>暂时没有在售商品</b></div>
+            <div class="goods-row" v-for="p in goods" :key="p.id" @click="openProduct(p.id)">
+              <img :src="cover(p.cover, p.category)" :alt="p.name" loading="lazy" @error="imgFail">
+              <div class="goods-body">
+                <b class="ell2">{{ p.name }}</b>
+                <div class="tags"><span v-for="t in (p.tags || []).slice(0,2)" :key="t" class="tag tag-muted">{{ t }}</span></div>
+                <div class="goods-foot">
+                  <div class="price">{{ money(p.price) }}<em>/{{ p.unit || '份' }}</em></div>
+                  <div class="dim tiny">已售 {{ p.sold || 0 }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section" v-if="activities.length">
+          <div class="section-head">
+            <div class="section-title"><i></i>近期活动</div>
+            <a class="section-more" @click="go('activities')">活动日历 ›</a>
+          </div>
+          <div class="pad-x">
+            <div class="act-row card" v-for="a in activities" :key="a.id">
+              <div class="act-date"><b>{{ day(a.date) }}</b><span>{{ month(a.date) }} 月</span></div>
+              <div class="act-body">
+                <div class="act-top"><b>{{ a.title }}</b><span class="tag tag-accent">{{ a.tag }}</span></div>
+                <div class="dim tiny">地点：{{ a.place }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer class="page-foot">{{ site.name }}</footer>
+      </section>
+
+      <!-- ------------------------------ 点位打卡 ------------------------------ -->
+      <section v-show="view === 'spots'" class="page-body">
+        <div class="topbar">
+          <div class="topbar-title">
+            <h1>点位打卡集章</h1>
+            <p>已集 {{ collected }} / {{ total }} 枚</p>
+          </div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress"><i :style="{ width: percent + '%' }"></i></div>
+          <div class="progress-tip">{{ progressText }}</div>
+        </div>
+
+        <div class="tabs tabs-pad">
+          <div class="tab" :class="{ on: spotTab === 'spots' }" @click="spotTab = 'spots'">全部点位</div>
+          <div class="tab" :class="{ on: spotTab === 'wall' }" @click="spotTab = 'wall'">我的印章墙</div>
+        </div>
+
+        <div class="pad-x" v-if="spotTab === 'spots'">
+          <div v-if="loadingSpots" class="empty-box"><b>正在加载点位…</b></div>
+          <div v-else-if="!spots.length" class="empty-box"><b>暂时没有点位数据</b></div>
+          <div v-else class="card spot-item" v-for="s in spots" :key="s.id">
+            <img class="spot-item-cover" :src="asset(s.cover)" :alt="s.name" loading="lazy" @click="openSpot(s.id)">
+            <div class="spot-item-body">
+              <div class="spot-item-top">
+                <b>{{ s.name }}</b>
+                <span class="tag" :class="s.checked ? 'tag-ok' : 'tag-muted'">{{ s.checked ? '已打卡' : '未打卡' }}</span>
+              </div>
+              <div class="dim tiny">{{ s.type }} · {{ s.location }}</div>
+              <p class="ell2 small">{{ s.intro }}</p>
+              <div class="spot-item-foot">
+                <span class="dim tiny">{{ s.checked ? ago(s.checkedAt) + '打卡' : '盖「' + s.stamp + '」印章' }}</span>
+                <button class="btn btn-sm" :class="s.checked ? 'btn-ghost' : ''" @click="checkin(s)">
+                  {{ s.checked ? '再打一次' : '立即打卡' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pad-x" v-else>
+          <div v-if="!stamps.length" class="empty-box"><b>集章册还是空的</b><p>到点位点一下「立即打卡」就能得到第一枚印章。</p></div>
+          <template v-else>
+            <div class="wall">
+              <div class="seal" v-for="st in stamps" :key="st.id">
+                <div class="seal-circle">{{ st.stampIcon || '印' }}</div>
+                <b>{{ st.stamp || st.spotName }}</b>
+                <span>{{ date(st.at) }}</span>
+              </div>
+            </div>
+            <div v-if="allDone" class="done-box">
+              <b>恭喜集齐全部 {{ total }} 枚印章</b>
+              <p>你已走遍战旗村的主要林盘点位，可在游客服务中心出示本页面领取纪念品。</p>
+            </div>
+          </template>
+        </div>
+        <div class="page-bottom-space"></div>
+      </section>
+
+      <!-- ------------------------------ 商城 ------------------------------ -->
+      <section v-show="view === 'shop'" class="page-body">
+        <div class="topbar topbar-shop">
+          <div class="topbar-title"><h1>农产文创商城</h1><p>战旗村直供 · 现摘现发</p></div>
+          <div class="search">
+            <input class="input search-input" v-model.trim="keyword" placeholder="搜商品名或卖点" @keyup.enter="loadProducts">
+          </div>
+        </div>
+
+        <div class="tabs tabs-pad cats">
+          <div class="tab" v-for="c in cats" :key="c.key" :class="{ on: category === c.key }" @click="switchCategory(c.key)">
+            {{ c.text }}
+          </div>
+        </div>
+
+        <div class="pad-x">
+          <div v-if="loadingProducts" class="empty-box"><b>正在加载商品…</b></div>
+          <div v-else-if="!products.length" class="empty-box"><b>没有找到相关商品</b><p>换个关键词或分类试试。</p></div>
+          <div v-else class="goods-grid">
+            <div class="goods-cell" v-for="p in products" :key="p.id" @click="openProduct(p.id)">
+              <div class="goods-cell-cover">
+                <img :src="cover(p.cover, p.category)" :alt="p.name" loading="lazy" @error="imgFail">
+                <span class="cell-cat">{{ p.categoryText }}</span>
+                <span v-if="p.stock <= 5" class="cell-low">仅剩 {{ p.stock }}</span>
+              </div>
+              <div class="goods-cell-body">
+                <b class="ell2">{{ p.name }}</b>
+                <div class="goods-cell-foot">
+                  <div class="price">{{ money(p.price) }}<em>/{{ p.unit || '份' }}</em></div>
+                  <button class="add-btn" @click.stop="addCart(p)">＋</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 购物车浮标 -->
+        <button v-if="cartCount > 0" class="cart-fab" @click="cartOpen = true">
+          <span>车</span><i>{{ cartCount }}</i>
+        </button>
+        <div class="page-bottom-space"></div>
+      </section>
+
+      <!-- ------------------------------ 我的 ------------------------------ -->
+      <section v-show="view === 'mine'" class="page-body">
+        <div class="hero hero-mine">
+          <div class="blob b1"></div><div class="blob b2"></div>
+          <div class="hero-inner">
+            <div class="my-avatar">{{ first(user.name) }}</div>
+            <div class="my-body">
+              <b>{{ user.name }}</b>
+              <span>战旗村游客</span>
+            </div>
+            <button class="btn-ghost-light" @click="doLogout">退出</button>
+          </div>
+        </div>
+
+        <div class="stats card">
+          <div class="stat" @click="go('spots', true); spotTab='wall'">
+            <b>{{ collected }}</b><span>枚印章</span>
+          </div>
+          <i class="stat-sep"></i>
+          <div class="stat" @click="go('orders')"><b>{{ orderCount }}</b><span>笔订单</span></div>
+          <i class="stat-sep"></i>
+          <div class="stat"><b>{{ money(spent) }}</b><span>累计消费</span></div>
+        </div>
+
+        <div class="pad-x">
+          <div class="card">
+            <div class="card-title"><i></i>我的印章墙</div>
+            <div class="wall wall-mini">
+              <div class="seal" v-for="(st, i) in stamps.slice(0, 8)" :key="i">
+                <div class="seal-circle">{{ st.stampIcon || '印' }}</div>
+                <b>{{ st.stamp || st.spotName }}</b>
+              </div>
+              <div class="seal" v-for="n in Math.max(0, 8 - stamps.length)" :key="'e' + n">
+                <div class="seal-circle seal-off">?</div>
+                <b class="dim">未获得</b>
+              </div>
+            </div>
+          </div>
+
+          <div class="card menu">
+            <div class="menu-item" v-for="(m, i) in menus" :key="m.key"
+                 :class="{ 'menu-line': i !== menus.length - 1 }" @click="go(m.view, m.tab)">
+              <div class="menu-icon" :style="{ background: m.bg }"><span :style="{ color: m.color }">{{ m.glyph }}</span></div>
+              <div class="menu-body"><b>{{ m.text }}</b><span>{{ m.desc }}</span></div>
+              <div class="menu-arrow">›</div>
+            </div>
+          </div>
+
+          <div class="card about">
+            <b>{{ site.name }}</b>
+            <span>川西林盘农商文旅智慧服务平台 · 游客端 v1.0.0</span>
+            <span class="dim">本端提供点位打卡集章、农产文创商城、研学民宿预约与 AI 文旅助手服务。</span>
+          </div>
+        </div>
+        <div class="page-bottom-space"></div>
+      </section>
+
+      <!-- ==================================================================
+           子页面（从 Tab 页推入，带返回）
+           ================================================================== -->
+
+      <!-- 点位详情 -->
+      <section v-if="view === 'spotDetail'" class="page-body subpage">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack">‹</button>
+          <div class="topbar-title"><h1>{{ current.name || '点位详情' }}</h1><p>{{ current.type }}</p></div>
+        </div>
+        <div v-if="current.id">
+          <div class="cover-lg"><img :src="asset(current.cover)" :alt="current.name" @error="imgFail"></div>
+
+          <div class="pad-x">
+            <div class="card">
+              <div class="card-title">
+                <i :class="{ live: speaking }"></i>语音讲解
+                <span class="dim tiny" style="margin-left:auto">{{ speaking ? '正在朗读…' : '浏览器语音合成' }}</span>
+              </div>
+              <div class="row gap">
+                <button class="btn btn-sm" @click="toggleSpeak">{{ speaking ? '停止朗读' : '播放讲解' }}</button>
+                <button class="btn btn-ghost btn-sm" @click="showScript = !showScript">{{ showScript ? '收起文稿' : '查看文稿' }}</button>
+              </div>
+              <div v-if="speaking" class="wave"><i v-for="n in 18" :key="n" :style="waveStyle(n)"></i></div>
+              <p v-if="showScript" class="script">{{ current.tts || current.intro }}</p>
+            </div>
+
+            <div class="card">
+              <div class="card-title"><i></i>点位介绍</div>
+              <p class="para">{{ current.intro }}</p>
+            </div>
+
+            <div class="card seal-box">
+              <div class="seal-circle" :class="{ 'seal-off': !current.checked }">{{ current.stampIcon || '印' }}</div>
+              <div>
+                <b>「{{ current.stamp }}」印章</b>
+                <p class="dim small">{{ current.checked ? '已于 ' + time(current.checkedAt) + ' 收入集章册' : '到点位打卡即可获得这枚印章' }}</p>
+              </div>
+            </div>
+
+            <button v-if="!current.checked" class="btn btn-block" @click="checkin(current)">打卡盖「{{ current.stamp }}」印章</button>
+            <button v-else class="btn btn-ghost btn-block" @click="go('spots', true); spotTab='wall'">查看我的印章墙</button>
+          </div>
+        </div>
+        <div v-else class="empty-box"><b>没找到这个点位</b></div>
+        <div class="page-bottom-space"></div>
+      </section>
+
+      <!-- 商品详情 -->
+      <section v-if="view === 'productDetail'" class="page-body subpage">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack">‹</button>
+          <div class="topbar-title"><h1>{{ product.name || '商品详情' }}</h1><p>{{ product.categoryText }}</p></div>
+        </div>
+        <div v-if="product.id">
+          <div class="cover-lg"><img :src="cover(product.cover, product.category)" :alt="product.name" @error="imgFail"></div>
+          <div class="pad-x">
+            <div class="card">
+              <div class="price-lg">{{ money(product.price) }}<em>/ {{ product.unit || '份' }}</em></div>
+              <b class="product-name">{{ product.name }}</b>
+              <div class="tags mt10"><span v-for="t in product.tags || []" :key="t" class="tag">{{ t }}</span></div>
+              <div class="stat-line">
+                <span>已售 {{ product.sold || 0 }}</span>
+                <span>库存 {{ product.stock || 0 }} {{ product.unit || '份' }}</span>
+                <span>{{ product.merchantName }}</span>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title"><i></i>商品介绍</div>
+              <p class="para">{{ product.desc || '商家还没有填写详细介绍。' }}</p>
+              <p v-if="product.intro" class="para dim sub-para">{{ product.intro }}</p>
+            </div>
+
+            <div class="card" v-if="isBooking">
+              <div class="card-title"><i class="accent"></i>{{ product.category === 'homestay' ? '入住信息' : '预约信息' }}</div>
+              <label class="field"><span>{{ product.category === 'homestay' ? '入住日期' : '预约日期' }}</span>
+                <input class="input" type="date" v-model="bookDate" :min="today">
+              </label>
+              <div class="field">
+                <span>人数</span>
+                <div class="stepper">
+                  <button @click="people = Math.max(1, people - 1)">−</button>
+                  <b>{{ people }}</b>
+                  <button @click="people = Math.min(20, people + 1)">＋</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" v-else>
+              <div class="card-title"><i></i>收货信息</div>
+              <label class="field"><span>收货地址</span>
+                <input class="input" v-model.trim="address" placeholder="省市区 + 详细地址">
+              </label>
+            </div>
+
+            <div class="card">
+              <div class="card-title"><i></i>备注</div>
+              <textarea class="input textarea" v-model.trim="remark" maxlength="200" placeholder="有特殊要求可以写在这里，商家会看到"></textarea>
+            </div>
+
+            <div class="card row-between">
+              <b>数量</b>
+              <div class="stepper">
+                <button @click="qty = Math.max(1, qty - 1)">−</button>
+                <b>{{ qty }}</b>
+                <button @click="qty = Math.min(product.stock || 1, qty + 1)">＋</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="bottom-bar">
+            <div class="bottom-total"><span>合计</span><b>{{ money(productTotal) }}</b></div>
+            <button v-if="!isBooking" class="btn btn-ghost" @click="addCart(product, qty)">加入购物车</button>
+            <button class="btn" :disabled="product.stock <= 0" @click="buyNow">
+              {{ product.stock <= 0 ? '已售罄' : (isBooking ? '立即预约' : '立即购买') }}
+            </button>
+          </div>
+          <div class="page-bottom-space tall"></div>
+        </div>
+        <div v-else class="empty-box"><b>没找到这件商品</b></div>
+      </section>
+
+      <!-- 我的订单 / 结算 -->
+      <section v-if="view === 'orders'" class="page-body subpage">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack">‹</button>
+          <div class="topbar-title"><h1>{{ checkoutMode ? '确认订单' : '我的订单' }}</h1>
+            <p>{{ checkoutMode ? '确认后提交给商家' : '按状态筛选' }}</p></div>
+        </div>
+
+        <!-- 结算 -->
+        <div class="pad-x" v-if="checkoutMode">
+          <div class="card">
+            <div class="card-title"><i></i>商品清单</div>
+            <div class="line-item" v-for="it in cart" :key="it.productId">
+              <img :src="cover(it.cover, it.category)" :alt="it.name" @error="imgFail">
+              <div class="line-body">
+                <b class="ell1">{{ it.name }}</b>
+                <span class="dim tiny">{{ money(it.price) }} × {{ it.qty }} {{ it.unit }}</span>
+              </div>
+              <div class="price">{{ money(it.price * it.qty) }}</div>
+            </div>
+
+            <label class="field mt" v-if="cartHasBooking"><span>预约 / 入住日期</span>
+              <input class="input" type="date" v-model="bookDate" :min="today">
+            </label>
+            <div class="field" v-if="cartHasBooking">
+              <span>人数</span>
+              <div class="stepper">
+                <button @click="people = Math.max(1, people - 1)">−</button><b>{{ people }}</b>
+                <button @click="people = Math.min(20, people + 1)">＋</button>
+              </div>
+            </div>
+            <label class="field mt" v-else><span>收货地址</span>
+              <input class="input" v-model.trim="address" placeholder="省市区 + 详细地址">
+            </label>
+            <label class="field mt"><span>备注</span>
+              <textarea class="input textarea" v-model.trim="remark" maxlength="200" placeholder="选填"></textarea>
+            </label>
+          </div>
+          <div class="card row-between">
+            <div class="bottom-total"><span>合计</span><b>{{ money(cartTotal) }}</b></div>
+            <button class="btn" :disabled="submitting" @click="submitCart">{{ submitting ? '提交中…' : '提交订单' }}</button>
+          </div>
+        </div>
+
+        <!-- 订单列表 -->
+        <template v-else>
+          <div class="tabs tabs-pad">
+            <div class="tab" v-for="s in statuses" :key="s.key" :class="{ on: orderStatusFilter === s.key }"
+                 @click="orderStatusFilter = s.key; loadOrders()">{{ s.text }}</div>
+          </div>
+          <div class="pad-x">
+            <div v-if="loadingOrders" class="empty-box"><b>正在加载订单…</b></div>
+            <div v-else-if="!orders.length" class="empty-box">
+              <b>还没有订单</b><p>去商城或研学预约看看，村里有不少好东西。</p>
+            </div>
+            <div v-else class="card order-card" v-for="o in orders" :key="o.id">
+              <div class="order-head">
+                <span class="dim tiny">单号 {{ o.id }}</span>
+                <span class="tag" :class="statusClass(o.status)">{{ statusText(o.status) }}</span>
+              </div>
+              <div class="order-main">
+                <img :src="cover(o.cover, o.category)" :alt="o.productName" loading="lazy" @error="imgFail">
+                <div class="order-body">
+                  <b class="ell2">{{ o.productName }}</b>
+                  <span class="dim tiny">{{ o.merchantName }} · {{ o.categoryText }}</span>
+                  <span v-if="o.bookDate" class="dim tiny">预约日期：{{ o.bookDate }} · {{ o.people }} 人</span>
+                  <span v-if="o.address" class="dim tiny ell1">收货：{{ o.address }}</span>
+                </div>
+              </div>
+              <div class="order-foot">
+                <span class="dim tiny">{{ time(o.createdAt) }}</span>
+                <div class="row gap10">
+                  <b class="price">{{ money(o.amount) }}</b>
+                  <button v-if="canCancel(o)" class="btn btn-ghost btn-xs" @click="cancelOrder(o)">取消</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+        <div class="page-bottom-space"></div>
+      </section>
+
+      <!-- 预约页 -->
+      <section v-if="view === 'booking'" class="page-body subpage">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack">‹</button>
+          <div class="topbar-title"><h1>研学 · 民宿 · 农事预约</h1><p>提前一天预约，到村直接体验</p></div>
+        </div>
+        <div class="tabs tabs-pad">
+          <div class="tab" v-for="c in bookingCats" :key="c.key" :class="{ on: bookingCat === c.key }"
+               @click="bookingCat = c.key; loadBooking()">{{ c.text }}</div>
+        </div>
+        <div class="pad-x">
+          <div v-if="loadingBooking" class="empty-box"><b>正在加载…</b></div>
+          <div v-else-if="!bookingList.length" class="empty-box"><b>这个分类暂时没有可预约项目</b></div>
+          <div v-else class="card booking-card" v-for="p in bookingList" :key="p.id">
+            <img :src="cover(p.cover, p.category)" :alt="p.name" loading="lazy" @click="openProduct(p.id)" @error="imgFail">
+            <div class="booking-body">
+              <span class="tag tag-info">{{ p.categoryText }}</span>
+              <b class="mt6">{{ p.name }}</b>
+              <p class="ell2 small dim">{{ p.desc }}</p>
+              <div class="row-between mt10">
+                <div class="price">{{ money(p.price) }}<em>/ {{ p.unit || '人' }}</em></div>
+                <button class="btn btn-sm" @click="openProduct(p.id)">去预约</button>
+              </div>
+              <div class="dim tiny mt6">剩余名额 {{ p.stock }} {{ p.unit || '人' }} · 已约 {{ p.sold || 0 }}</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><i class="warn"></i>预约须知</div>
+            <p class="para small">· 研学课程与农事体验需提前一天预约，收割与插秧仅在特定月份开放。</p>
+            <p class="para small">· 民宿入住当天 14:00 后可办理，退房时间为次日 12:00 前。</p>
+            <p class="para small">· 提交预约后由商户确认，确认成功会出现在「我的订单」里。</p>
+            <p class="para small">· 如需改期或取消，请在订单里操作，库存会自动回滚。</p>
+          </div>
+        </div>
+        <div class="page-bottom-space"></div>
+      </section>
+
+      <!-- 活动日历 -->
+      <section v-if="view === 'activities'" class="page-body subpage">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack">‹</button>
+          <div class="topbar-title"><h1>村内活动日历</h1><p>非遗节庆 · 农事体验 · 研学课程</p></div>
+        </div>
+        <div class="pad-x">
+          <div v-if="!activities.length" class="empty-box"><b>暂时没有活动安排</b></div>
+          <div v-else class="act-cell" v-for="a in activities" :key="a.id">
+            <div class="act-cell-date">
+              <b>{{ day(a.date) }}</b><span>{{ month(a.date) }} 月</span>
+              <em v-if="isOngoing(a)" class="live-tag">进行中</em>
+              <em v-else-if="isPast(a)" class="past-tag">已结束</em>
+            </div>
+            <div class="card act-cell-body" :class="{ dimmed: isPast(a) }">
+              <div class="act-top"><b>{{ a.title }}</b><span class="tag tag-accent">{{ a.tag }}</span></div>
+              <div class="dim tiny mt6">时间：{{ rangeText(a) }}</div>
+              <div class="dim tiny">地点：{{ a.place }}</div>
+              <p class="para small mt10">{{ a.desc }}</p>
+            </div>
+          </div>
+        </div>
+        <div class="page-bottom-space"></div>
+      </section>
+
+      <!-- AI 助手 -->
+      <section v-if="view === 'ai'" class="page-body subpage chat-page">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack">‹</button>
+          <div class="topbar-title"><h1>AI 文旅助手</h1><p>{{ ai.mode || '本地知识库检索' }}</p></div>
+        </div>
+
+        <div class="chat" ref="chat">
+          <div class="chat-welcome">
+            <div class="chat-logo">AI</div>
+            <b>你好，我是战旗村的 AI 文旅助手</b>
+            <p>村内点位、非遗手作、农产好物、研学预约、交通住宿都可以问我。我只根据村内知识库回答，找不到时会直接告诉你，不会编造内容。</p>
+          </div>
+
+          <div class="msg" :class="'msg-' + m.role" v-for="(m, i) in messages" :key="i">
+            <div class="msg-avatar">{{ m.role === 'user' ? '我' : 'AI' }}</div>
+            <div class="msg-bubble">
+              <span>{{ m.shown }}</span><i v-if="m.streaming" class="caret"></i>
+              <div v-if="m.sources && m.sources.length" class="src">
+                <span class="dim tiny">知识库来源</span>
+                <div class="tags mt6"><span class="src-tag" v-for="(s, si) in m.sources" :key="si">{{ s }}</span></div>
+              </div>
+              <div v-if="m.matched === false" class="miss">这个问题不在村内知识库里。可以换个说法，或看看下面的推荐问题。</div>
+            </div>
+          </div>
+
+          <div v-if="thinking" class="msg msg-assistant">
+            <div class="msg-avatar">AI</div>
+            <div class="msg-bubble"><div class="dots"><i v-for="n in 3" :key="n" :style="{ animationDelay: n * 0.16 + 's' }"></i></div></div>
+          </div>
+        </div>
+
+        <div class="suggests" v-if="!messages.length">
+          <button v-for="q in suggests" :key="q" @click="ask(q)">{{ q }}</button>
+        </div>
+
+        <div class="chat-input">
+          <input class="input" v-model.trim="draft" placeholder="问问战旗村的事…" :disabled="thinking" @keyup.enter="ask()">
+          <button class="btn" :disabled="!draft || thinking" @click="ask()">发送</button>
+        </div>
+      </section>
+
+      <!-- AI 行程规划 -->
+      <section v-if="view === 'plan'" class="page-body subpage">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack">‹</button>
+          <div class="topbar-title"><h1>AI 行程规划</h1><p>按你的偏好编排一天到三天</p></div>
+        </div>
+        <div class="pad-x">
+          <div class="card">
+            <div class="field">
+              <span>玩几天</span>
+              <div class="chips">
+                <button v-for="d in [1,2,3]" :key="d" :class="{ on: planDays === d }" @click="planDays = d">{{ d }} 天</button>
+              </div>
+            </div>
+            <div class="field">
+              <span>几个人</span>
+              <div class="stepper">
+                <button @click="planPeople = Math.max(1, planPeople - 1)">−</button><b>{{ planPeople }}</b>
+                <button @click="planPeople = Math.min(20, planPeople + 1)">＋</button>
+              </div>
+            </div>
+            <div class="field">
+              <span>偏好（可多选）</span>
+              <div class="chips">
+                <button v-for="p in prefOptions" :key="p" :class="{ on: planPrefs.indexOf(p) >= 0 }"
+                        @click="togglePref(p)">{{ p }}</button>
+              </div>
+            </div>
+            <button class="btn btn-block" :disabled="loadingPlan" @click="generatePlan">
+              {{ loadingPlan ? '正在生成…' : (planResult ? '重新生成' : '生成行程') }}
+            </button>
+          </div>
+
+          <template v-if="planResult">
+            <div class="plan-hero">
+              <b>{{ planResult.title }}</b>
+              <p>{{ planResult.summary }}</p>
+              <div class="plan-stats">
+                <div><b>{{ (planResult.days || []).length }}</b><span>天</span></div>
+                <div><b>{{ planPeople }}</b><span>人</span></div>
+                <div><b>{{ money(planResult.estimate) }}</b><span>预估花费</span></div>
+              </div>
+            </div>
+
+            <div class="card" v-for="d in planResult.days || []" :key="d.day">
+              <div class="day-head">
+                <span class="day-badge">D{{ d.day }}</span>
+                <div><b>第 {{ d.day }} 天</b><span class="dim tiny">{{ d.date }}</span></div>
+              </div>
+              <div class="tl">
+                <div class="tl-item" v-for="(it, ii) in d.items || []" :key="ii">
+                  <div class="tl-left"><i :class="{ 'tl-last': ii === d.items.length - 1 }"></i><em v-if="ii !== d.items.length - 1"></em></div>
+                  <div class="tl-body">
+                    <span class="tl-time">{{ it.time }}</span>
+                    <div class="tl-title"><b>{{ it.title }}</b>
+                      <a v-if="it.spotId" class="dim tiny" @click="openSpot(it.spotId)">点位 ›</a>
+                    </div>
+                    <p class="small dim">{{ it.desc }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" v-if="(planResult.booking || []).length">
+              <div class="card-title"><i></i>可以在村里预约的项目</div>
+              <div class="line-item" v-for="b in planResult.booking" :key="b.id" @click="openProduct(b.id)">
+                <div class="line-body"><b class="ell1">{{ b.name }}</b><span class="price tiny">{{ money(b.price) }} / {{ b.unit }}</span></div>
+                <div class="dim tiny">去预约 ›</div>
+              </div>
+            </div>
+
+            <div class="card" v-if="(planResult.tips || []).length">
+              <div class="card-title"><i class="warn"></i>出行提示</div>
+              <div class="tip-item" v-for="(t, i) in planResult.tips" :key="i"><i>{{ i + 1 }}</i><span>{{ t }}</span></div>
+            </div>
+          </template>
+          <div v-else-if="!loadingPlan" class="empty-box">
+            <b>选好条件，点「生成行程」</b>
+            <p>AI 会从村内 8 个林盘点位里按你的偏好排出一条路线，并给出时间轴与花费预估。</p>
+          </div>
+        </div>
+        <div class="page-bottom-space"></div>
+      </section>
+
+      <!-- 底部 Tab 栏：只在顶层四个页面显示 -->
+      <nav class="tabbar" v-if="isTopView">
+        <div class="tabbar-item" :class="{ on: view === 'home' }" @click="go('home', true)">
+          <span class="tabbar-glyph">首</span><em>首页</em>
+        </div>
+        <div class="tabbar-item" :class="{ on: view === 'spots' }" @click="go('spots', true)">
+          <span class="tabbar-glyph">印</span><em>打卡</em>
+        </div>
+        <div class="tabbar-item" :class="{ on: view === 'shop' }" @click="go('shop', true)">
+          <span class="tabbar-glyph">购</span><em>商城</em>
+        </div>
+        <div class="tabbar-item" :class="{ on: view === 'mine' }" @click="go('mine', true)">
+          <span class="tabbar-glyph">我</span><em>我的</em>
+        </div>
+      </nav>
+    </div>
+
+    <!-- ==================================================================
+         购物车抽屉（全局，商城与商品详情都能唤起）
+         ================================================================== -->
+    <div v-if="cartOpen" class="mask" @click="cartOpen = false"></div>
+    <div class="drawer" :class="{ open: cartOpen }">
+      <div class="drawer-head">
+        <b>购物车（{{ cartCount }} 件）</b>
+        <a class="danger" @click="clearCart">清空</a>
+      </div>
+      <div class="drawer-body">
+        <div v-if="!cart.length" class="empty-box"><b>购物车还是空的</b><p>挑几件战旗村的好物吧。</p></div>
+        <div class="line-item" v-for="it in cart" :key="it.productId">
+          <img :src="cover(it.cover, it.category)" :alt="it.name" @error="imgFail">
+          <div class="line-body">
+            <b class="ell1">{{ it.name }}</b>
+            <span class="price tiny">{{ money(it.price) }} / {{ it.unit }}</span>
+            <div class="row-between mt6">
+              <div class="stepper">
+                <button @click="setQty(it.productId, it.qty - 1)">−</button><b>{{ it.qty }}</b>
+                <button @click="setQty(it.productId, it.qty + 1)">＋</button>
+              </div>
+              <a class="dim tiny" @click="removeCart(it.productId)">删除</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="drawer-foot">
+        <div class="bottom-total"><span>合计</span><b>{{ money(cartTotal) }}</b></div>
+        <button class="btn" :disabled="!cart.length" @click="startCheckout">去结算</button>
+      </div>
+    </div>
+  </template>
+</div>
+
+<script src="../vendors/vue.min.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="./js/visitor.js"></script>
+</body>
+</html>

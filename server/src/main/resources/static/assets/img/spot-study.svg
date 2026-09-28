@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480" role="img" aria-label="农耕研学基地">
+  <title>农耕研学基地</title>
+    
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E8F1EC"/>
+      <stop offset="100%" stop-color="#F8F5EE"/>
+    </linearGradient>
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E3EADF"/>
+      <stop offset="100%" stop-color="#D3DECB"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" fill="url(#sky)"/>
+  <circle cx="516" cy="92" r="42" fill="#D9A441" opacity=".28"/>
+  <circle cx="516" cy="92" r="26" fill="#D9A441" opacity=".55"/>
+  <path d="M0 250 L96 194 L176 236 L268 182 L360 240 L448 196 L544 246 L640 206 L640 300 L0 300 Z"
+        fill="#BBD3C6" opacity=".75"/>
+  <path d="M0 286 L84 244 L188 288 L286 246 L392 292 L494 250 L640 296 L640 360 L0 360 Z"
+        fill="#8FB9A3" opacity=".9"/>
+  <rect y="330" width="640" height="150" fill="url(#field)"/>
+    <rect x="550" y="245" width="7.2" height="99" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="530.2" cy="269.75" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 550 269.75)"/><ellipse cx="530.2" cy="294.5" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 550 294.5)"/><ellipse cx="530.2" cy="319.25" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 550 319.25)"/><rect x="566" y="214.4" width="7.2" height="129.6" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="585.8" cy="246.8" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 566 246.8)"/><ellipse cx="585.8" cy="279.2" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 566 279.2)"/><ellipse cx="585.8" cy="311.6" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 566 311.6)"/><rect x="582" y="245" width="7.2" height="99" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="562.2" cy="269.75" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 582 269.75)"/><ellipse cx="562.2" cy="294.5" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 582 294.5)"/><ellipse cx="562.2" cy="319.25" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 582 319.25)"/><rect x="598" y="214.4" width="7.2" height="129.6" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="617.8" cy="246.8" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 598 246.8)"/><ellipse cx="617.8" cy="279.2" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 598 279.2)"/><ellipse cx="617.8" cy="311.6" rx="18" ry="5.4"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 598 311.6)"/>
+    <rect y="352" width="640" height="128" fill="#D9E3D2"/>
+    <g stroke="#146B57" stroke-width="3" opacity=".45">
+      <path d="M0 372 H640"/><path d="M0 390 H640"/><path d="M0 408 H640"/><path d="M0 426 H640"/><path d="M0 444 H640"/><path d="M0 462 H640"/>
+    </g>
+    <g>
+      
+        <path d="M64 420 q-3 -30 0 -46" stroke="#2F6B4F" stroke-width="3" fill="none"/>
+        <ellipse cx="52" cy="392" rx="14" ry="7" fill="#1D9E75" opacity=".8"/>
+        <ellipse cx="77" cy="402" rx="14" ry="7" fill="#146B57" opacity=".7"/>
+        <path d="M142 420 q-3 -30 0 -46" stroke="#2F6B4F" stroke-width="3" fill="none"/>
+        <ellipse cx="130" cy="392" rx="14" ry="7" fill="#1D9E75" opacity=".8"/>
+        <ellipse cx="155" cy="402" rx="14" ry="7" fill="#146B57" opacity=".7"/>
+        <path d="M220 420 q-3 -30 0 -46" stroke="#2F6B4F" stroke-width="3" fill="none"/>
+        <ellipse cx="208" cy="392" rx="14" ry="7" fill="#1D9E75" opacity=".8"/>
+        <ellipse cx="233" cy="402" rx="14" ry="7" fill="#146B57" opacity=".7"/>
+        <path d="M298 420 q-3 -30 0 -46" stroke="#2F6B4F" stroke-width="3" fill="none"/>
+        <ellipse cx="286" cy="392" rx="14" ry="7" fill="#1D9E75" opacity=".8"/>
+        <ellipse cx="311" cy="402" rx="14" ry="7" fill="#146B57" opacity=".7"/>
+        <path d="M376 420 q-3 -30 0 -46" stroke="#2F6B4F" stroke-width="3" fill="none"/>
+        <ellipse cx="364" cy="392" rx="14" ry="7" fill="#1D9E75" opacity=".8"/>
+        <ellipse cx="389" cy="402" rx="14" ry="7" fill="#146B57" opacity=".7"/>
+        <path d="M454 420 q-3 -30 0 -46" stroke="#2F6B4F" stroke-width="3" fill="none"/>
+        <ellipse cx="442" cy="392" rx="14" ry="7" fill="#1D9E75" opacity=".8"/>
+        <ellipse cx="467" cy="402" rx="14" ry="7" fill="#146B57" opacity=".7"/>
+        <path d="M532 420 q-3 -30 0 -46" stroke="#2F6B4F" stroke-width="3" fill="none"/>
+        <ellipse cx="520" cy="392" rx="14" ry="7" fill="#1D9E75" opacity=".8"/>
+        <ellipse cx="545" cy="402" rx="14" ry="7" fill="#146B57" opacity=".7"/>
+    </g>
+    <rect x="404" y="252" width="8" height="112" fill="#9C6B4A"/>
+    <path d="M408 252 q34 22 8 56" stroke="#5C6B65" stroke-width="7" fill="none"/>
+    <path d="M440 236 l40 14 -40 16 Z" fill="#5C6B65" opacity=".8"/>
+</svg>

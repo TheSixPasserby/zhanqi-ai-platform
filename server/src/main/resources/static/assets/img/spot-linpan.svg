@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480" role="img" aria-label="川西林盘院落群">
+  <title>川西林盘院落群</title>
+    
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E8F1EC"/>
+      <stop offset="100%" stop-color="#F8F5EE"/>
+    </linearGradient>
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E3EADF"/>
+      <stop offset="100%" stop-color="#D3DECB"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" fill="url(#sky)"/>
+  <circle cx="516" cy="92" r="42" fill="#D9A441" opacity=".28"/>
+  <circle cx="516" cy="92" r="26" fill="#D9A441" opacity=".55"/>
+  <path d="M0 250 L96 194 L176 236 L268 182 L360 240 L448 196 L544 246 L640 206 L640 300 L0 300 Z"
+        fill="#BBD3C6" opacity=".75"/>
+  <path d="M0 286 L84 244 L188 288 L286 246 L392 292 L494 250 L640 296 L640 360 L0 360 Z"
+        fill="#8FB9A3" opacity=".9"/>
+  <rect y="330" width="640" height="150" fill="url(#field)"/>
+    <rect x="36" y="217.5" width="9.2" height="126.49999999999999" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="10.700000000000003" cy="249.125" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 36 249.125)"/><ellipse cx="10.700000000000003" cy="280.75" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 36 280.75)"/><ellipse cx="10.700000000000003" cy="312.375" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 36 312.375)"/><rect x="52" y="178.4" width="9.2" height="165.6" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="77.3" cy="219.8" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 52 219.8)"/><ellipse cx="77.3" cy="261.2" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 52 261.2)"/><ellipse cx="77.3" cy="302.6" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 52 302.6)"/><rect x="68" y="217.5" width="9.2" height="126.49999999999999" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="42.7" cy="249.125" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 68 249.125)"/><ellipse cx="42.7" cy="280.75" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 68 280.75)"/><ellipse cx="42.7" cy="312.375" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 68 312.375)"/><rect x="84" y="178.4" width="9.2" height="165.6" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="109.3" cy="219.8" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 84 219.8)"/><ellipse cx="109.3" cy="261.2" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 84 261.2)"/><ellipse cx="109.3" cy="302.6" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 84 302.6)"/><rect x="126" y="242.5" width="6.8" height="93.5" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="107.3" cy="265.875" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 126 265.875)"/><ellipse cx="107.3" cy="289.25" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 126 289.25)"/><ellipse cx="107.3" cy="312.625" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 126 312.625)"/><rect x="142" y="213.60000000000002" width="6.8" height="122.39999999999999" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="160.7" cy="244.20000000000002" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 142 244.20000000000002)"/><ellipse cx="160.7" cy="274.8" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 142 274.8)"/><ellipse cx="160.7" cy="305.40000000000003" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 142 305.40000000000003)"/><rect x="158" y="242.5" width="6.8" height="93.5" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="139.3" cy="265.875" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 158 265.875)"/><ellipse cx="139.3" cy="289.25" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 158 289.25)"/><ellipse cx="139.3" cy="312.625" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 158 312.625)"/><rect x="174" y="213.60000000000002" width="6.8" height="122.39999999999999" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="192.7" cy="244.20000000000002" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 174 244.20000000000002)"/><ellipse cx="192.7" cy="274.8" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 174 274.8)"/><ellipse cx="192.7" cy="305.40000000000003" rx="17" ry="5.1"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 174 305.40000000000003)"/><rect x="536" y="223.5" width="9.2" height="126.49999999999999" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="510.7" cy="255.125" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 536 255.125)"/><ellipse cx="510.7" cy="286.75" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 536 286.75)"/><ellipse cx="510.7" cy="318.375" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 536 318.375)"/><rect x="552" y="184.4" width="9.2" height="165.6" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="577.3" cy="225.8" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 552 225.8)"/><ellipse cx="577.3" cy="267.2" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 552 267.2)"/><ellipse cx="577.3" cy="308.6" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 552 308.6)"/><rect x="568" y="223.5" width="9.2" height="126.49999999999999" rx="4"
+              fill="#4E8A63" opacity=".85"/><ellipse cx="542.7" cy="255.125" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 568 255.125)"/><ellipse cx="542.7" cy="286.75" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 568 286.75)"/><ellipse cx="542.7" cy="318.375" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(18 568 318.375)"/><rect x="584" y="184.4" width="9.2" height="165.6" rx="4"
+              fill="#2F6B4F" opacity=".85"/><ellipse cx="609.3" cy="225.8" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 584 225.8)"/><ellipse cx="609.3" cy="267.2" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 584 267.2)"/><ellipse cx="609.3" cy="308.6" rx="23" ry="6.8999999999999995"
+                fill="#4E8A63" opacity=".7" transform="rotate(-18 584 308.6)"/>
+    
+  <rect x="200" y="278" width="190" height="88" fill="#F6F4EF" stroke="#5C6B65" stroke-width="2"/>
+  <path d="M186 278 L295 238 L404 278 Z"
+        fill="#5C6B65"/>
+  <rect x="280" y="332" width="30" height="34" fill="#9C6B4A" opacity=".85"/>
+  <rect x="216" y="294" width="26" height="24" fill="#E8F1EC" stroke="#5C6B65" stroke-width="1.5"/>
+  <rect x="348" y="294" width="26" height="24" fill="#E8F1EC" stroke="#5C6B65" stroke-width="1.5"/>
+    <path d="M0 396 Q200 372 400 398 T640 390" stroke="#7FB3C8" stroke-width="14" fill="none" opacity=".7"/>
+    <ellipse cx="330" cy="452" rx="150" ry="18" fill="#146B57" opacity=".12"/>
+</svg>

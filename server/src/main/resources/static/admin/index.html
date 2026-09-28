@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1280">
+  <title>战旗云 · PC 管理后台</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
+  <link rel="stylesheet" href="../vendors/element-ui.css">
+  <link rel="stylesheet" href="../assets/css/app.css">
+  <link rel="stylesheet" href="./css/admin.css">
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- ==================== 登录页 ==================== -->
+  <div v-if="!user" class="login-wrap">
+    <div class="login-visual">
+      <img class="hero anim-float" src="../assets/img/hero.svg" alt="战旗村川西林盘">
+      <h1>{{ site.shortName || '战旗云' }} · PC 管理后台</h1>
+      <p class="slogan">{{ site.slogan || '院在林中 · 林在田中 · 农商文旅一站通' }}</p>
+      <ul class="feature">
+        <li v-for="(f, i) in features" :key="i" class="anim-up" :style="{ '--i': i }">
+          <i class="el-icon-check"></i>{{ f }}
+        </li>
+      </ul>
+      <div class="login-links">
+        <div v-for="(l, i) in entries" :key="i" class="entry" :class="{ on: l.on }">
+          <span class="name">{{ l.name }}</span>
+          <span class="path mono">{{ l.path }}</span>
+          <span class="desc">{{ l.desc }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="login-panel">
+      <div class="login-card card anim-up">
+        <div class="login-head">
+          <div class="mark">旗</div>
+          <div>
+            <h2>管理员登录</h2>
+            <div class="dim" style="font-size:12.5px">管理商家与买家账号，也负责服务器与连接配置</div>
+          </div>
+        </div>
+
+        <el-form :model="loginForm" :rules="loginRules" ref="loginForm" label-position="top"
+                 @submit.native.prevent="doLogin">
+          <el-form-item label="管理员账号" prop="account">
+            <el-input v-model="loginForm.account" placeholder="请输入管理员账号" prefix-icon="el-icon-user"
+                      @keyup.enter.native="doLogin"></el-input>
+          </el-form-item>
+          <el-form-item label="密码" prop="password">
+            <el-input v-model="loginForm.password" type="password" placeholder="请输入密码"
+                      prefix-icon="el-icon-lock" show-password @keyup.enter.native="doLogin"></el-input>
+          </el-form-item>
+          <el-button type="primary" style="width:100%" :loading="loginLoading" @click="doLogin">
+            进入管理后台
+          </el-button>
+        </el-form>
+
+        <div class="quick">
+          <div class="quick-head">
+            <span>快捷登录</span>
+            <span class="dim">只显示登录过的账号</span>
+          </div>
+          <div v-if="knownAdmins.length" class="quick-list">
+            <div v-for="(a, i) in knownAdmins" :key="a.account" class="quick-item anim-up"
+                 :style="{ '--i': i }" @click="quickLogin(a)">
+              <span class="avatar" :style="{ background: a.color }">{{ a.name.slice(0, 1) }}</span>
+              <div class="flex-1">
+                <div class="name">{{ a.name }}</div>
+                <div class="dim">{{ a.account }} · 上次 {{ fmt.ago(a.lastLoginAt) }}</div>
+              </div>
+              <i class="el-icon-right"></i>
+            </div>
+          </div>
+          <div v-else class="quick-empty">
+            <i class="el-icon-lock"></i>
+            <div>还没有可快捷登录的账号</div>
+            <div class="dim">初始状态不展示任何已有账号，请用账号密码登录一次</div>
+          </div>
+        </div>
+
+        <div class="default-hint">
+          内置管理员账号：<b class="mono">admin / admin123</b>（可管理商家与买家，也可管理服务器与连接配置）
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 主界面 ==================== -->
+  <div v-else class="shell" :class="{ loading: loading }">
+    <aside class="side">
+      <div class="side-brand">
+        <div class="logo">旗</div>
+        <div>
+          <div class="title">{{ site.shortName || '战旗云' }}</div>
+          <div class="sub">PC 管理后台</div>
+        </div>
+      </div>
+      <div class="side-scroll">
+        <el-menu :default-active="view" @select="go">
+          <el-menu-item v-for="m in menus" :key="m.key" :index="m.key">
+            <i :class="m.icon"></i><span slot="title">{{ m.name }}</span>
+          </el-menu-item>
+        </el-menu>
+      </div>
+      <div class="side-foot">
+        <div class="flex items-center gap-8">
+          <span class="dot ok anim-ring"></span>服务运行中
+        </div>
+        <div class="mono" style="margin-top:4px">{{ links.base || 'http://localhost:8080' }}</div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div>
+          <h2>{{ currentMenu.name }}</h2>
+          <div class="crumb">战旗云 · {{ currentMenu.desc }}</div>
+        </div>
+        <div class="flex items-center gap-12">
+          <el-tag size="mini" type="success" effect="plain">管理员</el-tag>
+          <span class="muted">{{ user.name }}</span>
+          <el-dropdown @command="onUserCommand">
+            <span class="avatar sm" :style="{ background: '#35506E' }">{{ user.name.slice(0, 1) }}</span>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="refresh"><i class="el-icon-refresh"></i> 刷新当前页</el-dropdown-item>
+              <el-dropdown-item command="qr"><i class="el-icon-mobile"></i> 手机端连接二维码</el-dropdown-item>
+              <el-dropdown-item command="logout" divided><i class="el-icon-switch-button"></i> 退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+        </div>
+      </header>
+
+      <div class="content">
+        <transition name="fade" mode="out-in">
+          <component :is="'view-' + view" :key="view" :links="links" :site="site"
+                     :server="serverInfo" @refresh="loadServer" @reload="reloadSite"></component>
+        </transition>
+      </div>
+    </div>
+
+    <!-- 手机端连接二维码：管理后台统一下发，游客端不出现任何地址设置 -->
+    <el-dialog title="手机端 / 其他电脑连接" :visible.sync="qrDialog" width="560px">
+      <div v-if="qr" class="qr-box">
+        <img :src="qr.qrMobile" alt="手机端二维码">
+        <div class="qr-tip">
+          <div><b>游客端（手机）</b></div>
+          <div class="mono">{{ qr.links.mobileUrl }}</div>
+          <div class="dim" style="margin-top:6px">打开手机浏览器扫码即可进入游客端；安卓 App 首次启动也用扫码完成连接。</div>
+        </div>
+      </div>
+      <div v-if="qr" class="qr-list">
+        <div class="qr-row">
+          <span>商户工作台（电脑浏览器）</span>
+          <a class="mono" :href="qr.links.merchantUrl" target="_blank">{{ qr.links.merchantUrl }}</a>
+        </div>
+        <div class="qr-row">
+          <span>PC 管理后台</span>
+          <span class="mono">{{ qr.links.adminUrl }}</span>
+        </div>
+        <div class="qr-row">
+          <span>本机访问</span>
+          <span class="mono">{{ qr.links.localUrl }}</span>
+        </div>
+      </div>
+      <span slot="footer">
+        <el-button @click="qrDialog = false">关闭</el-button>
+      </span>
+    </el-dialog>
+  </div>
+</div>
+
+<!-- ==========================================================================
+     视图模板
+     ========================================================================== -->
+
+<script type="text/x-template" id="tpl-summary">
+  <div>
+    <div class="kpi mb-16">
+      <div class="kpi-item anim-up" style="--i:0">
+        <div class="kpi-label">商家账号</div>
+        <div class="kpi-value">{{ fmt.num(kpi.merchants) }}</div>
+        <div class="kpi-extra">正常 {{ kpi.activeMerchants || 0 }} · 近 7 日新增 {{ newIn7d.merchants || 0 }}</div>
+      </div>
+      <div class="kpi-item info anim-up" style="--i:1">
+        <div class="kpi-label">买家（游客）</div>
+        <div class="kpi-value">{{ fmt.num(kpi.buyers) }}</div>
+        <div class="kpi-extra">正常 {{ kpi.activeBuyers || 0 }} · 近 7 日新增 {{ newIn7d.buyers || 0 }}</div>
+      </div>
+      <div class="kpi-item accent anim-up" style="--i:2">
+        <div class="kpi-label">累计交易额</div>
+        <div class="kpi-value">{{ fmt.money(kpi.revenue) }}</div>
+        <div class="kpi-extra">共 {{ fmt.num(kpi.orders) }} 笔订单</div>
+      </div>
+      <div class="kpi-item warn anim-up" style="--i:3">
+        <div class="kpi-label">待处理订单</div>
+        <div class="kpi-value">{{ fmt.num(kpi.pendingOrders) }}</div>
+        <div class="kpi-extra">打卡印章 {{ fmt.num(kpi.checkins) }} 枚</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head">
+          <h3>近 7 日交易走势</h3>
+          <el-radio-group v-model="trendKey" size="mini">
+            <el-radio-button label="amount">金额</el-radio-button>
+            <el-radio-button label="orders">订单数</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="card-body">
+          <zq-line :data="trend" :value-key="trendKey" :money="trendKey === 'amount'"
+                   :unit="trendKey === 'orders' ? ' 笔' : ''"
+                   :color="trendKey === 'amount' ? '#146B57' : '#2F6BA8'"></zq-line>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>订单状态分布</h3></div>
+        <div class="card-body">
+          <zq-donut :items="statusItems"></zq-donut>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 mt-16">
+      <div class="card">
+        <div class="card-head"><h3>商家营收排行</h3><span class="hint">口径：已确认 + 已核销</span></div>
+        <div class="card-body"><zq-bars :items="merchantRank.slice(0, 6)"></zq-bars></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>买家消费排行</h3><span class="hint">按累计消费额</span></div>
+        <div class="card-body"><zq-bars :items="buyerItems" color="#2F6BA8"></zq-bars></div>
+      </div>
+    </div>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-merchants">
+  <div>
+    <div class="card mb-16">
+      <div class="card-body flex items-center gap-12" style="flex-wrap:wrap">
+        <el-input v-model="keyword" placeholder="搜索账号 / 店铺名 / 联系人 / 电话" prefix-icon="el-icon-search"
+                  style="width:290px" clearable @clear="load" @keyup.enter.native="load"></el-input>
+        <el-select v-model="status" placeholder="账号状态" clearable style="width:140px" @change="load">
+          <el-option label="正常" value="active"></el-option>
+          <el-option label="已停用" value="disabled"></el-option>
+        </el-select>
+        <el-button type="primary" @click="load">查询</el-button>
+        <div class="flex-1"></div>
+        <span class="muted">共 {{ total }} 个商家，正常 {{ activeCount }} 个</span>
+        <el-button type="primary" plain icon="el-icon-plus" @click="openCreate">新增商家账号</el-button>
+      </div>
+    </div>
+
+    <div class="card">
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
+        <el-table-column label="店铺" min-width="200">
+          <template slot-scope="s">
+            <div class="cell-main">{{ s.row.short }}</div>
+            <div class="cell-sub">{{ s.row.account }} · {{ s.row.contact || '—' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="type" label="经营类型" width="120"></el-table-column>
+        <el-table-column prop="phone" label="联系电话" width="130"></el-table-column>
+        <el-table-column label="商品" width="90" align="center">
+          <template slot-scope="s">{{ s.row.onSaleCount }} / {{ s.row.productCount }}</template>
+        </el-table-column>
+        <el-table-column prop="orderCount" label="订单" width="80" align="center"></el-table-column>
+        <el-table-column label="营收" width="120" align="right">
+          <template slot-scope="s"><span class="mono">{{ fmt.money(s.row.revenue) }}</span></template>
+        </el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template slot-scope="s">
+            <span class="pill" :class="s.row.status">{{ s.row.status === 'active' ? '正常' : '已停用' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="230" align="right">
+          <template slot-scope="s">
+            <el-button type="text" @click="detail(s.row)">详情</el-button>
+            <el-button type="text" @click="edit(s.row)">编辑</el-button>
+            <el-button type="text" @click="resetPwd(s.row)">重置密码</el-button>
+            <el-button type="text" :class="{ danger: s.row.status === 'active' }"
+                       @click="toggleStatus(s.row)">{{ s.row.status === 'active' ? '停用' : '启用' }}</el-button>
+            <el-button type="text" class="danger" @click="remove(s.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- 新增 / 编辑 -->
+    <el-dialog :title="form.id ? '编辑商家资料' : '新增商家账号'" :visible.sync="formVisible" width="560px">
+      <el-form :model="form" label-width="96px">
+        <el-form-item v-if="!form.id" label="账号">
+          <el-input v-model="form.account" placeholder="字母开头，4–20 位字母数字下划线"></el-input>
+        </el-form-item>
+        <el-form-item v-if="!form.id" label="密码">
+          <el-input v-model="form.password" placeholder="至少 6 位"></el-input>
+        </el-form-item>
+        <el-form-item label="店铺名称"><el-input v-model="form.short"></el-input></el-form-item>
+        <el-form-item :label="form.id ? '联系人' : '联系人姓名'"><el-input v-model="form.contact"></el-input></el-form-item>
+        <el-form-item label="经营类型">
+          <el-select v-model="form.type" style="width:100%">
+            <el-option v-for="t in merchantTypes" :key="t" :label="t" :value="t"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="联系电话"><el-input v-model="form.phone"></el-input></el-form-item>
+        <el-form-item label="店铺简介">
+          <el-input type="textarea" v-model="form.intro" :rows="3"></el-input>
+        </el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="formVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      </span>
+    </el-dialog>
+
+    <!-- 详情 -->
+    <el-drawer title="商家详情" :visible.sync="detailVisible" size="620px">
+      <div v-if="current" class="drawer-body">
+        <div class="profile">
+          <span class="avatar lg" style="background:#BE5230">{{ (current.short || '商').slice(0, 1) }}</span>
+          <div>
+            <h3>{{ current.short }}</h3>
+            <div class="dim">{{ current.name }}</div>
+            <div class="mt-8">
+              <span class="tag brand">{{ current.type || '未填写' }}</span>
+              <span class="tag">{{ current.phone || '未填写电话' }}</span>
+              <span class="tag" :class="current.status === 'active' ? 'ok' : 'danger'">
+                {{ current.status === 'active' ? '正常' : '已停用' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpi" style="margin-top:14px">
+          <div class="kpi-item"><div class="kpi-label">商品数</div><div class="kpi-value small">{{ current.productCount }}</div></div>
+          <div class="kpi-item"><div class="kpi-label">订单数</div><div class="kpi-value small">{{ current.orderCount }}</div></div>
+          <div class="kpi-item accent"><div class="kpi-label">营收</div><div class="kpi-value small">{{ fmt.money(current.revenue) }}</div></div>
+          <div class="kpi-item warn"><div class="kpi-label">待确认</div><div class="kpi-value small">{{ current.pendingCount }}</div></div>
+        </div>
+
+        <el-tabs v-model="detailTab" class="mt-16">
+          <el-tab-pane label="店铺资料" name="info">
+            <el-descriptions :column="1" border size="small">
+              <el-descriptions-item label="店铺简介">{{ current.intro || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="入驻时间">{{ current.since || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="注册日期">{{ current.createdAt || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="登录次数">{{ current.loginCount }}</el-descriptions-item>
+              <el-descriptions-item label="最近登录">{{ fmt.time(current.lastLoginAt) }}</el-descriptions-item>
+            </el-descriptions>
+          </el-tab-pane>
+          <el-tab-pane :label="'名下商品 ' + (products || []).length" name="products">
+            <div v-if="(products || []).length" class="mini-list">
+              <div v-for="p in products" :key="p.id" class="mini-item">
+                <img :src="p.cover" alt="">
+                <div class="flex-1">
+                  <div class="cell-main">{{ p.name }}</div>
+                  <div class="cell-sub">{{ fmt.money(p.price) }}/{{ p.unit }} · 库存 {{ p.stock }} · 已售 {{ p.sold }}</div>
+                </div>
+                <span class="tag" :class="p.status === 'on' ? 'ok' : ''">{{ p.status === 'on' ? '在售' : '已下架' }}</span>
+              </div>
+            </div>
+            <div v-else class="empty">该商家暂无商品</div>
+          </el-tab-pane>
+          <el-tab-pane :label="'最近订单 ' + (orders || []).length" name="orders">
+            <div v-if="(orders || []).length" class="mini-list">
+              <div v-for="o in orders" :key="o.id" class="mini-item">
+                <div class="flex-1">
+                  <div class="cell-main">{{ o.productName }}</div>
+                  <div class="cell-sub">{{ o.buyerName }} · {{ fmt.money(o.amount) }} · {{ fmt.time(o.createdAt) }}</div>
+                </div>
+                <span class="pill" :class="o.status">{{ o.statusText }}</span>
+              </div>
+            </div>
+            <div v-else class="empty">暂无订单</div>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+    </el-drawer>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-buyers">
+  <div>
+    <div class="card mb-16">
+      <div class="card-body flex items-center gap-12" style="flex-wrap:wrap">
+        <el-input v-model="keyword" placeholder="搜索账号 / 昵称 / 手机号" prefix-icon="el-icon-search"
+                  style="width:280px" clearable @clear="load" @keyup.enter.native="load"></el-input>
+        <el-select v-model="status" placeholder="账号状态" clearable style="width:140px" @change="load">
+          <el-option label="正常" value="active"></el-option>
+          <el-option label="已停用" value="disabled"></el-option>
+        </el-select>
+        <el-button type="primary" @click="load">查询</el-button>
+        <div class="flex-1"></div>
+        <span class="muted">共 {{ total }} 位买家，正常 {{ activeCount }} 位</span>
+        <el-button type="primary" plain icon="el-icon-plus" @click="openCreate">新增买家账号</el-button>
+      </div>
+    </div>
+
+    <div class="card">
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
+        <el-table-column label="买家" min-width="180">
+          <template slot-scope="s">
+            <div class="flex items-center gap-8">
+              <span class="avatar sm" :style="{ background: s.row.avatarColor || '#146B57' }">
+                {{ (s.row.name || '游').slice(0, 1) }}</span>
+              <div>
+                <div class="cell-main">{{ s.row.name }}</div>
+                <div class="cell-sub">{{ s.row.account }}</div>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="phoneText" label="手机号" width="140"></el-table-column>
+        <el-table-column prop="orderCount" label="订单" width="80" align="center"></el-table-column>
+        <el-table-column label="消费额" width="120" align="right">
+          <template slot-scope="s"><span class="mono">{{ fmt.money(s.row.amount) }}</span></template>
+        </el-table-column>
+        <el-table-column label="印章" width="90" align="center">
+          <template slot-scope="s">{{ s.row.stampCount }} 枚</template>
+        </el-table-column>
+        <el-table-column label="最近登录" width="150">
+          <template slot-scope="s">{{ fmt.time(s.row.lastLoginAt) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template slot-scope="s">
+            <span class="pill" :class="s.row.status">{{ s.row.status === 'active' ? '正常' : '已停用' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="230" align="right">
+          <template slot-scope="s">
+            <el-button type="text" @click="detail(s.row)">详情</el-button>
+            <el-button type="text" @click="edit(s.row)">编辑</el-button>
+            <el-button type="text" @click="resetPwd(s.row)">重置密码</el-button>
+            <el-button type="text" :class="{ danger: s.row.status === 'active' }"
+                       @click="toggleStatus(s.row)">{{ s.row.status === 'active' ? '停用' : '启用' }}</el-button>
+            <el-button type="text" class="danger" @click="remove(s.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <el-dialog :title="form.id ? '编辑买家资料' : '新增买家账号'" :visible.sync="formVisible" width="520px">
+      <el-form :model="form" label-width="90px">
+        <el-form-item v-if="!form.id" label="账号">
+          <el-input v-model="form.account" placeholder="字母开头，4–20 位字母数字下划线"></el-input>
+        </el-form-item>
+        <el-form-item v-if="!form.id" label="密码">
+          <el-input v-model="form.password" placeholder="至少 6 位"></el-input>
+        </el-form-item>
+        <el-form-item label="昵称"><el-input v-model="form.name"></el-input></el-form-item>
+        <el-form-item label="手机号"><el-input v-model="form.phone" placeholder="选填，11 位"></el-input></el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="formVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      </span>
+    </el-dialog>
+
+    <el-drawer title="买家详情" :visible.sync="detailVisible" size="600px">
+      <div v-if="current" class="drawer-body">
+        <div class="profile">
+          <span class="avatar lg" :style="{ background: current.avatarColor || '#146B57' }">
+            {{ (current.name || '游').slice(0, 1) }}</span>
+          <div>
+            <h3>{{ current.name }}</h3>
+            <div class="dim">{{ current.account }} · {{ current.phoneText }}</div>
+            <div class="mt-8">
+              <span class="tag">{{ current.loginCount }} 次登录</span>
+              <span class="tag" :class="current.status === 'active' ? 'ok' : 'danger'">
+                {{ current.status === 'active' ? '正常' : '已停用' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpi" style="margin-top:14px">
+          <div class="kpi-item"><div class="kpi-label">订单数</div><div class="kpi-value small">{{ current.orderCount }}</div></div>
+          <div class="kpi-item accent"><div class="kpi-label">消费额</div><div class="kpi-value small">{{ fmt.money(current.amount) }}</div></div>
+          <div class="kpi-item info"><div class="kpi-label">印章数</div><div class="kpi-value small">{{ current.stampCount }}</div></div>
+          <div class="kpi-item warn"><div class="kpi-label">注册日期</div>
+            <div class="kpi-value small">{{ current.createdAt || '—' }}</div></div>
+        </div>
+
+        <div class="card pad mt-16">
+          <h3 style="font-size:14px;margin-bottom:12px">印章墙</h3>
+          <div v-if="(stamps || []).length" class="seal-wall">
+            <div v-for="(s, i) in stamps" :key="s.id" class="seal anim-pop" :style="{ '--i': i }">
+              <span class="icon">{{ s.stampIcon }}</span>
+              <span class="name">{{ s.stamp }}</span>
+            </div>
+          </div>
+          <div v-else class="dim">该买家还没有打卡记录</div>
+        </div>
+
+        <div class="card mt-16">
+          <div class="card-head"><h3>最近订单</h3></div>
+          <div class="card-body">
+            <div v-if="(orders || []).length" class="mini-list">
+              <div v-for="o in orders" :key="o.id" class="mini-item">
+                <div class="flex-1">
+                  <div class="cell-main">{{ o.productName }}</div>
+                  <div class="cell-sub">{{ fmt.money(o.amount) }} · {{ fmt.time(o.createdAt) }}</div>
+                </div>
+                <span class="pill" :class="o.status">{{ o.statusText }}</span>
+              </div>
+            </div>
+            <div v-else class="empty">暂无订单</div>
+          </div>
+        </div>
+      </div>
+    </el-drawer>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-orders">
+  <div>
+    <div class="card mb-16">
+      <div class="card-body flex items-center gap-12" style="flex-wrap:wrap">
+        <el-radio-group v-model="status" size="small" @change="load">
+          <el-radio-button label="">全部</el-radio-button>
+          <el-radio-button v-for="(text, key) in statusText" :key="key" :label="key">{{ text }}</el-radio-button>
+        </el-radio-group>
+        <div class="flex-1"></div>
+        <el-input v-model="keyword" placeholder="搜索订单号 / 商品 / 买家 / 商家" prefix-icon="el-icon-search"
+                  style="width:280px" clearable @clear="load" @keyup.enter.native="load"></el-input>
+        <el-button type="primary" @click="load">查询</el-button>
+      </div>
+    </div>
+
+    <div class="card">
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
+        <el-table-column label="订单" min-width="240">
+          <template slot-scope="s">
+            <div class="flex items-center gap-8">
+              <img v-if="s.row.cover" :src="s.row.cover" class="thumb" alt="">
+              <div>
+                <div class="cell-main">{{ s.row.productName }}</div>
+                <div class="cell-sub mono">#{{ s.row.id }}</div>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="买家" width="110" prop="buyerName"></el-table-column>
+        <el-table-column label="商家" width="140" prop="merchantName"></el-table-column>
+        <el-table-column label="数量" width="70" align="center" prop="qty"></el-table-column>
+        <el-table-column label="金额" width="110" align="right">
+          <template slot-scope="s"><span class="mono">{{ fmt.money(s.row.amount) }}</span></template>
+        </el-table-column>
+        <el-table-column label="预约日期" width="110">
+          <template slot-scope="s">{{ s.row.bookDate || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="下单时间" width="150">
+          <template slot-scope="s">{{ fmt.time(s.row.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100" align="center">
+          <template slot-scope="s"><span class="pill" :class="s.row.status">{{ s.row.statusText }}</span></template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="right">
+          <template slot-scope="s">
+            <el-button v-if="s.row.cancellable" type="text" class="danger" @click="cancel(s.row)">
+              强制取消
+            </el-button>
+            <span v-else class="dim">—</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-products">
+  <div>
+    <div class="card mb-16">
+      <div class="card-body flex items-center gap-12" style="flex-wrap:wrap">
+        <el-input v-model="keyword" placeholder="搜索商品名 / 商家名" prefix-icon="el-icon-search"
+                  style="width:280px" clearable @clear="load" @keyup.enter.native="load"></el-input>
+        <el-button type="primary" @click="load">查询</el-button>
+        <div class="flex-1"></div>
+        <span class="muted">共 {{ total }} 件商品（含已下架）</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
+        <el-table-column label="商品" min-width="260">
+          <template slot-scope="s">
+            <div class="flex items-center gap-8">
+              <img v-if="s.row.cover" :src="s.row.cover" class="thumb" alt="">
+              <div>
+                <div class="cell-main">{{ s.row.name }}</div>
+                <div class="cell-sub mono">#{{ s.row.id }}</div>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="merchantName" label="所属商家" width="160"></el-table-column>
+        <el-table-column label="分类" width="110">
+          <template slot-scope="s"><span class="tag brand">{{ s.row.categoryText }}</span></template>
+        </el-table-column>
+        <el-table-column label="价格" width="110" align="right">
+          <template slot-scope="s"><span class="mono">{{ fmt.money(s.row.price) }}</span> / {{ s.row.unit }}</template>
+        </el-table-column>
+        <el-table-column prop="stock" label="库存" width="80" align="center"></el-table-column>
+        <el-table-column prop="sold" label="已售" width="80" align="center"></el-table-column>
+        <el-table-column label="状态" width="90" align="center">
+          <template slot-scope="s"><span class="tag" :class="s.row.status === 'on' ? 'ok' : ''">
+            {{ s.row.status === 'on' ? '在售' : '已下架' }}</span></template>
+        </el-table-column>
+      </el-table>
+    </div>
+    <div class="dim mt-12" style="font-size:12.5px">
+      商品上下架由商家在工作台自行操作（本平台不设独立审核流程），管理员在此总览全平台商品。
+    </div>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-content">
+  <div>
+    <div class="card">
+      <div class="card-head">
+        <h3>内容数据管理</h3>
+        <div class="flex items-center gap-8">
+          <el-tag size="mini" type="info" effect="plain">点位 / 活动 / 知识库都会被三端直接使用</el-tag>
+          <el-button size="mini" type="primary" plain icon="el-icon-plus" @click="openCreate">
+            新增{{ tableLabel }}
+          </el-button>
+        </div>
+      </div>
+      <div class="card-body">
+        <el-tabs v-model="tab" @tab-click="switchTab">
+          <el-tab-pane label="林盘点位" name="spots"></el-tab-pane>
+          <el-tab-pane label="文旅活动" name="activities"></el-tab-pane>
+          <el-tab-pane label="AI 知识库" name="knowledge"></el-tab-pane>
+        </el-tabs>
+
+        <el-table :data="list" v-loading="loading" stripe size="small" style="width:100%">
+          <el-table-column v-if="tab !== 'knowledge'" label="" width="66">
+            <template slot-scope="s"><img v-if="s.row.cover" :src="s.row.cover" class="thumb" alt=""></template>
+          </el-table-column>
+          <el-table-column :label="tab === 'knowledge' ? '标题' : '名称'" min-width="200">
+            <template slot-scope="s">
+              <div class="cell-main">{{ s.row.name || s.row.title }}</div>
+              <div class="cell-sub">{{ s.row.intro || s.row.content }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="tab === 'spots'" prop="type" label="类型" width="110"></el-table-column>
+          <el-table-column v-if="tab === 'spots'" prop="location" label="位置" width="170"></el-table-column>
+          <el-table-column v-if="tab === 'spots'" label="印章" width="110">
+            <template slot-scope="s">
+              <span class="tag brand">{{ s.row.stampIcon }} {{ s.row.stamp }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="tab === 'activities'" prop="date" label="开始" width="110"></el-table-column>
+          <el-table-column v-if="tab === 'activities'" prop="place" label="地点" width="180"></el-table-column>
+          <el-table-column v-if="tab === 'activities'" label="标签" width="90">
+            <template slot-scope="s"><span class="tag accent">{{ s.row.tag }}</span></template>
+          </el-table-column>
+          <el-table-column v-if="tab === 'knowledge'" label="检索关键词" min-width="200">
+            <template slot-scope="s">
+              <span class="tag" v-for="t in s.row.tags" :key="t" style="margin-right:4px">{{ t }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="130" align="right">
+            <template slot-scope="s">
+              <el-button type="text" @click="edit(s.row)">编辑</el-button>
+              <el-button type="text" class="danger" @click="remove(s.row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </div>
+
+    <el-dialog :title="(form.id ? '编辑' : '新增') + tableLabel" :visible.sync="formVisible" width="620px">
+      <el-form :model="form" label-width="100px">
+        <template v-if="tab === 'spots'">
+          <el-form-item label="点位名称"><el-input v-model="form.name"></el-input></el-form-item>
+          <el-form-item label="类型"><el-input v-model="form.type" placeholder="如：非遗工坊 / 农事景观"></el-input></el-form-item>
+          <el-form-item label="所在位置"><el-input v-model="form.location"></el-input></el-form-item>
+          <el-form-item label="配图路径">
+            <el-select v-model="form.cover" style="width:100%">
+              <el-option v-for="c in covers" :key="c" :label="c" :value="c"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="印章名称"><el-input v-model="form.stamp"></el-input></el-form-item>
+          <el-form-item label="印章单字"><el-input v-model="form.stampIcon" maxlength="2" style="width:90px"></el-input></el-form-item>
+          <el-form-item label="点位介绍"><el-input type="textarea" :rows="3" v-model="form.intro"></el-input></el-form-item>
+          <el-form-item label="语音讲解稿"><el-input type="textarea" :rows="4" v-model="form.tts"></el-input></el-form-item>
+        </template>
+
+        <template v-else-if="tab === 'activities'">
+          <el-form-item label="活动标题"><el-input v-model="form.title"></el-input></el-form-item>
+          <el-form-item label="开始日期"><el-date-picker v-model="form.date" type="date" value-format="yyyy-MM-dd"
+                                    placeholder="选择日期" style="width:100%"></el-date-picker></el-form-item>
+          <el-form-item label="结束日期"><el-date-picker v-model="form.endDate" type="date" value-format="yyyy-MM-dd"
+                                    placeholder="单日活动留空" style="width:100%"></el-date-picker></el-form-item>
+          <el-form-item label="活动地点"><el-input v-model="form.place"></el-input></el-form-item>
+          <el-form-item label="活动标签"><el-input v-model="form.tag" placeholder="如：非遗 / 农事 / 节庆"></el-input></el-form-item>
+          <el-form-item label="配图路径">
+            <el-select v-model="form.cover" style="width:100%">
+              <el-option v-for="c in covers" :key="c" :label="c" :value="c"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="活动说明"><el-input type="textarea" :rows="3" v-model="form.desc"></el-input></el-form-item>
+        </template>
+
+        <template v-else>
+          <el-form-item label="条目标题"><el-input v-model="form.title"></el-input></el-form-item>
+          <el-form-item label="检索关键词">
+            <el-input v-model="tagsText" placeholder="用逗号分隔，如：交通,位置,怎么去"></el-input>
+          </el-form-item>
+          <el-form-item label="知识正文">
+            <el-input type="textarea" :rows="7" v-model="form.content"></el-input>
+          </el-form-item>
+        </template>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="formVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      </span>
+    </el-dialog>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-server">
+  <div>
+    <div class="card mb-16">
+      <div class="card-body">
+        <el-tabs v-model="tab" @tab-click="onTab">
+          <el-tab-pane label="服务器状态" name="status"></el-tab-pane>
+          <el-tab-pane label="连接配置" name="links"></el-tab-pane>
+          <el-tab-pane label="平台设置" name="site"></el-tab-pane>
+          <el-tab-pane label="AI 设置" name="ai"></el-tab-pane>
+          <el-tab-pane label="在线会话" name="sessions"></el-tab-pane>
+          <el-tab-pane label="数据库" name="schema"></el-tab-pane>
+        </el-tabs>
+
+        <!-- 服务器状态 -->
+        <div v-if="tab === 'status'">
+          <div class="kpi mb-16">
+            <div class="kpi-item"><div class="kpi-label">运行时长</div>
+              <div class="kpi-value small">{{ fmt.duration(st.status.uptimeSec) }}</div>
+              <div class="kpi-extra">启动于 {{ fmt.time(st.status.startedAt) }}</div></div>
+            <div class="kpi-item info"><div class="kpi-label">内存占用</div>
+              <div class="kpi-value small">{{ st.status.memory.usedMb }} MB</div>
+              <div class="kpi-extra">上限 {{ st.status.memory.maxMb }} MB · {{ st.status.memory.usagePercent }}%</div></div>
+            <div class="kpi-item accent"><div class="kpi-label">服务端口</div>
+              <div class="kpi-value small">{{ st.status.port }}</div>
+              <div class="kpi-extra">Java {{ st.status.javaVersion }}</div></div>
+            <div class="kpi-item warn"><div class="kpi-label">局域网发现</div>
+              <div class="kpi-value small" style="font-size:15px">{{ st.discovery.state }}</div>
+              <div class="kpi-extra">广播 {{ st.discovery.broadcastCount }} 次 · 应答 {{ st.discovery.probeCount }} 次</div></div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-head"><h3>数据库连接</h3></div>
+              <div class="card-body">
+                <el-descriptions :column="1" size="small" border>
+                  <el-descriptions-item label="连接摘要">{{ st.status.database }}</el-descriptions-item>
+                  <el-descriptions-item label="操作系统">{{ st.status.os }}</el-descriptions-item>
+                  <el-descriptions-item label="CPU 核心">{{ st.status.processors }}</el-descriptions-item>
+                  <el-descriptions-item label="服务版本">v{{ st.status.version }}</el-descriptions-item>
+                </el-descriptions>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h3>各表记录数</h3><span class="hint">数据是否落库一目了然</span></div>
+              <div class="card-body">
+                <div class="count-grid">
+                  <div v-for="(v, k) in st.tables" :key="k" class="count-item">
+                    <span class="mono name">{{ k }}</span>
+                    <span class="mono val">{{ v }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-16">
+            <div class="card-head"><h3>本机网卡</h3>
+              <span class="hint">带「虚拟」标记的是 VMware / WSL 之类，通常不是手机能访问到的地址</span></div>
+            <el-table :data="st.interfaces" size="small" style="width:100%">
+              <el-table-column prop="name" label="网卡" min-width="200"></el-table-column>
+              <el-table-column prop="ip" label="IPv4 地址" width="150">
+                <template slot-scope="s"><span class="mono">{{ s.row.ip }}</span></template>
+              </el-table-column>
+              <el-table-column prop="netmask" label="子网掩码" width="150">
+                <template slot-scope="s"><span class="mono">{{ s.row.netmask }}</span></template>
+              </el-table-column>
+              <el-table-column label="判定" width="150">
+                <template slot-scope="s">
+                  <span class="tag" :class="s.row.virtual ? '' : 'ok'">
+                    {{ s.row.virtual ? '虚拟网卡' : '物理网卡' }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+
+        <!-- 连接配置 -->
+        <div v-else-if="tab === 'links'">
+          <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px"
+                    title="其他端（手机端、商户工作台）的连接统一在这里配置"
+                    description="游客端与商户工作台不保存任何服务器地址，也不需要有人手工输入 IP。改完保存后，各端下次打开页面即生效；服务端口变更需重启服务。"></el-alert>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-head"><h3>地址配置</h3></div>
+              <div class="card-body">
+                <el-form label-width="150px" size="small">
+                  <el-form-item label="服务器对外地址">
+                    <el-input v-model="form['link.serverHost']" placeholder="留空 = 自动探测局域网 IP（推荐）"></el-input>
+                    <div class="dim" style="font-size:12px">当前自动探测结果：<b class="mono">{{ st.links.ip }}</b></div>
+                  </el-form-item>
+                  <el-form-item label="游客端路径">
+                    <el-input v-model="form['link.mobilePath']"></el-input>
+                  </el-form-item>
+                  <el-form-item label="商户工作台路径">
+                    <el-input v-model="form['link.merchantPath']"></el-input>
+                  </el-form-item>
+                  <el-form-item label="管理后台路径">
+                    <el-input v-model="form['link.adminPath']"></el-input>
+                  </el-form-item>
+                  <el-form-item label="局域网自动发现">
+                    <el-switch v-model="form['link.enableDiscovery']" active-value="true" inactive-value="false"></el-switch>
+                    <span class="dim" style="margin-left:10px;font-size:12px">关闭后其他电脑无法广播发现本服务</span>
+                  </el-form-item>
+                  <el-form-item label="发现广播端口">
+                    <el-input v-model="form['link.discoveryPort']" style="width:130px"></el-input>
+                  </el-form-item>
+                  <el-form-item label="服务端口">
+                    <el-input v-model="form['server.port']" style="width:130px"></el-input>
+                    <span class="dim" style="margin-left:10px;font-size:12px">修改后需重启服务</span>
+                  </el-form-item>
+                  <el-form-item label="服务器名称">
+                    <el-input v-model="form['server.displayName']"></el-input>
+                  </el-form-item>
+                </el-form>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head"><h3>各端入口</h3></div>
+              <div class="card-body">
+                <div class="link-row">
+                  <div class="link-name">游客端（手机 H5 / App）</div>
+                  <div class="link-url mono">{{ st.links.mobileUrl }}</div>
+                  <img v-if="st.qrMobile" :src="st.qrMobile" class="qr-img" alt="游客端二维码">
+                  <div class="dim" style="font-size:12px">手机浏览器扫码即可进入；安卓 App 首次启动也扫这个码完成连接。</div>
+                </div>
+                <div class="link-row">
+                  <div class="link-name">商户工作台（电脑浏览器）</div>
+                  <div class="link-url mono">{{ st.links.merchantUrl }}</div>
+                </div>
+                <div class="link-row">
+                  <div class="link-name">PC 管理后台（本页）</div>
+                  <div class="link-url mono">{{ st.links.adminUrl }}</div>
+                </div>
+                <div class="link-row">
+                  <div class="link-name">本机访问</div>
+                  <div class="link-url mono">{{ st.links.localUrl }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-16">
+            <el-button type="primary" :loading="saving" @click="save">保存连接配置</el-button>
+            <el-button @click="loadSettings">重新读取</el-button>
+          </div>
+        </div>
+
+        <!-- 平台设置 -->
+        <div v-else-if="tab === 'site'">
+          <div class="card">
+            <div class="card-head"><h3>平台基础信息</h3><span class="hint">三端页面标题、首页标语与公告都取这里</span></div>
+            <div class="card-body">
+              <el-form label-width="130px" size="small" style="max-width:720px">
+                <el-form-item label="平台名称"><el-input v-model="form['site.name']"></el-input></el-form-item>
+                <el-form-item label="平台简称"><el-input v-model="form['site.shortName']" style="width:220px"></el-input></el-form-item>
+                <el-form-item label="首页标语"><el-input v-model="form['site.slogan']"></el-input></el-form-item>
+                <el-form-item label="首页公告"><el-input type="textarea" :rows="2" v-model="form['site.announcement']"></el-input></el-form-item>
+                <el-form-item label="开放自助注册">
+                  <el-switch v-model="form['site.allowRegister']" active-value="true" inactive-value="false"></el-switch>
+                  <span class="dim" style="margin-left:10px;font-size:12px">关闭后游客端与商户端都不能自助注册，只能由管理员开通</span>
+                </el-form-item>
+              </el-form>
+              <el-button type="primary" :loading="saving" @click="save">保存平台设置</el-button>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 设置 -->
+        <div v-else-if="tab === 'ai'">
+          <el-alert type="info" :closable="false" show-icon style="margin-bottom:16px"
+                    :title="'当前 AI 引擎：' + (st.ai.engine === 'llm+knowledge' ? '知识库 + 大模型润色' : '本地知识库检索')"
+                    :description="st.ai.note"></el-alert>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-head"><h3>第三方大模型接口</h3><span class="hint">任何 OpenAI 兼容接口都可以</span></div>
+              <div class="card-body">
+                <el-form label-width="110px" size="small">
+                  <el-form-item label="启用大模型">
+                    <el-switch v-model="form['ai.enabled']" active-value="true" inactive-value="false"></el-switch>
+                  </el-form-item>
+                  <el-form-item label="接口地址">
+                    <el-input v-model="form['ai.baseUrl']" placeholder="https://api.deepseek.com/v1"></el-input>
+                  </el-form-item>
+                  <el-form-item label="API Key">
+                    <el-input v-model="form['ai.apiKey']" placeholder="sk-..." show-password></el-input>
+                  </el-form-item>
+                  <el-form-item label="模型名称">
+                    <el-input v-model="form['ai.model']" style="width:260px" placeholder="deepseek-chat"></el-input>
+                  </el-form-item>
+                  <el-form-item label="系统提示词">
+                    <el-input type="textarea" :rows="5" v-model="form['ai.systemPrompt']"></el-input>
+                  </el-form-item>
+                </el-form>
+                <div>
+                  <el-button type="primary" :loading="saving" @click="save">保存 AI 配置</el-button>
+                  <el-button :loading="testing" @click="testAi">测试连接</el-button>
+                  <span class="dim" style="margin-left:10px;font-size:12px">
+                    测试失败不影响演示 —— 系统会自动回退到本地知识库模式
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head"><h3>知识库约束</h3><span class="hint">抑制幻觉的关键设计</span></div>
+              <div class="card-body">
+                <p class="muted" style="margin-top:0">
+                  AI 的回答严格限定在本地知识库范围内。提问时先做中文二元切分检索，
+                  <b>没有命中就明确回答「没找到」</b>，不会编造村外的内容。
+                  即使接入了大模型，也只是把命中的知识原文交给模型润色，模型拿不到资料以外的信息。
+                </p>
+                <div class="kpi">
+                  <div class="kpi-item"><div class="kpi-label">知识库条目</div>
+                    <div class="kpi-value small">{{ st.ai.knowledgeCount }}</div></div>
+                  <div class="kpi-item info"><div class="kpi-label">当前模型</div>
+                    <div class="kpi-value small" style="font-size:14px">{{ st.ai.model }}</div></div>
+                </div>
+                <el-divider></el-divider>
+                <div class="dim" style="font-size:12.5px">
+                  知识库条目的增删改在「内容管理」页的「AI 知识库」标签里维护。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 在线会话 -->
+        <div v-else-if="tab === 'sessions'">
+          <div class="card">
+            <div class="card-head">
+              <h3>在线会话</h3>
+              <div class="flex items-center gap-8">
+                <span class="hint">共 {{ sessionList.length }} 个未过期会话</span>
+                <el-button size="mini" @click="loadSessions">刷新</el-button>
+              </div>
+            </div>
+            <el-table :data="sessionList" size="small" v-loading="sessionLoading" style="width:100%">
+              <el-table-column prop="name" label="账号" min-width="150"></el-table-column>
+              <el-table-column label="角色" width="120">
+                <template slot-scope="s">
+                  <span class="tag" :class="s.row.role === 'admin' ? 'info' : (s.row.role === 'merchant' ? 'accent' : 'brand')">
+                    {{ roleText(s.row.role) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="登录端" width="120">
+                <template slot-scope="s">{{ clientText(s.row.client) }}</template>
+              </el-table-column>
+              <el-table-column prop="token" label="令牌" width="120">
+                <template slot-scope="s"><span class="mono">{{ s.row.token }}</span></template>
+              </el-table-column>
+              <el-table-column label="签发时间" width="160">
+                <template slot-scope="s">{{ fmt.time(s.row.createdAt) }}</template>
+              </el-table-column>
+              <el-table-column label="剩余有效期" width="130">
+                <template slot-scope="s">{{ s.row.expiresInMin }} 分钟</template>
+              </el-table-column>
+              <el-table-column label="操作" width="110" align="right">
+                <template slot-scope="s">
+                  <el-button type="text" class="danger" @click="kick(s.row)">强制下线</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+
+        <!-- 数据库 -->
+        <div v-else>
+          <el-alert type="warning" :closable="false" show-icon style="margin-bottom:16px"
+                    title="表结构由服务端启动时自动创建，这里是只读总览"
+                    description="服务端使用 CREATE TABLE IF NOT EXISTS 与 INSERT IGNORE 两种幂等语句，反复启动不会破坏已有数据。需要清空演示数据时，用一键脚本的重置功能。"></el-alert>
+          <div class="card">
+            <el-table :data="schemaList" size="small" v-loading="schemaLoading" style="width:100%">
+              <el-table-column prop="table" label="表名" width="150">
+                <template slot-scope="s"><span class="mono">{{ s.row.table }}</span></template>
+              </el-table-column>
+              <el-table-column prop="rows" label="记录数" width="100" align="center"></el-table-column>
+              <el-table-column label="字段" min-width="420">
+                <template slot-scope="s">
+                  <span class="tag" v-for="c in s.row.columns" :key="c" style="margin:2px 4px 2px 0"
+                        :class="s.row.jsonColumns.indexOf(c) >= 0 ? 'warn' : ''">{{ c }}</span>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+          <div class="dim mt-12" style="font-size:12.5px">
+            橙色标签表示该字段是 JSON 类型（存数组，例如商品标签、知识库关键词）。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</script>
+
+<script src="../vendors/vue.min.js"></script>
+<script src="../vendors/element-ui.js"></script>
+<script src="../assets/js/api.js"></script>
+<script src="../assets/js/charts.js"></script>
+<script src="./js/admin.js"></script>
+</body>
+</html>

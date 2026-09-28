@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="战旗云">
+  <!-- 站点图标：竹青圆角方块 + 白色「旗」字，与三端顶栏的印章标识一致 -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0E4C3E"/>
+      <stop offset="0.55" stop-color="#146B57"/>
+      <stop offset="1" stop-color="#1D9E75"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <!-- 装饰：右下角一枚浅色光斑，和页面头部的光斑呼应 -->
+  <circle cx="52" cy="12" r="14" fill="#FFFFFF" opacity="0.14"/>
+  <!-- 「旗」的极简直绘：旗杆 + 旗面 -->
+  <rect x="18" y="14" width="3.2" height="36" rx="1.6" fill="#FFFFFF"/>
+  <path d="M22 16.5 h20 a3 3 0 0 1 3 3 v10 a3 3 0 0 1 -3 3 h-20 z" fill="#FFFFFF" opacity="0.92"/>
+  <path d="M22 33 h14 a3 3 0 0 1 3 3 v6 a3 3 0 0 1 -3 3 h-14 z" fill="#FFFFFF" opacity="0.62"/>
+</svg>

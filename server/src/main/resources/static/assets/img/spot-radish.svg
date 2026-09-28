@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480" role="img" aria-label="云桥圆根萝卜">
+  <title>云桥圆根萝卜</title>
+    
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E8F1EC"/>
+      <stop offset="100%" stop-color="#F8F5EE"/>
+    </linearGradient>
+    <linearGradient id="field" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E3EADF"/>
+      <stop offset="100%" stop-color="#D3DECB"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="480" fill="url(#sky)"/>
+  <circle cx="516" cy="92" r="42" fill="#D9A441" opacity=".28"/>
+  <circle cx="516" cy="92" r="26" fill="#D9A441" opacity=".55"/>
+  <path d="M0 250 L96 194 L176 236 L268 182 L360 240 L448 196 L544 246 L640 206 L640 300 L0 300 Z"
+        fill="#BBD3C6" opacity=".75"/>
+  <path d="M0 286 L84 244 L188 288 L286 246 L392 292 L494 250 L640 296 L640 360 L0 360 Z"
+        fill="#8FB9A3" opacity=".9"/>
+  <rect y="330" width="640" height="150" fill="url(#field)"/>
+    <rect y="336" width="640" height="144" fill="#E2E8DC"/>
+    <g stroke="#146B57" stroke-width="3" opacity=".4">
+      <path d="M20 480 q-8 -70 4 -132"/><path d="M104 480 q-8 -70 4 -132"/><path d="M188 480 q-8 -70 4 -132"/><path d="M272 480 q-8 -70 4 -132"/><path d="M356 480 q-8 -70 4 -132"/><path d="M440 480 q-8 -70 4 -132"/><path d="M524 480 q-8 -70 4 -132"/><path d="M608 480 q-8 -70 4 -132"/>
+    </g>
+    <g>
+      <ellipse cx="248" cy="360" rx="62" ry="58" fill="#FFFFFF" stroke="#BBD3C6" stroke-width="2"/>
+      <path d="M248 302 q-6 -34 -24 -46 M248 302 q10 -32 28 -42 M248 306 v-56"
+            stroke="#4E8A63" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <ellipse cx="386" cy="386" rx="48" ry="44" fill="#FFFFFF" stroke="#BBD3C6" stroke-width="2"/>
+      <path d="M386 344 q-4 -26 -18 -36 M386 344 q8 -24 22 -32"
+            stroke="#4E8A63" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </g>
+    <rect y="432" width="640" height="48" fill="#9C6B4A" opacity=".22"/>
+</svg>

@@ -1,0 +1,27 @@
+{
+  "name": "zhanqi-visitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "郫都区战旗村 · 川西林盘农商文旅智慧服务平台 —— 游客端（uni-app：安卓 App + H5）",
+  "scripts": {
+    "dev:h5": "uni",
+    "build:h5": "uni build",
+    "dev:app": "uni -p app",
+    "build:app": "uni build -p app"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-alpha-5020720260921001",
+    "@dcloudio/uni-app-plus": "3.0.0-alpha-5020720260921001",
+    "@dcloudio/uni-components": "3.0.0-alpha-5020720260921001",
+    "@dcloudio/uni-h5": "3.0.0-alpha-5020720260921001",
+    "vue": "3.4.21"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.31",
+    "@dcloudio/uni-cli-shared": "3.0.0-alpha-5020720260921001",
+    "@dcloudio/uni-stacktracey": "3.0.0-alpha-5020720260921001",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-5020720260921001",
+    "@vue/runtime-core": "3.4.21",
+    "vite": "5.2.8"
+  }
+}

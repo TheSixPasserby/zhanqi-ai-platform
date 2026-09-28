@@ -1,0 +1,30 @@
+/*
+ * uni.scss —— 全局 SCSS 变量。
+ *
+ * 项目里所有页面的样式都写在各自的 <style> 中（普通 CSS，不用预处理器），
+ * 这里只保留 uni-app 默认主题变量，供组件库与后续扩展使用。
+ * 保持为空壳是有意的：不引入 sass 依赖，装依赖时就不会因为编译 sass 而失败。
+ */
+
+/* 主色：竹青 */
+$uni-color-primary: #146B57;
+$uni-color-success: #2C7A57;
+$uni-color-warning: #B07A18;
+$uni-color-error: #B33A3A;
+
+/* 文字 */
+$uni-text-color: #1F2A26;
+$uni-text-color-inverse: #FFFFFF;
+$uni-text-color-grey: #5C6B65;
+$uni-text-color-placeholder: #B6C0BB;
+
+/* 背景 */
+$uni-bg-color: #F6F4EF;
+$uni-bg-color-grey: #FBFAF7;
+
+/* 边框 */
+$uni-border-color: #E8E4DA;
+
+/* 圆角 */
+$uni-border-radius-base: 13rpx;
+$uni-border-radius-lg: 20rpx;
