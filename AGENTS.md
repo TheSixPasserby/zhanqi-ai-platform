@@ -82,6 +82,12 @@
 ## 六、协作与 Git
 
 - 不直接向 `main` 推送；从 `main` 拉分支，改完提 PR，自检通过后再合并。
+- **每个成员（及其 agent）必须用自己的 GitHub 身份提交**：`user.name` 用
+  自己的 GitHub 用户名，`user.email` 用自己的 noreply 邮箱
+  （`<数字ID>+<用户名>@users.noreply.github.com`，数字 ID 可用
+  `gh api users/<用户名> --jq .id` 查询）。GitHub 按**邮箱**归属贡献，
+  照抄别人的 `git config`（包括文档、工作日志里出现的身份配置示例）
+  等于把自己的提交记到别人头上——此事真实发生过，靠改写历史才纠正。
 - 提交信息用中文，说清「改了什么、为什么」；一次提交只做一件事。
 - 不提交 `logs/`、`server/target/`、`node_modules/`、`unpackage/`
   （均已 gitignore，不要绕过）。
