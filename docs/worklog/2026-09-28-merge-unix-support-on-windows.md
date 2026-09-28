@@ -2,7 +2,11 @@
 
 - 日期：2026-09-28
 - 作者：WorkBuddy（本机 Windows 上的 agent）
-- 分支 / PR：`feature/win-handover-and-deploy-fixes`（基于 `d3c5f6d`，合并 `3a537b5`）；尚未 push
+- 分支 / PR：`feature/win-handover-and-deploy-fixes`（`6c47a36`，其上 `5d1f5a7` 合并 `3a537b5`）→ 已推送，PR #2
+
+> **提交号说明**：本文写作时最早的提交号是 `d3c5f6d` / `9429d58`，后来因「提交身份改写」
+> （见文末一节）被重写为 **`6c47a36` / `5d1f5a7`**，内容（tree）完全一致。
+> 正文保留原记录以免篡改排查过程，**引用提交号请以新号为准**。
 
 ## 背景：两条线在同一个坑上撞了车
 
@@ -119,3 +123,53 @@ git reset --mixed                        # 再把索引恢复到 HEAD 的内容
 - `Get-ConfigValue` 的块查找仍**没有常驻回归测试**：本次是人工「跑两次部署看端口」
   验证的，下一次重构没有护栏。建议抽成一个能独立跑的断言脚本并进 `tools/` 自检族。
 - `main` 仍无分支保护，「不直推 main」目前只靠自觉。
+
+## 补充：推送、开 PR，以及一次提交身份改写
+
+### 推送卡在认证上 —— 本机的 Git Credential Manager 是坏的
+
+仓库是公开的，所以 `fetch` / `clone` 从来不需要认证，**这个坑一直没暴露**。
+第一次 `git push` 直接失败：
+
+```
+bash: line 1: /dev/tty: No such device or address
+fatal: could not read Username for 'https://github.com': No such file or directory
+```
+
+排查结果：本机**没装 `gh`**、**没有 SSH key**、**没有 `GITHUB_TOKEN`/`GH_TOKEN`**、
+Windows 凭据管理器里也**没有 github 条目**。`~/.gitconfig` 里虽然配了
+Git Credential Manager，但它**根本不工作** —— `git-credential-manager --version`
+都是**空输出**，所以 GUI 弹窗（`helper-selector`）与设备码两条路一起断，
+git 只能退回去问那个不存在的 `/dev/tty`。绕开沙箱重试同样失败（不是沙箱的问题）。
+
+**解法：装 gh，用它的 OAuth 设备码流程。**
+
+1. 下载：Node 内置 `fetch` 从 GitHub Releases 拉
+   `gh_2.101.0_windows_amd64.zip`（15 MB，55 秒）—— 本机 npm 不可用，但 `fetch` 很快。
+2. 解压：PowerShell `Expand-Archive`。**`tar` 不认 zip**（先试了 tar，报
+   「This does not look like a tar archive」），别在这里浪费时间。
+3. 登录：`gh auth login --hostname github.com --git-protocol https --web -c`。
+   `-c` 把一次性验证码**复制到剪贴板**，用户在 `https://github.com/login/device` 粘贴授权。
+   **必须放到后台跑** —— 前台执行时验证码还没显示出来，命令就已经在等授权了。
+4. 接进 git：`gh auth setup-git --hostname github.com`，之后 `git push` 免交互。
+
+### 提交身份改写
+
+最初的提交误用了**仓库属主** `TheSixPasserby` 的身份，应改成操作者自己的账号
+`spsCiallo`（GitHub 上没设昵称，所以用登录名；邮箱用标准的
+`<id>+<login>@users.noreply.github.com`，既能把提交归到账号名下又不暴露真实邮箱）。
+
+做法：`git cat-file commit` 读原始提交对象 → **只替换 `author` / `committer` 两行** →
+`git hash-object -t commit -w --stdin` 写回，再手工更新 ref。这样
+**tree、父提交、提交信息、作者日期全都一字不变**，只有身份变了
+（脚本里跑了 10 项一致性断言，全过）。最后用
+`--force-with-lease=<ref>:<旧 sha>` 强推 —— 带上具体旧 sha 而不是裸 `--force`，
+万一远端被别人动过就会拒绝，不会覆盖别人的提交。
+
+于是 `d3c5f6d` / `9429d58` → **`6c47a36` / `5d1f5a7`**。
+
+> **事后复盘（值得记）**：改写**已推送**的提交会让文档里引用过的 sha 全部失效。
+> 正确顺序是**一开始就把提交身份配对**（`git config user.name/user.email`），
+> 而不是推完再改；真要改，改完必须全文 grep 一遍旧 sha 并同步。
+> 本次就是这么补救的 —— `HANDOVER.md` 与本文都做了同步，
+> 本文正文里作为「当时终端输出的逐字引用」保留原样，并已在顶部加了说明。

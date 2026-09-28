@@ -31,9 +31,10 @@
   局域网地址识别正确（本机 `10.131.7.162`）。
 - **Git**：仓库 `https://github.com/TheSixPasserby/zhanqi-ai-platform.git`（**公开仓库**）。
   远程 `main` 已被另一位成员推进到 `3a537b5`（新增 macOS / Linux 一键部署支持，
-  见第 5 节末）；本地那条线在分支 `feature/win-handover-and-deploy-fixes` 上
-  （`d3c5f6d` = 迁移 + P0/P1/P2 三个修复 + 交接文档，其上再合并了 `3a537b5`），
-  **尚未 push、尚未提 PR**，见第 6 节。
+  见第 5 节末）；本机这条线在分支 `feature/win-handover-and-deploy-fixes` 上
+  （`6c47a36` = 迁移 + P0/P1/P2 三个修复 + 交接文档，其上 `5d1f5a7` 合并了 `3a537b5`），
+  **已推送并开了 PR #2**，等评审合并。
+  提交身份统一为 `spsCiallo <182045554+spsCiallo@users.noreply.github.com>`。
 - **交付物** `dist/zhanqi-cloud-server.jar`（约 24 MB fat jar，含全部前端静态资源）。
   本次未改 Java，jar 未变。
 - **数据库** `zhanqi_cloud`（本机 MySQL 9.6）。服务已实机跑通并留下自检痕迹：
@@ -165,11 +166,11 @@ P0 统一成「按缩进计算块边界」的通用实现（远程那版写死�
 
 ## 6. 待办（按优先级）
 
-1. **把当前分支推上去并提 PR**。分支 `feature/win-handover-and-deploy-fixes`
-   已包含「项目迁移 + 3 个修复 + 交接文档」，并把远程的 macOS/Linux 部署支持
-   合并了进来；三套自检全绿，实机也跑过（结论见
-   `docs/worklog/2026-09-28-merge-unix-support-on-windows.md`）。
-   按 `AGENTS.md` 第六节走 PR，**不要直推 main**。
+1. **评审并合并 PR #2**。分支 `feature/win-handover-and-deploy-fixes` 已推送
+   （`6c47a36` + `5d1f5a7`），内含「项目迁移 + 3 个修复 + 交接文档」，
+   并把远程的 macOS/Linux 部署支持合并了进来；自检全绿、实机也跑过
+   （结论见 `docs/worklog/2026-09-28-merge-unix-support-on-windows.md`）。
+   合并之后这个分支可以删掉。
    （`config/application.yml`、`.workbuddy/`、`logs/` 均已 gitignore，不入库。）
 2. **修掉「重置演示数据」的断头路**（本次新发现：文档与实现不一致）。
    `README.md` 与本文件第 4 节都教用户「把 `app.database.reset-on-start` 改成
