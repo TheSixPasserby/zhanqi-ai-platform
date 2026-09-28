@@ -175,16 +175,24 @@ function Test-TcpPort($hostName, $port, $timeoutMs = 1500) {
 }
 
 function Get-ConfigValue($key, $fallback) {
-  # 从 config/application.yml 里读一个形如 "  key: value" 的简单键值，
+  # 从 config/application.yml 的 database: 块里读一个键值。
+  # 必须限定在 database: 块内：文件里 app.port（服务端口 8080）在 database.port
+  # （MySQL 端口 3306）之前，朴素地取第一个 "port:" 会把服务端口当成 MySQL 端口，
+  # 再被 Write-LocalConfig 写回去，配置就被污染了 —— 此坑真实存在过，勿回退。
   # 只用于把当前配置回显给用户，读不到就用默认值，绝不因为解析失败而中断部署
   if (-not (Test-Path $ConfigYml)) { return $fallback }
   try {
-    $line = Select-String -Path $ConfigYml -Pattern "^\s*$key\s*:" -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-    if (-not $line) { return $fallback }
-    $v = ($line.Line -split ':', 2)[1].Trim().Trim('"').Trim("'")
-    if ([string]::IsNullOrWhiteSpace($v)) { return $fallback }
-    return $v
+    $inDb = $false
+    foreach ($line in (Get-Content $ConfigYml -Encoding UTF8)) {
+      if ($line -match '^\s{2}database\s*:') { $inDb = $true; continue }
+      if ($inDb -and $line -match '^\s{2}\S') { $inDb = $false }
+      if ($inDb -and $line -match "^\s*$key\s*:") {
+        $v = ($line -split ':', 2)[1].Trim().Trim('"').Trim("'")
+        if ([string]::IsNullOrWhiteSpace($v)) { return $fallback }
+        return $v
+      }
+    }
+    return $fallback
   } catch {
     return $fallback
   }

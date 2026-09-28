@@ -11,7 +11,16 @@
   （2026-09-28，来源：2026-09-28-init-repo.md）
 - `dist/zhanqi-cloud-server.jar` 是交付物而非构建产物，**刻意入库**；
   改了 Java 却忘了重编译同步，等于交付旧版本，且自检脚本测的是 jar 的行为。
-  （2026-09-28，来源：2026-09-28-init-repo.md）
+  重编译要用 JDK 17/21 标准环境，别用本机碰巧装的高版本 JDK。
+  （2026-09-28，来源：2026-09-28-init-repo.md / 2026-09-28-unix-support.md）
+- 部署逻辑有两套对等实现：tools/deploy.ps1（Windows）和 tools/deploy.sh
+  （macOS/Linux），改一边必须同步另一边，行为与文案都要一致。
+  （2026-09-28，来源：2026-09-28-unix-support.md）
+- `config/application.yml` 可能由任一平台的脚本生成：Windows 写出来带 CRLF。
+  Unix 侧任何读它的代码取值后必须剥 \r（残留的 \r 拼进主机名/端口后
+  连接必失败，且报错信息里肉眼看不出来）。另外 `port:` 在 app 和 database
+  块下各有一个，取值必须限定块范围。
+  （2026-09-28，来源：2026-09-28-unix-support.md）
 
 ## 安全
 
@@ -35,3 +44,10 @@
   browser-check 走 Chrome DevTools Protocol + Node 内置 WebSocket，
   想加依赖前先想想能不能用内置模块实现。
   （2026-09-28，来源：README）
+- `.sh` 必须兼容 macOS 自带的 bash 3.2：禁用 bash 4 语法；变量紧邻全角
+  字符时必须写 `${var}`——bash 3.2 会把多字节字符的字节并进变量名，
+  报「unbound variable」且变量名末尾带乱码，极难看懂。
+  （2026-09-28，来源：2026-09-28-unix-support.md）
+- 用 Edit 工具改过 .ps1 后，先跑 `node tools/normalize-scripts.js`
+  （不带 --check）把 CRLF/BOM 修回规范，再用 --check 确认。
+  （2026-09-28，来源：2026-09-28-unix-support.md）

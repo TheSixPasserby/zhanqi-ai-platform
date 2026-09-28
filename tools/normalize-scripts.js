@@ -19,6 +19,13 @@
  *    —— 看起来像参数写错，实际是编码问题，非常容易被误判成逻辑 bug。
  *    加一个 UTF-8 BOM 就能让 PowerShell 5.1 正确识别编码，PowerShell 7 也兼容 BOM。
  *
+ * 3) .sh 必须「LF 换行 + UTF-8 无 BOM + 首行 shebang」
+ *    bash 把 CRLF 里的 \r 当成普通字符：报「$'\r': command not found」，
+ *    或者更隐蔽 —— 变量末尾拖一个不可见的 \r，拼出来的 URL / 路径全错。
+ *    这在 Windows 上编辑过 .sh（git 的 autocrlf 配错）时极易发生。
+ *    BOM 同理：bash 不认 BOM，首行会变成「\xef\xbb\xbf#!/usr/bin/env bash」，
+ *    shebang 直接失效。另外在类 Unix 系统上顺带检查可执行位（chmod +x）。
+ *
  * 用法：
  *   node tools/normalize-scripts.js          # 检查并自动修复
  *   node tools/normalize-scripts.js --check  # 只检查，有问题退出码 1（可挂 CI / 提交前钩子）
@@ -125,13 +132,70 @@ function handlePowerShell(file, buf) {
   return { bad: 1, fixed: 1 };
 }
 
+/* ------------------------------------------------------------------ .sh --- */
+
+function handleShell(file, buf) {
+  const rel = path.relative(ROOT, file);
+  const info = analyze(buf);
+  const problems = [];
+
+  if (info.hasBom) problems.push('含 UTF-8 BOM（bash 不认 BOM，shebang 会失效）');
+  if (info.crlf > 0) problems.push('含 ' + info.crlf + ' 处 CRLF 换行（bash 会把 \\r 当普通字符，应为 LF）');
+  if (info.bareCr > 0) problems.push('含 ' + info.bareCr + ' 处裸 CR');
+
+  const text = buf.toString('utf8').replace(/^﻿/, '');
+  if (!text.startsWith('#!')) problems.push('首行缺少 shebang（应为 #!/usr/bin/env bash）');
+
+  // 可执行位只在类 Unix 系统上有意义；Windows 上 fs 的 mode 不可靠，跳过
+  let execOk = true;
+  if (process.platform !== 'win32') {
+    try {
+      execOk = (fs.statSync(file).mode & 0o111) !== 0;
+    } catch (_) { }
+    if (!execOk) problems.push('缺少可执行位（chmod +x）');
+  }
+
+  if (problems.length === 0) {
+    console.log('  [OK]   ' + rel + '   LF + 无 BOM + shebang');
+    return { bad: 0, fixed: 0 };
+  }
+
+  console.log('  [问题] ' + rel);
+  problems.forEach((p) => console.log('         - ' + p));
+
+  if (CHECK_ONLY) return { bad: 1, fixed: 0 };
+
+  // 换行 / BOM / 可执行位可以自动修；缺 shebang 无法猜意图，只提示
+  let fixed = 0;
+  if (info.hasBom || info.crlf > 0 || info.bareCr > 0) {
+    const lf = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    fs.writeFileSync(file, Buffer.from(lf, 'utf8'));
+    console.log('         → 已自动修复为 LF + 无 BOM');
+    fixed = 1;
+  }
+  if (!execOk) {
+    try {
+      fs.chmodSync(file, fs.statSync(file).mode | 0o755);
+      console.log('         → 已补上可执行位');
+      fixed = 1;
+    } catch (e) {
+      console.log('         → 补可执行位失败：' + e.message);
+    }
+  }
+  if (!text.startsWith('#!')) {
+    console.log('         → 缺 shebang：请手工在首行加 #!/usr/bin/env bash');
+  }
+  return { bad: 1, fixed };
+}
+
 /* ------------------------------------------------------------------ main --- */
 
-const all = walk(ROOT).filter((f) => /\.(bat|cmd|ps1|psm1)$/i.test(f));
+const all = walk(ROOT).filter((f) => /\.(bat|cmd|ps1|psm1|sh)$/i.test(f));
 const bats = all.filter((f) => /\.(bat|cmd)$/i.test(f));
 const pss = all.filter((f) => /\.(ps1|psm1)$/i.test(f));
+const shs = all.filter((f) => /\.sh$/i.test(f));
 
-console.log('[scripts] 批处理文件 ' + bats.length + ' 个，PowerShell 脚本 ' + pss.length + ' 个');
+console.log('[scripts] 批处理 ' + bats.length + ' 个，PowerShell ' + pss.length + ' 个，Shell ' + shs.length + ' 个');
 console.log('');
 console.log('--- .bat / .cmd （要求 CRLF + 纯 ASCII）---');
 
@@ -147,6 +211,14 @@ console.log('');
 console.log('--- .ps1 （要求 UTF-8 BOM + CRLF）---');
 for (const f of pss) {
   const r = handlePowerShell(f, fs.readFileSync(f));
+  bad += r.bad;
+  fixed += r.fixed;
+}
+
+console.log('');
+console.log('--- .sh （要求 LF + 无 BOM + shebang）---');
+for (const f of shs) {
+  const r = handleShell(f, fs.readFileSync(f));
   bad += r.bad;
   fixed += r.fixed;
 }
