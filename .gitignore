@@ -11,6 +11,10 @@ uniapp-visitor/install.log
 
 # 本机专属配置（含数据库口令，由一键部署脚本生成；模板见 application.example.yml）
 config/application.yml
+config/application.yml.bak
+
+# 本机 agent 工作区记忆（含本机路径与环境备忘，不适合入库）
+.workbuddy/
 
 # 系统文件
 .DS_Store
