@@ -11,12 +11,23 @@
   （2026-09-28，来源：2026-09-28-init-repo.md）
 - `dist/zhanqi-cloud-server.jar` 是交付物而非构建产物，**刻意入库**；
   改了 Java 却忘了重编译同步，等于交付旧版本，且自检脚本测的是 jar 的行为。
-  （2026-09-28，来源：2026-09-28-init-repo.md）
+  重编译要用 JDK 17/21 标准环境，别用本机碰巧装的高版本 JDK。
+  （2026-09-28，来源：2026-09-28-init-repo.md / 2026-09-28-unix-support.md）
+- 部署逻辑有两套对等实现：`tools/deploy.ps1`（Windows）与 `tools/deploy.sh`
+  （macOS/Linux），改一边必须同步另一边，行为与文案都要一致。
+  （2026-09-28，来源：2026-09-28-unix-support.md）
 - `config/application.yml` 里 `app.port` 与 `app.database.port` **键名同为 `port`**。
-  任何按「全文找第一个 `port:`」读配置的代码都会读到服务端口 8080；
-  `tools/deploy.ps1` 的 `Get-ConfigValue` 已改为按 `$section` 限定块查找，
-  **新增读配置的代码必须同样限定块**。
-  （2026-09-28，来源：2026-09-28-migrate-to-d-and-handover.md）
+  任何按「全文找第一个 `port:`」读配置的代码都会读到服务端口 8080，再被
+  `Write-LocalConfig` 写回就永久毒化配置（首次部署不触发、第二次起才发作，
+  且两侧报错都指向 MySQL，极难定位）。**取值必须限定在所属块内**
+  （`Get-ConfigValue` 用 `$section` 参数，按缩进判定块边界）。
+  该文件还可能由 Windows 侧脚本生成而带 CRLF，Unix 侧取值后必须剥 `\r`。
+  （2026-09-28，来源：2026-09-28-migrate-to-d-and-handover.md / 2026-09-28-unix-support.md）
+- 上面那条配置毒化 bug 被两个平台**各自独立发现、各写了一版修复**
+  （Windows 侧与 macOS 侧，在互相不知情的情况下撞上同一个坑）。
+  合并时统一成「按缩进计算块边界」的通用实现，不要退回写死缩进或全文匹配。
+  再动这块代码前先读 `tools/deploy.ps1` 里 `Get-ConfigValue` 的注释。
+  （2026-09-28，来源：2026-09-28-merge-unix-support-on-windows.md）
 - 该项目在协作方本机的位置是 `D:\zhanqi-ai-platform`（2026-09-28 从
   `C:\Users\13541\WorkBuddy\2026-09-23-14-12-43\` 迁移而来）。
   本机专属信息（口令位置、工具绝对路径、沙箱特性）记在**不入库**的
@@ -58,3 +69,10 @@
   browser-check 走 Chrome DevTools Protocol + Node 内置 WebSocket，
   想加依赖前先想想能不能用内置模块实现。
   （2026-09-28，来源：README）
+- `.sh` 必须兼容 macOS 自带的 bash 3.2：禁用 bash 4 语法；变量紧邻全角
+  字符时必须写 `${var}`——bash 3.2 会把多字节字符的字节并进变量名，
+  报「unbound variable」且变量名末尾带乱码，极难看懂。
+  （2026-09-28，来源：2026-09-28-unix-support.md）
+- 用 Edit 工具改过 .ps1 后，先跑 `node tools/normalize-scripts.js`
+  （不带 --check）把 CRLF/BOM 修回规范，再用 --check 确认。
+  （2026-09-28，来源：2026-09-28-unix-support.md）

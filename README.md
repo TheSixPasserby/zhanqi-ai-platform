@@ -5,7 +5,9 @@
 
 ---
 
-## 一、一键部署（Windows）
+## 一、一键部署
+
+### Windows
 
 | 步骤 | 操作 | 说明 |
 | --- | --- | --- |
@@ -17,6 +19,20 @@
 运行包 `dist/zhanqi-cloud-server.jar` 已经预编译好，双击即可。
 
 > 如果双击后窗口一闪而过，说明批处理文件被改坏了。执行 `node tools/normalize-scripts.js --check` 可以查出原因。
+
+### macOS / Linux
+
+前提同样只有 **JDK 17+** 和 **MySQL**（macOS 可用 `brew install --cask temurin@17` 和 `brew services start mysql`），在项目根目录执行：
+
+```bash
+./deploy.sh      # 一键部署并启动，等价于 Windows 的「一键部署.bat」
+./stop.sh        # 停止服务
+./status.sh      # 查看运行状态与各端地址
+./rebuild.sh     # 重新编译后端（需要 Maven，改了 Java 代码才需要）
+```
+
+> 如果提示没有执行权限，先执行 `chmod +x *.sh tools/deploy.sh`，或直接用 `bash deploy.sh`。
+> 两个平台的脚本行为完全对等（同样的口令探测、找空闲端口、后台运行、失败给人话提示）。
 
 ### 部署后的访问地址
 
@@ -49,13 +65,15 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `一键部署.bat` / `deploy.bat` | 启动服务（含首次部署的全部初始化） |
-| `stop.bat` | 停止服务 |
-| `status.bat` | 查看进程状态、健康检查结果与各端地址 |
-| `rebuild.bat` | 重新编译后端（改了 Java 代码后才需要，需要 Maven） |
-| `tools/deploy.ps1` | 上述批处理的实际逻辑（可直接阅读，注释很详细） |
-| `tools/build.ps1` | 编译后端并把产物同步到 `dist/` |
-| `tools/normalize-scripts.js` | 校验脚本编码（`.bat` 必须 CRLF + 纯 ASCII，`.ps1` 必须 UTF-8 BOM） |
+| `一键部署.bat` / `deploy.bat` | 启动服务（含首次部署的全部初始化，Windows） |
+| `stop.bat` | 停止服务（Windows） |
+| `status.bat` | 查看进程状态、健康检查结果与各端地址（Windows） |
+| `rebuild.bat` | 重新编译后端（改了 Java 代码后才需要，需要 Maven，Windows） |
+| `deploy.sh` / `stop.sh` / `status.sh` / `rebuild.sh` | 上述四个脚本的 macOS / Linux 版，行为完全对等 |
+| `tools/deploy.ps1` | Windows 批处理的实际逻辑（可直接阅读，注释很详细） |
+| `tools/deploy.sh` | macOS / Linux 脚本的实际逻辑，与 deploy.ps1 保持行为对等 |
+| `tools/build.ps1` | 编译后端并把产物同步到 `dist/`（Windows） |
+| `tools/normalize-scripts.js` | 校验脚本编码（`.bat` 必须 CRLF + 纯 ASCII，`.ps1` 必须 UTF-8 BOM，`.sh` 必须 LF 无 BOM） |
 
 ### 自检脚本（改完代码跑一遍）
 

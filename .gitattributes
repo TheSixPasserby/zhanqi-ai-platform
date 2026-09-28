@@ -1,0 +1,11 @@
+# 换行符必须固定，不能交给各人本地的 core.autocrlf 决定：
+#   .bat 带 LF 会让 cmd 解析错位；.sh 带 CRLF 会让 bash 报 $'\r' 错误。
+# 这里的规则和 tools/normalize-scripts.js 的检查一一对应。
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+*.sh   text eol=lf
+
+# 预编译 jar 是二进制交付物，禁止任何文本转换
+*.jar  binary

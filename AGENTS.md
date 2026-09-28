@@ -29,10 +29,20 @@
 ## 二、脚本与编码
 
 - `.bat` 文件必须是 **CRLF 换行 + 纯 ASCII**（中文写在 `.ps1` 里）；
-  `.ps1` 文件必须是 **UTF-8 with BOM**。
+  `.ps1` 文件必须是 **UTF-8 with BOM**；
+  `.sh` 文件必须是 **LF 换行 + UTF-8 无 BOM + 首行 shebang + 可执行位**。
+  `.gitattributes` 已固定这些换行规则，不要删改。
+- `.sh` 必须兼容 **bash 3.2**（macOS 自带版本）：禁用关联数组、`${var,,}`、
+  `mapfile` 等 bash 4 语法；变量紧邻全角字符时必须写成 `${var}`
+  （bash 3.2 会把多字节字符的字节并进变量名）。
 - 改动任何脚本后必须执行 `node tools/normalize-scripts.js --check` 通过后才能提交。
-- 批处理只做入口转发，实际逻辑写在 `tools/deploy.ps1` / `tools/build.ps1`，
+- 部署逻辑有两套对等实现：`tools/deploy.ps1`（Windows）与
+  `tools/deploy.sh`（macOS / Linux）。**改一边必须同步另一边**，
+  行为、提示文案、失败处理都要保持一致。
+- 批处理 / 根目录 .sh 只做入口转发，实际逻辑写在 `tools/` 里，
   并保持其高密度中文注释风格。
+- 读取 `config/application.yml` 时必须容忍 CRLF（它可能由 Windows 侧脚本
+  生成），且键值要限定在所属块内取（`port:` 在 app 和 database 下各有一个）。
 
 ## 三、后端约定（server/）
 

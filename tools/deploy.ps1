@@ -187,10 +187,14 @@ function Get-ConfigValue($key, $fallback, $section) {
   #   之后服务永远连不上 MySQL；而且 deploy 侧报「数据库没启动」、
   #   Java 侧报 Connection refused，两句提示都指向错误方向，极难定位。
   #   所以凡是 database 块下的键，一律传 $section = 'database'。
+  #
+  # 块边界按「缩进回到同级或更浅」判断，不写死两级缩进 —— 配置被编辑器
+  # 重新缩进过（或将来加一层嵌套）也不会读错。macOS / Linux 侧的
+  # tools/deploy.sh 有对等实现，改这里必须同步那边。
   if (-not (Test-Path $ConfigYml)) { return $fallback }
 
   try {
-    $lines = @(Get-Content $ConfigYml -ErrorAction Stop)
+    $lines = @(Get-Content $ConfigYml -Encoding UTF8 -ErrorAction Stop)
   } catch {
     return $fallback
   }
