@@ -174,34 +174,76 @@ function Test-TcpPort($hostName, $port, $timeoutMs = 1500) {
   }
 }
 
-function Get-ConfigValue($key, $fallback) {
-  # 从 config/application.yml 的 database: 块里读一个键值。
-  # 必须限定在 database: 块内：文件里 app.port（服务端口 8080）在 database.port
-  # （MySQL 端口 3306）之前，朴素地取第一个 "port:" 会把服务端口当成 MySQL 端口，
-  # 再被 Write-LocalConfig 写回去，配置就被污染了 —— 此坑真实存在过，勿回退。
-  # 只用于把当前配置回显给用户，读不到就用默认值，绝不因为解析失败而中断部署
+function Get-ConfigValue($key, $fallback, $section) {
+  # 从 config/application.yml 里读一个形如 "  key: value" 的简单键值
+  # （只支持本项目用到的两级缩进结构），读不到就用默认值，
+  # 绝不因为解析失败而中断部署。
+  #
+  # 【$section 为什么必须存在 —— 真实事故，不要退回「全文找第一个」】
+  #   配置里 app.port（服务端口 8080）与 app.database.port（数据库端口 3306）
+  #   的键名都是 port。按全文匹配第一个 "port:" 读，读到的永远是 app.port。
+  #   后果：第一次部署（还没有配置文件）用默认 3306 正常；
+  #   第二次部署起，把上一步读到的 8080 当成数据库端口写回 database.port，
+  #   之后服务永远连不上 MySQL；而且 deploy 侧报「数据库没启动」、
+  #   Java 侧报 Connection refused，两句提示都指向错误方向，极难定位。
+  #   所以凡是 database 块下的键，一律传 $section = 'database'。
+  #
+  # 块边界按「缩进回到同级或更浅」判断，不写死两级缩进 —— 配置被编辑器
+  # 重新缩进过（或将来加一层嵌套）也不会读错。macOS / Linux 侧的
+  # tools/deploy.sh 有对等实现，改这里必须同步那边。
   if (-not (Test-Path $ConfigYml)) { return $fallback }
+
   try {
-    $inDb = $false
-    foreach ($line in (Get-Content $ConfigYml -Encoding UTF8)) {
-      if ($line -match '^\s{2}database\s*:') { $inDb = $true; continue }
-      if ($inDb -and $line -match '^\s{2}\S') { $inDb = $false }
-      if ($inDb -and $line -match "^\s*$key\s*:") {
-        $v = ($line -split ':', 2)[1].Trim().Trim('"').Trim("'")
-        if ([string]::IsNullOrWhiteSpace($v)) { return $fallback }
-        return $v
-      }
-    }
-    return $fallback
+    $lines = @(Get-Content $ConfigYml -Encoding UTF8 -ErrorAction Stop)
   } catch {
     return $fallback
   }
+
+  $start = 0
+  $end = $lines.Count
+
+  if ($section) {
+    $found = -1
+    $sectionIndent = 0
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+      $m = [regex]::Match($lines[$i], '^(?<ind>[ \t]*)' + [regex]::Escape($section) + '\s*:')
+      if ($m.Success) {
+        $found = $i
+        $sectionIndent = $m.Groups['ind'].Value.Length
+        break
+      }
+    }
+    if ($found -lt 0) { return $fallback }   # 没有这个块，交给默认值
+    $start = $found + 1
+
+    # 块的范围：缩进回到 section 同级或更浅的第一行即为块外
+    for ($i = $start; $i -lt $lines.Count; $i++) {
+      $l = $lines[$i]
+      if ([string]::IsNullOrWhiteSpace($l) -or $l -match '^\s*#') { continue }
+      if (($l.Length - $l.TrimStart().Length) -le $sectionIndent) { $end = $i; break }
+    }
+  }
+
+  for ($i = $start; $i -lt $end; $i++) {
+    $l = $lines[$i]
+    if ([string]::IsNullOrWhiteSpace($l) -or $l -match '^\s*#') { continue }
+    $m = [regex]::Match($l, '^\s*' + [regex]::Escape($key) + '\s*:\s*(?<val>.*)$')
+    if (-not $m.Success) { continue }
+    $v = $m.Groups['val'].Value.Trim()
+    # 去掉行尾注释；值本身含 # 时用引号包起来即可（下面 Trim 会剥掉引号）
+    if ($v -notmatch '^[''"'']') { $v = ($v -split '\s+#')[0].Trim() }
+    $v = $v.Trim('"').Trim("'")
+    if ([string]::IsNullOrWhiteSpace($v)) { return $fallback }
+    return $v
+  }
+
+  return $fallback
 }
 
 function Assert-MySql {
   Step '检查 MySQL 是否可连接…'
-  $dbHost = $env:DB_HOST; if (-not $dbHost) { $dbHost = Get-ConfigValue 'host' '127.0.0.1' }
-  $dbPort = $env:DB_PORT; if (-not $dbPort) { $dbPort = Get-ConfigValue 'port' '3306' }
+  $dbHost = $env:DB_HOST; if (-not $dbHost) { $dbHost = Get-ConfigValue 'host' '127.0.0.1' 'database' }
+  $dbPort = $env:DB_PORT; if (-not $dbPort) { $dbPort = Get-ConfigValue 'port' '3306' 'database' }
 
   if (Test-TcpPort $dbHost ([int]$dbPort)) {
     Ok "MySQL 可连接（$dbHost`:$dbPort）"
@@ -274,10 +316,10 @@ function Wait-Health($port, $timeoutSec) {
 function Write-LocalConfig($password, $port) {
   if (-not (Test-Path $ConfigDir)) { New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null }
 
-  $dbHost = $env:DB_HOST; if (-not $dbHost) { $dbHost = Get-ConfigValue 'host' '127.0.0.1' }
-  $dbPort = $env:DB_PORT; if (-not $dbPort) { $dbPort = Get-ConfigValue 'port' '3306' }
-  $dbName = $env:DB_NAME; if (-not $dbName) { $dbName = Get-ConfigValue 'name' 'zhanqi_cloud' }
-  $dbUser = $env:DB_USER; if (-not $dbUser) { $dbUser = Get-ConfigValue 'user' 'root' }
+  $dbHost = $env:DB_HOST; if (-not $dbHost) { $dbHost = Get-ConfigValue 'host' '127.0.0.1' 'database' }
+  $dbPort = $env:DB_PORT; if (-not $dbPort) { $dbPort = Get-ConfigValue 'port' '3306' 'database' }
+  $dbName = $env:DB_NAME; if (-not $dbName) { $dbName = Get-ConfigValue 'name' 'zhanqi_cloud' 'database' }
+  $dbUser = $env:DB_USER; if (-not $dbUser) { $dbUser = Get-ConfigValue 'user' 'root' 'database' }
 
   # 口令里可能出现 $ 或 " 之类的字符，用单引号包裹并转义单引号本身
   $pwdYaml = '"' + ($password -replace '\\', '\\' -replace '"', '\"') + '"'
@@ -396,9 +438,50 @@ function Start-ServiceServer($javaExe, $port) {
 
   Step "启动服务（端口 $port）…"
   # WorkingDirectory 必须是项目根目录：Spring Boot 从这里读取 config/application.yml
-  $proc = Start-Process -FilePath $javaExe -ArgumentList $jarArgs `
-            -WorkingDirectory $Root -WindowStyle Hidden -PassThru `
-            -RedirectStandardOutput $LogFile -RedirectStandardError $ErrFile
+  #
+  # 【为什么要先清理「同名环境变量」】
+  #   PowerShell 5.1 的 Start-Process 会把环境块装进一个「大小写不敏感」的字典；
+  #   若环境块里同时存在 Path / PATH / path 这种只差大小写的键，它会抛
+  #   ArgumentException「已添加项。字典中的关键字:"Path"所添加的关键字:"PATH"」。
+  #   这种环境不常见但真实存在（不规范的企业镜像、被启动器或 CI 注入过环境的机器）。
+  #   在部署场景里它的表现最糟：脚本只会说「服务启动失败」、运行日志是空的，
+  #   而提示却把人往「MySQL 没启动」上引 —— 完全定位不到真因。
+  #
+  #   修法：启动前把重复的键删掉，只留一个，然后照常 Start-Process。
+  #   这样能保留「子进程直接写日志文件」的语义 —— 父进程退出后服务照样活着，
+  #   换成管道重定向就会破坏这一点。
+  #   试过 -UseNewEnvironment，没用：Start-Process 在应用这个开关之前就要先把
+  #   那个字典建好，异常一样会抛。两种失败方式的实测记录见 docs/worklog。
+  $pathKeys = @()
+  try {
+    $pathKeys = @([System.Environment]::GetEnvironmentVariables('Process').Keys |
+                  Where-Object { $_ -match '^path$' })
+  } catch { }
+
+  if ($pathKeys.Count -gt 1) {
+    Warn "检测到环境变量里有 $($pathKeys.Count) 个同名 Path 键（$($pathKeys -join ' / ')），先清理再启动"
+    $guard = 0
+    while ($pathKeys.Count -gt 1 -and $guard -lt 5) {
+      $guard++
+      for ($i = 1; $i -lt $pathKeys.Count; $i++) {
+        try { [System.Environment]::SetEnvironmentVariable($pathKeys[$i], $null, 'Process') } catch { }
+      }
+      $pathKeys = @([System.Environment]::GetEnvironmentVariables('Process').Keys |
+                    Where-Object { $_ -match '^path$' })
+    }
+  }
+
+  try {
+    $proc = Start-Process -FilePath $javaExe -ArgumentList $jarArgs `
+              -WorkingDirectory $Root -WindowStyle Hidden -PassThru `
+              -RedirectStandardOutput $LogFile -RedirectStandardError $ErrFile -ErrorAction Stop
+  } catch {
+    Fail "无法启动 java 进程：$($_.Exception.Message)"
+    Say '  这通常不是数据库问题，而是本机环境变量异常或被安全软件拦截。' 'Yellow'
+    Say '  可手工执行下面的命令，直接看到真实报错：' 'Yellow'
+    Say "    `"$javaExe`" -jar `"$jar`" --server.port=$port" 'DarkGray'
+    exit 1
+  }
 
   Set-Content -Path $PidFile -Value $proc.Id -Encoding ASCII
   Set-Content -Path $PortFile -Value $port -Encoding ASCII
@@ -468,10 +551,15 @@ function Show-Banner($port, $dbSummary) {
   Say ''
 }
 
-/**
- * 从正在运行的服务上取地址信息。
- * 取不到时返回 $null，调用方会退回本机猜测的地址（不会因此中断部署）。
- */
+<#
+  从正在运行的服务上取地址信息。
+  取不到时返回 $null，调用方会退回本机猜测的地址（不会因此中断部署）。
+
+  注意：PowerShell 没有 /* */ 注释语法（那是 C / JS 的写法）。
+  写成 /** ... */ 不报语法错，但会被当成 4 条命令去执行，
+  每次运行都吐 4 行「无法将"/**"项识别为 cmdlet」，看起来像脚本坏了。
+  块注释的写法是「小于号 + 井号 … 井号 + 大于号」，不能用 C / JS 那种斜杠星号。
+#>
 function Get-ServerInfo($port) {
   foreach ($ep in @('127.0.0.1', 'localhost')) {
     try {
@@ -520,13 +608,26 @@ function Get-DbSummary($port) {
 function Show-LastError {
   Say '  最后 25 行运行日志：' 'Yellow'
   Say '  ------------------------------------------------------------' 'DarkGray'
+  $printed = 0
   foreach ($f in @($LogFile, $ErrFile)) {
     if (Test-Path $f) {
-      Get-Content $f -Tail 25 -Encoding UTF8 -ErrorAction SilentlyContinue |
-        ForEach-Object { Say "  $_" 'DarkGray' }
+      $lines = @(Get-Content $f -Tail 25 -Encoding UTF8 -ErrorAction SilentlyContinue)
+      foreach ($l in $lines) { Say "  $l" 'DarkGray' }
+      $printed += $lines.Count
     }
   }
   Say '  ------------------------------------------------------------' 'DarkGray'
+
+  # 日志是空的，说明 java 进程压根没起来（连 JVM 都没运行），
+  # 这时下面「MySQL 没启动 / 口令不对 / 端口被占」三条提示全是误导，必须点破。
+  if ($printed -eq 0) {
+    Say '  （日志为空 —— java 进程根本没有启动，不是数据库的问题）' 'Yellow'
+    Say '  常见原因：java 可执行文件路径不对，或启动过程被安全软件 / 环境变量异常拦下。' 'Yellow'
+    Say '  可手工执行下面的命令，直接看到真实报错：' 'Yellow'
+    $javaHint = $javaExe
+    if (-not $javaHint) { try { $javaHint = Get-JavaExe } catch { $javaHint = '<JDK路径>\bin\java.exe' } }
+    Say "    `"$javaHint`" -jar `"$Root\dist\zhanqi-cloud-server.jar`" --server.port=$DefaultPort" 'DarkGray'
+  }
 }
 
 # ------------------------------------------------------------------ 动作
@@ -564,7 +665,7 @@ function Do-Start {
   Step '准备本机配置…'
   $password = $DbPassword
   if (-not $password) { $password = $env:DB_PASSWORD }
-  if (-not $password) { $password = Get-ConfigValue 'password' '' }
+  if (-not $password) { $password = Get-ConfigValue 'password' '' 'database' }
   Write-LocalConfig $password $desired
   if ($password) {
     Ok '已写入 config\application.yml（沿用已保存的 MySQL 口令）'
