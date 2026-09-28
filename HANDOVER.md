@@ -30,11 +30,15 @@
   四个入口页全部 HTTP 200，接口冒烟测试 **97/97 通过**。
   局域网地址识别正确（本机 `10.131.7.162`）。
 - **Git**：仓库 `https://github.com/TheSixPasserby/zhanqi-ai-platform.git`（**公开仓库**）。
-  远程 `main` 已被另一位成员推进到 `3a537b5`（新增 macOS / Linux 一键部署支持，
-  见第 5 节末）；本机这条线在分支 `feature/win-handover-and-deploy-fixes` 上
-  （`6c47a36` = 迁移 + P0/P1/P2 三个修复 + 交接文档，其上 `5d1f5a7` 合并了 `3a537b5`），
-  **已推送并开了 PR #2**，等评审合并。
-  提交身份统一为 `spsCiallo <182045554+spsCiallo@users.noreply.github.com>`。
+  `main` 已开**分支保护**：只能走 PR 合并、禁 force push（详见 `docs/agent-memory.md`
+  的「协作」一节的说明）。
+  交接时这批工作（迁移 + P0/P1/P2 修复 + 本文件）已经由 PR #2 合入 `main`
+  （`6c47a36` → `5d1f5a7`（并入 macOS/Linux 支持）→ `95e89be`），分支已删除；
+  本地 `main` 现为 `4fa71ae`。
+  **提交必须用你自己的 GitHub 身份**：`user.name` 用自己的用户名，`user.email` 用
+  `<自己的数字ID>+<用户名>@users.noreply.github.com`，ID 可用
+  `gh api users/<用户名> --jq .id` 查。**不要照抄任何文档里出现的身份**——
+  照抄等于把自己的提交记到别人头上（`AGENTS.md` 第六节）。
 - **交付物** `dist/zhanqi-cloud-server.jar`（约 24 MB fat jar，含全部前端静态资源）。
   本次未改 Java，jar 未变。
 - **数据库** `zhanqi_cloud`（本机 MySQL 9.6）。服务已实机跑通并留下自检痕迹：
@@ -103,7 +107,7 @@ rebuild.bat                               # 改过 Java 才需要；会把产物
 > ⚠️ **这条路径目前是断的（2026-09-28 实测确认）**：一键部署的 `Do-Start` 每次都会先
 > 调用 `Write-LocalConfig`，用一个**硬编码 `false` 的模板**重写配置文件，
 > 于是你改的 `true` 在 java 启动之前就被改了回去。想真正重置，得绕过一键部署、
-> 直接 `java -jar dist\zhanqi-cloud-server.jar` 启动一次。待办第 2 条。
+> 直接 `java -jar dist\zhanqi-cloud-server.jar` 启动一次。待办第 1 条。
 
 ## 5. 本次迁移顺手修掉的 3 个缺陷（重要，已修完但要知道）
 
@@ -166,33 +170,25 @@ P0 统一成「按缩进计算块边界」的通用实现（远程那版写死�
 
 ## 6. 待办（按优先级）
 
-1. **评审并合并 PR #2**。分支 `feature/win-handover-and-deploy-fixes` 已推送
-   （`6c47a36` + `5d1f5a7`），内含「项目迁移 + 3 个修复 + 交接文档」，
-   并把远程的 macOS/Linux 部署支持合并了进来；自检全绿、实机也跑过
-   （结论见 `docs/worklog/2026-09-28-merge-unix-support-on-windows.md`）。
-   合并之后这个分支可以删掉。
-   （`config/application.yml`、`.workbuddy/`、`logs/` 均已 gitignore，不入库。）
-2. **修掉「重置演示数据」的断头路**（本次新发现：文档与实现不一致）。
+1. **修掉「重置演示数据」的断头路**（本次新发现：文档与实现不一致）。
    `README.md` 与本文件第 4 节都教用户「把 `app.database.reset-on-start` 改成
    `true` 启动一次」，但 `deploy.ps1` 的 `Do-Start` 每次都会先调用
    `Write-LocalConfig`，用**硬编码 `false` 的模板**重写整个配置文件 ——
    开关在 java 启动之前就被改了回去，照文档做等于什么都没发生（已实测确认）。
    修法有取舍（让 `Write-LocalConfig` 保留已有值？还是加一个显式的 `-Reset` 动作？），
    先定产品意图再动手。想立刻重置，目前只能绕过一键部署、直接用 `java -jar` 启动一次。
-3. **给 `Get-ConfigValue` 补常驻回归测试**：目前是人工「连跑两次部署看端口有没有被
+2. **给 `Get-ConfigValue` 补常驻回归测试**：目前是人工「连跑两次部署看端口有没有被
    写坏」验证的，下一次重构没有护栏。建议抽成一个能独立跑的断言脚本并进
    `tools/` 自检族（`AGENTS.md` 也要求自检脚本零 npm 依赖）。
-4. **`tools/deploy.sh` 还缺一次 Linux 实机验证**：它只在 macOS 由 doris 跑过，
+3. **`tools/deploy.sh` 还缺一次 Linux 实机验证**：它只在 macOS 由 doris 跑过，
    Windows 上无法实测；两套脚本的对等性目前只靠 `AGENTS.md` 的约定与人工代码对照。
    `rebuild.sh` 同样一直未实测（作者本机 JDK 版本偏高，怕用非标准 JDK 重编交付物）。
-5. **`main` 尚未设分支保护**：「不直推 main」目前只靠自觉，
-   建议仓库管理员在 GitHub Settings → Branches 加保护规则。
-6. **README 里写有演示账号明文口令**（`admin/admin123` 等）。
+4. **README 里写有演示账号明文口令**（`admin/admin123` 等）。
    属刻意的公开演示数据；若哪天与某成员真实口令撞车，必须换掉。
-7. **旧目录处置**：`C:\Users\13541\WorkBuddy\2026-09-23-14-12-43\` 下仍留着
+5. **旧目录处置**：`C:\Users\13541\WorkBuddy\2026-09-23-14-12-43\` 下仍留着
    `zhanqi-ai-platform\`（旧副本）与 `zhanqi-ai-platform.7z`（约 48 MB 打包），
    确认无误后可清理，避免两个副本各自演进造成混淆。
-8. **npm 不可用是长期约束**：如果后续真的需要产出 uni-app 的 H5/安卓包，
+6. **npm 不可用是长期约束**：如果后续真的需要产出 uni-app 的 H5/安卓包，
    要么换一台能装依赖的机器，要么改用 Node 内置 `fetch` 手工拉 tarball 组装
    `node_modules`。当前游客端 H5 用的是零构建版，不依赖它。
 

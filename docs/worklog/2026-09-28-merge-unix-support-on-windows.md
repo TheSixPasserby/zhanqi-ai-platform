@@ -155,9 +155,11 @@ git 只能退回去问那个不存在的 `/dev/tty`。绕开沙箱重试同样�
 
 ### 提交身份改写
 
-最初的提交误用了**仓库属主** `TheSixPasserby` 的身份，应改成操作者自己的账号
-`spsCiallo`（GitHub 上没设昵称，所以用登录名；邮箱用标准的
-`<id>+<login>@users.noreply.github.com`，既能把提交归到账号名下又不暴露真实邮箱）。
+最初的提交误用了**仓库属主**的身份（原因是照抄了 `git log` 里看到的作者），
+应改成**操作者本人**的账号：`user.name` 用自己的用户名，`user.email` 用
+`<自己的数字ID>+<用户名>@users.noreply.github.com` —— 既能把提交正确归到账号名下，
+又不暴露真实邮箱。**这里刻意不写出具体身份**：照抄别人文档里的身份正是出事的原因，
+自己的 ID 用 `gh api users/<用户名> --jq .id` 查（`AGENTS.md` 第六节已固化为规则）。
 
 做法：`git cat-file commit` 读原始提交对象 → **只替换 `author` / `committer` 两行** →
 `git hash-object -t commit -w --stdin` 写回，再手工更新 ref。这样
