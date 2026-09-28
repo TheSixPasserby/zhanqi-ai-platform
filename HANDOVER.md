@@ -101,13 +101,13 @@ rebuild.bat                               # 改过 Java 才需要；会把产物
 > **订单会保留**（交易凭证，后台刻意不提供删除接口），脚本结尾会提示你。
 > 正式演示前按第 5 节恢复干净数据。
 
-**恢复干净演示数据**：把 `config/application.yml` 的 `app.database.reset-on-start` 改成
-`true` 启动一次，再改回 `false`。
+**恢复干净演示数据**：双击 `reset.bat`（macOS / Linux 执行 `./reset.sh`），
+按提示输入 `YES` 确认。
 
-> ⚠️ **这条路径目前是断的（2026-09-28 实测确认）**：一键部署的 `Do-Start` 每次都会先
-> 调用 `Write-LocalConfig`，用一个**硬编码 `false` 的模板**重写配置文件，
-> 于是你改的 `true` 在 java 启动之前就被改了回去。想真正重置，得绕过一键部署、
-> 直接 `java -jar dist\zhanqi-cloud-server.jar` 启动一次。待办第 1 条。
+> 历史注记：2026-09-28 之前文档教的是「手改 `reset-on-start` 为 `true` 启动一次」，
+> 这条路径是断的（`Write-LocalConfig` 每次启动都会用模板重写配置，手改无效）。
+> 现已通过显式 `reset` 动作修复（`deploy.ps1` / `deploy.sh` 双端对等），
+> 脚本完成后会自动把开关拨回 `false`。`reset.bat` 尚待 Windows 实机回归，见待办第 1 条。
 
 ## 5. 本次迁移顺手修掉的 3 个缺陷（重要，已修完但要知道）
 
@@ -170,13 +170,10 @@ P0 统一成「按缩进计算块边界」的通用实现（远程那版写死�
 
 ## 6. 待办（按优先级）
 
-1. **修掉「重置演示数据」的断头路**（本次新发现：文档与实现不一致）。
-   `README.md` 与本文件第 4 节都教用户「把 `app.database.reset-on-start` 改成
-   `true` 启动一次」，但 `deploy.ps1` 的 `Do-Start` 每次都会先调用
-   `Write-LocalConfig`，用**硬编码 `false` 的模板**重写整个配置文件 ——
-   开关在 java 启动之前就被改了回去，照文档做等于什么都没发生（已实测确认）。
-   修法有取舍（让 `Write-LocalConfig` 保留已有值？还是加一个显式的 `-Reset` 动作？），
-   先定产品意图再动手。想立刻重置，目前只能绕过一键部署、直接用 `java -jar` 启动一次。
+1. **`reset.bat` 待 Windows 实机回归**。「重置演示数据」的断头路已修复
+   （2026-09-28，方案取「显式 reset 动作」：`deploy.ps1` / `deploy.sh` 新增
+   `reset`，输入 YES 确认，完成后开关自动拨回 `false`）。macOS 侧已实测；
+   `reset.bat` → `deploy.ps1 reset` 这条 Windows 链路请双击验证一次。
 2. **给 `Get-ConfigValue` 补常驻回归测试**：目前是人工「连跑两次部署看端口有没有被
    写坏」验证的，下一次重构没有护栏。建议抽成一个能独立跑的断言脚本并进
    `tools/` 自检族（`AGENTS.md` 也要求自检脚本零 npm 依赖）。
