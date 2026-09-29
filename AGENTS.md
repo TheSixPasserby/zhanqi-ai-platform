@@ -76,8 +76,13 @@
 2. `node tools/smoke-test.js` —— 97 项接口断言必须全绿。
 3. 改了前端：`node tools/browser-check.js` —— 无未捕获异常、无控制台错误、
    无 4xx/5xx。
-4. 改了脚本：`node tools/normalize-scripts.js --check`。
-5. 自检失败禁止提交；不得为了让检查通过而删除或弱化断言。
+4. 改了 `tools/deploy.ps1` / `tools/deploy.sh` 里**读 `config/application.yml`
+   的取配置逻辑**：`node tools/deploy-config-test.js` —— 36 项断言必须全绿。
+   它守的是「`port` 同名键导致配置自污染」那个 P0（首次部署不发作、第二次起
+   才发作，Windows 与 macOS 两侧各自踩过）。**测试是抽交付版函数体来跑的、
+   不是复制一份实现**，所以改了脚本它一定会跟着变。
+5. 改了脚本：`node tools/normalize-scripts.js --check`。
+6. 自检失败禁止提交；不得为了让检查通过而删除或弱化断言。
 
 ## 六、协作与 Git
 

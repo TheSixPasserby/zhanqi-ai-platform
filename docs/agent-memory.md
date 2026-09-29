@@ -16,6 +16,12 @@
 - 部署逻辑有两套对等实现：`tools/deploy.ps1`（Windows）与 `tools/deploy.sh`
   （macOS/Linux），改一边必须同步另一边，行为与文案都要一致。
   （2026-09-28，来源：2026-09-28-unix-support.md）
+- 但两套**取配置**的实现并不完全对等（2026-09-29 由 `tools/deploy-config-test.js`
+  实测记录，非推测）：bash 版 `get_config_value` 把 `database:` 的缩进**写死成两格**、
+  也**不剥行尾注释**，而 ps1 版按缩进计算并剥注释。日常不触发（配置由固定模板生成），
+  用户手改过配置就会中招（行尾注释被当成值的一部分）。修它需要 BSD awk/sed 环境，
+  登记在 HANDOVER 待办里。
+  （2026-09-29，来源：2026-09-29-deploy-config-test.md）
 - `config/application.yml` 里 `app.port` 与 `app.database.port` **键名同为 `port`**。
   任何按「全文找第一个 `port:`」读配置的代码都会读到服务端口 8080，再被
   `Write-LocalConfig` 写回就永久毒化配置（首次部署不触发、第二次起才发作，
