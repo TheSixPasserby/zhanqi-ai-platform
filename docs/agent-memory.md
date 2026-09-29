@@ -70,13 +70,16 @@
 
 ## 协作
 
-- **git 身份不能跨成员复制**。真实事故：Windows 侧 agent 照抄了工作日志里
-  记录的 `git config` 身份命令，三个提交全记到了仓库所有者名下，最后靠
-  `git filter-branch` 改写历史才纠正（幸亏还没合并进 main——合并后就要
-  重写主分支了）。日志里可以记「配置了 git 身份」这个事实，但**不要贴出
-  可直接照抄的具体身份命令**；每人的 noreply 邮箱查法见 AGENTS.md 第六节。
-  （2026-09-28，来源：本条即蒸馏，过程见 spsCiallo 分支的
-  2026-09-28-merge-unix-support-on-windows.md 补记）
+- **git 身份不能跨成员复制**。真实事故：Windows 侧 agent 沿用了 `git log` 里
+  看到的作者身份，三个提交全记到了仓库所有者名下（所幸还没合并进 main，
+  否则就得重写主分支了）。订正手法是**只替换提交对象里的 author / committer
+  两行**（`git cat-file` 读原始对象 → `hash-object -w` 写回 → 手工更新 ref），
+  这样 tree / 父提交 / 提交信息 / 日期一字不变，比 `filter-branch` 精确得多 ——
+  同类场景**不要改用 `filter-branch`**。日志里可以记「配置了 git 身份」这个事实，
+  但**不要贴出可直接照抄的具体身份命令**；每人的 noreply 邮箱查法见 `AGENTS.md` 第六节。
+  （2026-09-28，来源：2026-09-28-merge-unix-support-on-windows.md。
+  2026-09-29 订正：此前记的「靠 `git filter-branch` 改写历史」不准确，
+  实际用的是上面的对象级改写，两个平台的记录已对齐）
 - GitHub 贡献者统计只算**默认分支（main）上的提交**，且按**作者邮箱**归属。
   「推了分支却不见贡献记录」先查这两点，别急着怀疑推送失败。
   （2026-09-28，来源：同上）
@@ -99,3 +102,12 @@
 - 用 Edit 工具改过 .ps1 后，先跑 `node tools/normalize-scripts.js`
   （不带 --check）把 CRLF/BOM 修回规范，再用 --check 确认。
   （2026-09-28，来源：2026-09-28-unix-support.md）
+- `tools/smoke-test.js` 的端口是**命令行参数**，默认打 8080：`node tools/smoke-test.js 8081`。
+  而服务不一定在 8080 —— `reset` 沿用上次运行的端口（`Get-ServicePort`），
+  端口被占时部署脚本也会自动往后找。不看打印出来的地址就跑，会满屏
+  `ECONNREFUSED 127.0.0.1:8080`，极易误判成「服务没起来」。
+  （2026-09-29，来源：2026-09-29-verify-reset-on-windows.md）
+- 临时 `.ps1` 脚本**写成纯 ASCII**，别带中文注释：用 Write 工具落盘的 `.ps1`
+  是无 BOM 的，而 PowerShell 5.1 会把无 BOM 的 `.ps1` 按 GBK 读，
+  中文注释足以把语法读坏 —— 表现是脚本完全跑不动，且报错也看不出原因。
+  （2026-09-29，来源：2026-09-29-verify-reset-on-windows.md）

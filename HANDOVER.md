@@ -41,10 +41,11 @@
   照抄等于把自己的提交记到别人头上（`AGENTS.md` 第六节）。
 - **交付物** `dist/zhanqi-cloud-server.jar`（约 24 MB fat jar，含全部前端静态资源）。
   本次未改 Java，jar 未变。
-- **数据库** `zhanqi_cloud`（本机 MySQL 9.6）。服务已实机跑通并留下自检痕迹：
-  `users=2 merchants=3 spots=8 products=10 orders=10 knowledge=16`——
-  比种子数据多出的 3 笔是自检脚本写入的测试订单（订单是交易凭证、刻意保留）。
-  各账号 `loginCount` 已被自检重置流程影响，见第 6 节第 1 条。
+- **数据库** `zhanqi_cloud`（本机 MySQL 9.6）已复原到**干净的种子数据**
+  （2026-09-29 用 `reset.bat` 重置并核验过）：
+  `users=2 merchants=3 admins=1 spots=8 stamps=3 products=10 orders=7
+  activities=5 knowledge=16 settings=18`。
+  此前自检留下的 3 笔测试订单已随重置清掉。重置用法见第 4 节。
 
 ## 3. 接手第一件事：本机环境（这台 Windows 机器）
 
@@ -107,7 +108,14 @@ rebuild.bat                               # 改过 Java 才需要；会把产物
 > 历史注记：2026-09-28 之前文档教的是「手改 `reset-on-start` 为 `true` 启动一次」，
 > 这条路径是断的（`Write-LocalConfig` 每次启动都会用模板重写配置，手改无效）。
 > 现已通过显式 `reset` 动作修复（`deploy.ps1` / `deploy.sh` 双端对等），
-> 脚本完成后会自动把开关拨回 `false`。`reset.bat` 尚待 Windows 实机回归，见待办第 1 条。
+> 脚本完成后会自动把开关拨回 `false`。
+> **Windows 侧已实机回归通过（2026-09-29）**：取消路径不动数据、重置路径
+> `orders 10→7` 回种子态、开关自动拨回 `false`、重置后冒烟 97/97、连续重置两次均正常。
+>
+> ⚠️ 一个容易踩的小坑：`reset` 会**沿用上次运行的端口**（`Get-ServicePort`），
+> 所以重置后服务不一定在 8080。而 `tools/smoke-test.js` 默认打 8080，
+> 此时直接跑会满屏 `ECONNREFUSED 127.0.0.1:8080`。按打印出来的地址传端口即可：
+> `node tools/smoke-test.js 8081`。
 
 ## 5. 本次迁移顺手修掉的 3 个缺陷（重要，已修完但要知道）
 
@@ -170,22 +178,18 @@ P0 统一成「按缩进计算块边界」的通用实现（远程那版写死�
 
 ## 6. 待办（按优先级）
 
-1. **`reset.bat` 待 Windows 实机回归**。「重置演示数据」的断头路已修复
-   （2026-09-28，方案取「显式 reset 动作」：`deploy.ps1` / `deploy.sh` 新增
-   `reset`，输入 YES 确认，完成后开关自动拨回 `false`）。macOS 侧已实测；
-   `reset.bat` → `deploy.ps1 reset` 这条 Windows 链路请双击验证一次。
-2. **给 `Get-ConfigValue` 补常驻回归测试**：目前是人工「连跑两次部署看端口有没有被
+1. **给 `Get-ConfigValue` 补常驻回归测试**：目前是人工「连跑两次部署看端口有没有被
    写坏」验证的，下一次重构没有护栏。建议抽成一个能独立跑的断言脚本并进
    `tools/` 自检族（`AGENTS.md` 也要求自检脚本零 npm 依赖）。
-3. **`tools/deploy.sh` 还缺一次 Linux 实机验证**：它只在 macOS 由 doris 跑过，
+2. **`tools/deploy.sh` 还缺一次 Linux 实机验证**：它只在 macOS 由 doris 跑过，
    Windows 上无法实测；两套脚本的对等性目前只靠 `AGENTS.md` 的约定与人工代码对照。
    `rebuild.sh` 同样一直未实测（作者本机 JDK 版本偏高，怕用非标准 JDK 重编交付物）。
-4. **README 里写有演示账号明文口令**（`admin/admin123` 等）。
+3. **README 里写有演示账号明文口令**（`admin/admin123` 等）。
    属刻意的公开演示数据；若哪天与某成员真实口令撞车，必须换掉。
-5. **旧目录处置**：`C:\Users\13541\WorkBuddy\2026-09-23-14-12-43\` 下仍留着
+4. **旧目录处置**：`C:\Users\13541\WorkBuddy\2026-09-23-14-12-43\` 下仍留着
    `zhanqi-ai-platform\`（旧副本）与 `zhanqi-ai-platform.7z`（约 48 MB 打包），
    确认无误后可清理，避免两个副本各自演进造成混淆。
-6. **npm 不可用是长期约束**：如果后续真的需要产出 uni-app 的 H5/安卓包，
+5. **npm 不可用是长期约束**：如果后续真的需要产出 uni-app 的 H5/安卓包，
    要么换一台能装依赖的机器，要么改用 Node 内置 `fetch` 手工拉 tarball 组装
    `node_modules`。当前游客端 H5 用的是零构建版，不依赖它。
 
