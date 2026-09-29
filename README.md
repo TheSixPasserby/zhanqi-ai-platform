@@ -83,13 +83,14 @@
 | --- | --- |
 | `node tools/smoke-test.js` | **接口冒烟测试**：97 项断言，覆盖认证、打卡、商城下单、AI 问答与防幻觉、权限矩阵、服务器管理，外加一条「图片引用是否都存在」的静态检查 |
 | `node tools/browser-check.js` | **前端实机自检**：用本机 Chrome 无头模式把四端页面真的跑一遍，抓未捕获异常、控制台错误、所有 4xx/5xx 请求，并对关键 DOM 做断言；顺带产出 `docs/screenshots/` 截图 |
+| `node tools/deploy-config-test.js` | **部署配置解析回归测试**：36 项断言。从交付版 `deploy.ps1` / `deploy.sh` 里把读配置的函数**抽出来原样执行**（不是复制一份实现），守住「`app.port` 与 `app.database.port` 同名 `port` 导致配置被写坏」那个老坑 —— 它首次部署不发作、第二次起才发作，Windows 与 macOS 两侧都被独立踩到过 |
 | `node tools/normalize-scripts.js --check` | 脚本编码自检（可挂到提交前钩子） |
 
-> 这两个自检脚本会用测试账号往数据库里写数据。账号与商品会自动清理；**订单会保留** ——
+> 冒烟测试与浏览器自检会用测试账号往数据库里写数据。账号与商品会自动清理；**订单会保留** ——
 > 订单是交易凭证，后台刻意不开放直接删除，脚本会在结尾提醒你。
 > 正式演示前按下面的「想清空演示数据重新开始？」重置一次即可。
 >
-> 两个脚本都不依赖任何 npm 包（浏览器自检走的是 Chrome DevTools Protocol + Node 内置 WebSocket），
+> 这些脚本都不依赖任何 npm 包（浏览器自检走的是 Chrome DevTools Protocol + Node 内置 WebSocket），
 > 所以在完全离线的机器上也能跑。
 
 ---
@@ -215,6 +216,7 @@ zhanqi-ai-platform/
 │  ├─ build.ps1                    编译后端并同步到 dist/
 │  ├─ normalize-scripts.js         脚本编码自检（.bat 纯 ASCII、.ps1 带 BOM）
 │  ├─ smoke-test.js                接口冒烟测试（97 项断言）
+│  ├─ deploy-config-test.js        部署配置解析回归测试（36 项断言）
 │  └─ browser-check.js             前端实机自检（无头 Chrome + CDP，含截图）
 ├─ docs/
 │  ├─ 架构说明.md                   整体架构与设计决策（含踩坑记录）

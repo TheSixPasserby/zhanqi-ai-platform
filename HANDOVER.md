@@ -92,10 +92,11 @@
 node tools/normalize-scripts.js --check   # 脚本编码：.bat 纯 ASCII+CRLF，.ps1 UTF-8 BOM+CRLF
 node tools/smoke-test.js                  # 接口冒烟 97 项
 node tools/browser-check.js               # 前端实机自检 46 项（无头 Chrome，顺带出截图）
+node tools/deploy-config-test.js          # 部署配置解析回归 36 项（动了 deploy 的取配置逻辑必跑）
 rebuild.bat                               # 改过 Java 才需要；会把产物同步到 dist/
 ```
 
-两个自检脚本**零 npm 依赖**（浏览器自检走 Chrome DevTools Protocol + Node 内置 WebSocket），
+三个自检脚本**零 npm 依赖**（浏览器自检走 Chrome DevTools Protocol + Node 内置 WebSocket），
 离线机器也能跑。这是硬约束，别加依赖。
 
 > 自检脚本会往库里写测试账号、商品和订单。账号与商品会自动清掉；
@@ -178,12 +179,16 @@ P0 统一成「按缩进计算块边界」的通用实现（远程那版写死�
 
 ## 6. 待办（按优先级）
 
-1. **给 `Get-ConfigValue` 补常驻回归测试**：目前是人工「连跑两次部署看端口有没有被
-   写坏」验证的，下一次重构没有护栏。建议抽成一个能独立跑的断言脚本并进
-   `tools/` 自检族（`AGENTS.md` 也要求自检脚本零 npm 依赖）。
+1. **`tools/deploy.sh` 的取配置逻辑比 ps1 版弱两处**（本次新发现，已由
+   `tools/deploy-config-test.js` 第 4 节实测记录，不是推测）：bash 版把
+   `database:` 的缩进**写死成两格**、也不**剥行尾注释**。日常不触发
+   （配置文件由脚本按固定模板生成），但用户手改过配置就会拿不到值 ——
+   行尾注释会被当成端口值的一部分。
+   动手时注意 bash 3.2 兼容与 BSD awk/sed 行为差异，**必须在 macOS/Linux 上验证**；
+   改完把测试第 4 节的「已知差异」改成断言相等即可。
 2. **`tools/deploy.sh` 还缺一次 Linux 实机验证**：它只在 macOS 由 doris 跑过，
-   Windows 上无法实测；两套脚本的对等性目前只靠 `AGENTS.md` 的约定与人工代码对照。
-   `rebuild.sh` 同样一直未实测（作者本机 JDK 版本偏高，怕用非标准 JDK 重编交付物）。
+   Windows 上无法实测。`rebuild.sh` 同样一直未实测（作者本机 JDK 版本偏高，
+   怕用非标准 JDK 重编交付物）。
 3. **README 里写有演示账号明文口令**（`admin/admin123` 等）。
    属刻意的公开演示数据；若哪天与某成员真实口令撞车，必须换掉。
 4. **旧目录处置**：`C:\Users\13541\WorkBuddy\2026-09-23-14-12-43\` 下仍留着
