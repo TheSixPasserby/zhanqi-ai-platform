@@ -100,15 +100,39 @@ public class AdminService {
         }
         buyerRank.sort((a, b) -> Double.compare(StatService.num(b.get("amount")), StatService.num(a.get("amount"))));
 
-        Map<String, Object> trend = new LinkedHashMap<>();
+        // 趋势图：7 天是默认视图，30 天用于展示更长周期的经营起伏。
+        // 两个区间由同一个 buildTrend 生成，口径完全一致 —— 前端切换区间时不会出现数字打架。
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("kpi", kpi);
+        out.put("newIn7d", newIn7d);
+        out.put("statusDist", statusDist);
+        out.put("merchantRank", merchantRank);
+        out.put("buyerRank", buyerRank.stream().limit(6).toList());
+        out.put("trend", buildTrend(7, orders, buyers));
+        out.put("trend30", buildTrend(30, orders, buyers));
+        return out;
+    }
+
+    /**
+     * 按天聚合经营数据，供运营概览的趋势图使用。
+     * <ul>
+     *   <li>orders：当天创建的订单数（含已取消，反映真实下单量）</li>
+     *   <li>amount：当天订单金额，只统计「已确认 + 已核销」，与 KPI 的营收口径一致</li>
+     *   <li>newBuyers：当天注册的买家数，用于「用户增长」曲线</li>
+     * </ul>
+     * 返回按日期升序排列，缺失的日期补 0（否则折线会跳着连，视觉上会误读）。
+     */
+    private List<Map<String, Object>> buildTrend(int days, List<Map<String, Object>> orders,
+                                                 List<Map<String, Object>> buyers) {
         LocalDate today = LocalDate.now();
         Map<String, Map<String, Object>> buckets = new LinkedHashMap<>();
-        for (int i = 6; i >= 0; i--) {
+        for (int i = days - 1; i >= 0; i--) {
             String date = today.minusDays(i).toString();
             Map<String, Object> bucket = new LinkedHashMap<>();
             bucket.put("date", date);
             bucket.put("orders", 0L);
             bucket.put("amount", 0.0);
+            bucket.put("newBuyers", 0L);
             buckets.put(date, bucket);
         }
         for (Map<String, Object> o : orders) {
@@ -121,16 +145,14 @@ public class AdminService {
                 bucket.put("amount", StatService.num(bucket.get("amount")) + StatService.num(o.get("amount")));
             }
         }
-        trend.putAll(buckets);
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("kpi", kpi);
-        out.put("newIn7d", newIn7d);
-        out.put("statusDist", statusDist);
-        out.put("merchantRank", merchantRank);
-        out.put("buyerRank", buyerRank.stream().limit(6).toList());
-        out.put("trend", new ArrayList<>(buckets.values()));
-        return out;
+        for (Map<String, Object> u : buyers) {
+            Map<String, Object> bucket = buckets.get(StatService.dayKey(u.get("createdAt")));
+            if (bucket == null) {
+                continue;
+            }
+            bucket.put("newBuyers", (Long) bucket.get("newBuyers") + 1);
+        }
+        return new ArrayList<>(buckets.values());
     }
 
     /* ============================ 账号列表 / 详情 ============================ */

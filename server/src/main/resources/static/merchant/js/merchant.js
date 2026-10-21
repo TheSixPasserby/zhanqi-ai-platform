@@ -225,14 +225,19 @@
 
   /* ---------------------------- 根实例 ---------------------------- */
 
+  // 图表组件必须【全局】注册：tab-home / tab-stat 是根实例的子组件，
+  // 而 Vue 2 的局部 components 只在注册它的那个实例的模板里可见，
+  // 子组件模板里的 <zq-line> / <zq-bars> / <zq-donut> 会解析不到，
+  // 结果是卡片有标题、图表区一片空白，且生产版 vue.min.js 不给任何警告。
+  Vue.component('zq-line', window.ZQCharts.LineChart);
+  Vue.component('zq-donut', window.ZQCharts.Donut);
+  Vue.component('zq-bars', window.ZQCharts.Bars);
+  Vue.component('zq-spark', window.ZQCharts.Spark);
+
   new Vue({
     el: '#app',
     components: {
-      'tab-home': tabHome, 'tab-goods': tabGoods, 'tab-orders': tabOrders, 'tab-stat': tabStat,
-      'zq-line': window.ZQCharts.LineChart,
-      'zq-donut': window.ZQCharts.Donut,
-      'zq-bars': window.ZQCharts.Bars,
-      'zq-spark': window.ZQCharts.Spark
+      'tab-home': tabHome, 'tab-goods': tabGoods, 'tab-orders': tabOrders, 'tab-stat': tabStat
     },
     data: function () {
       return {

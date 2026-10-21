@@ -168,7 +168,17 @@ public class Db {
 
     /* ============================ 内部工具 ============================ */
 
-    /** 生成下一个主键 */
+    /**
+     * 生成下一个主键。
+     *
+     * 已知缺陷（2026-10-21 实测，尚未修）：序号按「行数 + 1」起，且只在本表内防撞，
+     * 不检查历史订单等外部引用。所以删掉商家 m7 再新建会又拿到 m7，
+     * 新账号会「继承」前一个 m7 的历史订单（营收、订单数虚高）。
+     * 曾尝试改用 information_schema 的 AUTO_INCREMENT，但 MySQL 8 对它有
+     * 统计缓存（information_schema_stats_expiry，默认 24 小时），读到的值滞后，
+     * 实测仍会复用；SET_VAR 提示对该查询无效。彻底修需要一张独立的序号计数器表
+     * 或改用「删除即软删」，属于独立改造，别在这里临时打补丁。
+     */
     private String nextId(Tables.Meta meta) {
         String prefix = meta.idPrefix();
         if (prefix.isEmpty()) {

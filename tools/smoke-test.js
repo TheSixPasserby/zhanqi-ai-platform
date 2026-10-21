@@ -238,7 +238,8 @@ function section(title) {
 
   const spots = await req('GET', '/api/tour/spots');
   check('GET /api/tour/spots 可用', spots.data.ok && Array.isArray(spots.data.spots));
-  check('点位数量为 8', spots.data.total === 8, 'total=' + spots.data.total);
+  // 数量与 db/seed.sql 的演示数据保持一致；扩充种子数据时这里也要同步改。
+  check('点位数量为 14', spots.data.total === 14, 'total=' + spots.data.total);
 
   const firstSpot = (spots.data.spots || [])[0];
   check('点位含印章字段', !!(firstSpot && firstSpot.stamp && firstSpot.stampIcon));

@@ -85,14 +85,48 @@
         save: function () {
           var self = this;
           var payload = Object.assign({}, this.form);
-          if (payload.id) { delete payload.password; }
-          else { payload.role = kind; }
+          var creating = !payload.id;
+
+          // 新增前的必填校验：明确说出缺哪一项，别让用户对着「请填写商家姓名」猜。
+          // （编辑走 PUT，后端只校验店铺名与电话，不要求重填账号密码。）
+          if (creating) {
+            var trimmed = function (v) { return String(v == null ? '' : v).trim(); };
+            var missing = '';
+            if (!trimmed(payload.account)) { missing = '登录账号'; }
+            else if (trimmed(payload.password).length < 6) { missing = '密码（至少 6 位）'; }
+            else if (isMerchant && !trimmed(payload.short)) { missing = '店铺名称'; }
+            else if (!trimmed(isMerchant ? payload.contact : payload.name)) {
+              missing = isMerchant ? '联系人姓名' : '昵称';
+            }
+            if (missing) {
+              this.$message.warning('还有一项没填：' + missing);
+              return;
+            }
+            payload.role = kind;
+          } else {
+            delete payload.password; // 编辑时不改密码，密码走「重置密码」
+          }
+
+          // 【字段映射】同一条数据在两套接口里用了不同的键名：
+          //   创建（Accounts.create）  ← name / shopName / shopType
+          //   列表、详情、更新          → contact / short / type
+          // 以前少了这层适配，表单明明填了「联系人姓名」，后端读 name 仍是空，
+          // 于是必然报「请填写联系人姓名」——新增商家永远失败。改键名前请先看两边的实现。
+          if (isMerchant && creating) {
+            payload.name = trimmed(payload.contact);
+            payload.shopName = trimmed(payload.short);
+            payload.shopType = payload.type;
+            delete payload.contact;
+            delete payload.short;
+            delete payload.type;
+          }
+
           this.saving = true;
-          var req = payload.id ? api.put(base + '/' + payload.id, payload) : api.post(base, payload);
+          var req = creating ? api.post(base, payload) : api.put(base + '/' + payload.id, payload);
           req.then(function (res) {
             self.saving = false;
-            if (!res.ok) { return; }
-            self.$message.success(res.message || '已保存');
+            if (!res.ok) { return; } // 失败原因已由 api.js 统一弹出中文提示
+            self.$message.success(res.message || (creating ? '已新增' : '已保存'));
             self.formVisible = false;
             self.load();
           });
@@ -152,10 +186,23 @@
     name: 'view-summary',
     template: '#tpl-summary',
     data: function () {
-      return { loading: false, trendKey: 'amount', kpi: {}, newIn7d: {}, trend: [], statusDist: [], merchantRank: [], buyerRank: [], fmt: fmt };
+      return {
+        loading: false,
+        trendKey: 'amount',
+        trendDays: 7,
+        kpi: {}, newIn7d: {}, trend: [], trend30: [], statusDist: [], merchantRank: [], buyerRank: [], fmt: fmt
+      };
     },
     created: function () { this.load(); },
     computed: {
+      /** 趋势图当前展示的区间：7 天看近期波动，30 天看整月走势 */
+      trendData: function () {
+        return this.trendDays === 30 ? this.trend30 : this.trend;
+      },
+      trendColor: function () {
+        return this.trendKey === 'amount' ? '#146B57'
+          : (this.trendKey === 'orders' ? '#2F6BA8' : '#BE5230');
+      },
       statusItems: function () {
         var palette = { pending: COLORS.WARN, confirmed: COLORS.INFO, used: COLORS.BRAND, cancelled: '#C9C3B6' };
         return this.statusDist.map(function (s) {
@@ -176,6 +223,7 @@
           self.kpi = res.kpi || {};
           self.newIn7d = res.newIn7d || {};
           self.trend = res.trend || [];
+          self.trend30 = res.trend30 || [];
           self.statusDist = res.statusDist || [];
           self.merchantRank = res.merchantRank || [];
           self.buyerRank = res.buyerRank || [];
@@ -413,6 +461,16 @@
 
   /* ============================ 根实例 ============================ */
 
+  // 图表组件必须【全局】注册。
+  // 原因：它们是在 view-summary 的模板里用的，而 view-summary 是根实例的子组件；
+  // Vue 2 只让「局部 components」在注册它的那个实例的模板里可用，子组件解析不到。
+  // 生产版 vue.min.js 不会打印「Unknown custom element」，于是四个图表区一直是
+  // 空白卡片、控制台却没有任何报错 —— 这个坑真实存在过，别把下面四行改回 components。
+  Vue.component('zq-line', window.ZQCharts.LineChart);
+  Vue.component('zq-donut', window.ZQCharts.Donut);
+  Vue.component('zq-bars', window.ZQCharts.Bars);
+  Vue.component('zq-spark', window.ZQCharts.Spark);
+
   var app = new Vue({
     el: '#app',
     components: {
@@ -422,11 +480,7 @@
       'view-orders': viewOrders,
       'view-products': viewProducts,
       'view-content': viewContent,
-      'view-server': viewServer,
-      'zq-line': window.ZQCharts.LineChart,
-      'zq-donut': window.ZQCharts.Donut,
-      'zq-bars': window.ZQCharts.Bars,
-      'zq-spark': window.ZQCharts.Spark
+      'view-server': viewServer
     },
     data: function () {
       return {
@@ -448,7 +502,7 @@
         fmt: fmt,
         menus: [
           { key: 'summary', name: '运营概览', icon: 'el-icon-data-line', desc: '平台整体经营数据' },
-          { key: 'merchants', name: '商家管理', icon: 'el-icon-shop', desc: '账号开通、资料、停用与删除' },
+          { key: 'merchants', name: '商家管理', icon: 'el-icon-s-shop', desc: '账号开通、资料、停用与删除' },
           { key: 'buyers', name: '买家管理', icon: 'el-icon-user', desc: '游客账号与消费数据' },
           { key: 'orders', name: '订单总览', icon: 'el-icon-tickets', desc: '全平台订单与强制取消' },
           { key: 'products', name: '商品总览', icon: 'el-icon-goods', desc: '全平台商品清单' },
