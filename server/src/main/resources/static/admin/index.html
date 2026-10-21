@@ -202,17 +202,24 @@
 
     <div class="grid-2">
       <div class="card">
-        <div class="card-head">
-          <h3>近 7 日交易走势</h3>
-          <el-radio-group v-model="trendKey" size="mini">
-            <el-radio-button label="amount">金额</el-radio-button>
-            <el-radio-button label="orders">订单数</el-radio-button>
-          </el-radio-group>
+        <div class="card-head" style="flex-wrap:wrap;gap:8px">
+          <h3>经营走势</h3>
+          <div class="flex items-center gap-8" style="flex-wrap:wrap">
+            <el-radio-group v-model="trendDays" size="mini">
+              <el-radio-button :label="7">近 7 日</el-radio-button>
+              <el-radio-button :label="30">近 30 日</el-radio-button>
+            </el-radio-group>
+            <el-radio-group v-model="trendKey" size="mini">
+              <el-radio-button label="amount">金额</el-radio-button>
+              <el-radio-button label="orders">订单数</el-radio-button>
+              <el-radio-button label="newBuyers">新增买家</el-radio-button>
+            </el-radio-group>
+          </div>
         </div>
         <div class="card-body">
-          <zq-line :data="trend" :value-key="trendKey" :money="trendKey === 'amount'"
-                   :unit="trendKey === 'orders' ? ' 笔' : ''"
-                   :color="trendKey === 'amount' ? '#146B57' : '#2F6BA8'"></zq-line>
+          <zq-line :data="trendData" :value-key="trendKey" :money="trendKey === 'amount'"
+                   :unit="trendKey === 'orders' ? ' 笔' : (trendKey === 'newBuyers' ? ' 人' : '')"
+                   :color="trendColor"></zq-line>
         </div>
       </div>
 
@@ -227,7 +234,8 @@
     <div class="grid-2 mt-16">
       <div class="card">
         <div class="card-head"><h3>商家营收排行</h3><span class="hint">口径：已确认 + 已核销</span></div>
-        <div class="card-body"><zq-bars :items="merchantRank.slice(0, 6)"></zq-bars></div>
+        <!-- merchantRank 里营收字段叫 revenue（买家那边是 amount），必须显式指定，否则柱子恒为 0 -->
+        <div class="card-body"><zq-bars :items="merchantRank.slice(0, 6)" value-key="revenue"></zq-bars></div>
       </div>
       <div class="card">
         <div class="card-head"><h3>买家消费排行</h3><span class="hint">按累计消费额</span></div>

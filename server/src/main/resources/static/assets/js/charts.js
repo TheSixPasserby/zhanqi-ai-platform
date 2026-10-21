@@ -96,7 +96,12 @@
         }
         return out;
       },
-      gradientId: function () { return 'zqgrad' + this._uid; }
+      gradientId: function () { return 'zqgrad' + this._uid; },
+      // 点数多时（如 30 天趋势）日期标签会挤成一团，按数量抽稀，最多约 8 个标签
+      labelStep: function () {
+        var n = this.points.length;
+        return n > 10 ? Math.ceil(n / 8) : 1;
+      }
     },
     methods: {
       fmt: function (v) {
@@ -134,7 +139,7 @@
       '          stroke-dasharray="2400" :style="{ animationDelay: \'.1s\' }"/>',
       '    <g v-for="(p, i) in points" :key="\'p\' + i" class="fade" :style="{ \'--i\': i }">',
       '      <circle class="dot" :cx="p.x" :cy="p.y" :r="hover === i ? 6 : 4" :fill="color"/>',
-      '      <text class="axis" :x="p.x" :y="height - 8" text-anchor="middle">{{ p.label }}</text>',
+      '      <text v-if="i % labelStep === 0 || i === points.length - 1" class="axis" :x="p.x" :y="height - 8" text-anchor="middle">{{ p.label }}</text>',
       '    </g>',
       '  </svg>',
       '  <div v-if="hover >= 0 && points[hover]" class="zq-tip"',

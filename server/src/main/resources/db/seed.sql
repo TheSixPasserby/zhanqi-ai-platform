@@ -3,8 +3,12 @@
 --  【幂等】全部使用 INSERT IGNORE：主键已存在的行会被跳过，
 --  所以重复启动、反复执行都不会报错，也不会覆盖你在后台改过的数据。
 --
---  数据规模：8 个林盘点位 · 3 家商户 · 2 位游客 · 1 位管理员 · 10 件商品
---            5 场活动 · 16 条 AI 知识库 · 7 笔历史订单 · 3 条打卡记录
+--  数据规模：14 个林盘点位 · 6 家商户 · 12 位游客 · 1 位管理员 · 27 件商品
+--            10 场活动 · 30 条 AI 知识库 · 45 笔历史订单 · 26 条打卡记录
+--
+--  ⚠ 订单、打卡、部分账号的日期用 CURDATE()/NOW() 相对生成，不是写死的。
+--    这样无论哪天重置演示数据，「运营概览」的近 7 日 / 近 30 日走势都有内容，
+--    不会因为种子日期过期而变成一条平线。写死的只有「入驻年月」这类固定事实。
 --
 --  ⚠ 所有账号的 loginCount 都是 0：按需求「登录页初始不展示任何已有账号」，
 --    只有「注册/存在」+「成功登录过」两个条件都满足，才会出现快捷登录卡片。
@@ -43,18 +47,56 @@ INSERT IGNORE INTO `spots` (`id`,`name`,`type`,`cover`,`location`,`intro`,`tts`,
 ('sp8','林盘书屋','休闲空间','/assets/img/spot-bookhouse.svg','林盘院落群东侧',
  '由闲置农房改造的乡村书屋，藏书以川西民俗、农耕文化、地方志为主，可免费入内阅读。',
  '林盘书屋由一处闲置农房改造而成，保留了原有的木梁与青瓦。书屋内藏书三千余册，以川西民俗、农耕文化和郫都地方志为主。点一杯盖碗茶，坐在院子里的竹椅上读上一下午，是很多游客最喜欢的慢时光。',
- '林盘书屋','书');
+ '林盘书屋','书'),
+('sp9','战旗豆瓣晒场','非遗工坊','/assets/img/craft.svg','乡村十八坊西侧',
+ '露天晒场上整齐排列着数百口陶缸，豆瓣在阳光下翻晒发酵，是郫县豆瓣传统工艺最直观的展示。',
+ '这里是战旗豆瓣坊的露天晒场。郫县豆瓣是川菜之魂，传统工艺要经过蚕豆瓣制曲、加盐、拌辣椒、日晒夜露等步骤，至少三年才能出缸。晒场上这些陶缸，每天要由师傅定时翻晒，让豆瓣均匀发酵。您可以闻到明显的酱香和辣香，这就是时间参与酿造的味道。',
+ '豆瓣晒场','酱'),
+('sp10','林盘茶舍','休闲空间','/assets/img/spot-bookhouse.svg','林盘院落群南侧',
+ '竹椅、矮桌、盖碗茶，院坝里一坐就是一下午；配花生、瓜子和川西小吃，是本地人的日常。',
+ '林盘茶舍是村里面向游客和乡亲的露天茶馆。川西人喝茶讲究盖碗，茶盖、茶碗、茶船三件一套，既能保温又能滤茶。点一碗茉莉花茶或者本地绿茶，配一碟花生瓜子，听院里竹叶沙沙响，就是最地道的川西慢生活。茶舍也提供糍粑、凉粉等小吃。',
+ '林盘茶舍','茶'),
+('sp11','十八坊竹编铺','非遗工坊','/assets/img/craft.svg','乡村十八坊街区',
+ '竹篮、竹筐、竹灯罩均由本地竹匠手工编织，可现场体验简单的竹编技法。',
+ '竹编是川西农家最常见的手艺。战旗村周边盛产慈竹，竹匠把竹子剖成细篾，再编成竹篮、竹筐、竹席和灯罩。十八坊竹编铺保留着传统的剖篾、起底、收口工艺，游客可以看师傅现场编织，也可以报名半小时的体验课，亲手编一个小杯垫带走。',
+ '十八坊竹编','竹'),
+('sp12','稻田栈道','农事景观','/assets/img/spot-rice.svg','天府粮仓东侧',
+ '木栈道穿过稻田，两侧是稻浪与白鹭，是散步和拍照的安静去处。',
+ '稻田栈道沿着天府粮仓的田埂修建，全长约八百米，用防腐木铺成。春天两侧是油菜花，夏天是绿油油的稻浪，秋天稻穗低头，一片金黄。清晨和傍晚常有白鹭落在田里，是拍照的好时候。栈道平坦，推婴儿车和轮椅都能走。',
+ '稻田栈道','田'),
+('sp13','乡村集市','服务设施','/assets/img/spot-center.svg','游客服务中心旁',
+ '周末开市，村民自种的蔬菜、自制的豆瓣、萝卜干和竹器都会摆出来，价格实在。',
+ '乡村集市每周六周日上午开市，就在游客服务中心旁边。摆摊的多是本村村民，卖的是自家地里的时令菜、自己晒的萝卜干、自己做的豆瓣酱和竹编小物件。这里的价格比景区商铺实在，也是游客带伴手礼的好地方。集市不收门票，现金和扫码都可以。',
+ '乡村集市','集'),
+('sp14','百年银杏院','自然人文','/assets/img/spot-linpan.svg','林盘小院民宿内',
+ '三合院中央的一棵百年银杏，深秋满树金黄，落叶铺满青石板院坝。',
+ '这棵银杏是林盘小院民宿的院子中央的老树，树龄超过一百年，胸径要两个成年人才能合抱。每年十一月下旬到十二月初，叶子由绿转黄，一阵风过，金黄落叶铺满整个青石板院坝。住店客人可以在一楼廊下喝茶看树，这也是很多客人专程选在深秋来的原因。',
+ '百年银杏','杏');
 
 -- ------------------------------- 商家 ---------------------------------------
 INSERT IGNORE INTO `merchants` (`id`,`account`,`password`,`name`,`short`,`type`,`phone`,`intro`,`since`,`loginCount`,`lastLoginAt`,`rememberToken`,`status`,`createdAt`) VALUES
 ('m1','zhangmm','123456','战旗米坊 · 张桂芬','战旗米坊','农产品农户','13800002043','经营战旗大米与云桥圆根萝卜，自家四十亩田，产地直发。','2021-03',0,NULL,NULL,'active','2021-03-12'),
 ('m2','lims','123456','唐昌布鞋工坊 · 李长明','唐昌布鞋工坊','非遗手艺人','13900007712','唐昌布鞋制作技艺第四代传人，工坊八位绣娘，接受研学团体参观。','2019-09',0,NULL,NULL,'active','2019-09-03'),
-('m3','liujg','123456','林盘小院民宿 · 刘建国','林盘小院民宿','民宿经营者','13700005580','由三合院改造的八间客房，院中有一棵百年银杏。','2022-06',0,NULL,NULL,'active','2022-06-18');
+('m3','liujg','123456','林盘小院民宿 · 刘建国','林盘小院民宿','民宿经营者','13700005580','由三合院改造的八间客房，院中有一棵百年银杏。','2022-06',0,NULL,NULL,'active','2022-06-18'),
+('m4','wangxf','123456','战旗豆瓣坊 · 王秀芳','战旗豆瓣坊','农产品农户','13800007126','露天晒场三百口陶缸，传统工艺日晒夜露，三年陈酿才出缸。','2020-05',0,NULL,NULL,'active','2020-05-20'),
+('m5','zhaojl','123456','林盘茶舍 · 赵金莲','林盘茶舍','餐饮农家乐','13600008234','院坝竹椅盖碗茶，配花生瓜子与川西小吃，本地人常来坐一下午。','2023-04',0,NULL,NULL,'active','2023-04-08'),
+('m6','chengy','123456','十八坊竹编 · 陈国英','十八坊竹编','文创商户','13500006371','本地慈竹手工剖篾编织，竹篮竹器可现场体验，也接团队定制。','2021-10',0,NULL,NULL,'active',
+ DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 3 DAY), '%Y-%m-%d'));
 
 -- ------------------------------- 游客 ---------------------------------------
 INSERT IGNORE INTO `users` (`id`,`account`,`password`,`name`,`phone`,`role`,`avatarColor`,`loginCount`,`lastLoginAt`,`rememberToken`,`status`,`createdAt`) VALUES
 ('u1','wangyou','123456','小王','13500009911','buyer','#146B57',0,NULL,NULL,'active','2026-08-15'),
-('u2','lixue','123456','李同学','18600003322','buyer','#2F6BA8',0,NULL,NULL,'active','2026-09-02');
+('u2','lixue','123456','李同学','18600003322','buyer','#2F6BA8',0,NULL,NULL,'active','2026-09-02'),
+('u3','sunq','123456','孙倩','13800001123','buyer','#BE5230',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 28 DAY), '%Y-%m-%d')),
+('u4','zhouly','123456','周乐乐','13900002234','buyer','#B07A18',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 25 DAY), '%Y-%m-%d')),
+('u5','wujf','123456','吴佳峰','13700003345','buyer','#5C6B65',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 22 DAY), '%Y-%m-%d')),
+('u6','hexr','123456','何欣然','13600004456','buyer','#7A4FA3',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 19 DAY), '%Y-%m-%d')),
+('u7','tanm','123456','谭敏','13500005567','buyer','#0F766E',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 16 DAY), '%Y-%m-%d')),
+('u8','yangxy','123456','杨晓雨','13400006678','buyer','#A8324A',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 13 DAY), '%Y-%m-%d')),
+('u9','luoh','123456','罗海','13300007789','buyer','#146B57',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 10 DAY), '%Y-%m-%d')),
+('u10','dengyl','123456','邓雅丽','13200008890','buyer','#2F6BA8',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 7 DAY), '%Y-%m-%d')),
+('u11','xiem','123456','谢明','13100009901','buyer','#BE5230',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 4 DAY), '%Y-%m-%d')),
+('u12','fangtt','123456','方婷婷','13000001112','buyer','#B07A18',0,NULL,NULL,'active',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 2 DAY), '%Y-%m-%d'));
 
 -- ------------------------------- 管理员 -------------------------------------
 INSERT IGNORE INTO `admins` (`id`,`account`,`password`,`name`,`phone`,`role`,`loginCount`,`lastLoginAt`,`rememberToken`,`status`,`createdAt`) VALUES
@@ -91,7 +133,58 @@ INSERT IGNORE INTO `products` (`id`,`merchantId`,`name`,`category`,`price`,`unit
  '石臼打糍粑、石磨推豆浆，边做边吃。全程由村里阿姨带着做，不脏衣服，老人小孩都能参与。','2022-06-20'),
 ('p10','m2','唐昌布鞋 · 夏季透气款','goods',258.00,'双',0,63,'/assets/img/spot-buxie.svg','off',
  JSON_ARRAY('夏季款','暂时缺货'),'',
- '单层布底夏季款，轻薄透气。当前库存售罄，预计下月补货。','2023-05-06');
+ '单层布底夏季款，轻薄透气。当前库存售罄，预计下月补货。','2023-05-06'),
+('p11','m4','郫县豆瓣 · 三年陈酿 500g','goods',32.00,'瓶',260,148,'/assets/img/craft.svg','on',
+ JSON_ARRAY('三年陈酿','川菜之魂'),'',
+ '传统陶缸日晒夜露发酵满三年，酱香厚重、辣而不燥。炒回锅肉、烧豆瓣鱼都合适。开盖后冷藏，取用请用干勺。','2020-06-01'),
+('p12','m4','豆瓣蘸料礼盒 · 双瓶装','goods',88.00,'盒',120,67,'/assets/img/craft.svg','on',
+ JSON_ARRAY('伴手礼','双瓶装'),'',
+ '三年陈酿豆瓣与红油豆瓣各一瓶，配手提礼盒与吃法卡片。送人自用都体面，可代发快递。','2021-01-18'),
+('p13','m4','豆瓣晒场参观与制曲体验','study',78.00,'人',80,42,'/assets/img/farm.svg','on',
+ JSON_ARRAY('非遗工艺','可带走成品'),'',
+ '由晒场师傅带着看三百口陶缸，讲解制曲、拌辣椒、翻晒的全过程，并亲手拌一小坛豆瓣带走。全程约九十分钟。','2022-04-12'),
+('p14','m4','红油豆瓣 · 1kg 家庭装','goods',45.00,'罐',180,95,'/assets/img/craft.svg','on',
+ JSON_ARRAY('家庭装','红油'),'',
+ '在传统豆瓣基础上加入菜籽红油，颜色红亮、直接下锅。一公斤装适合三口之家吃小半年。','2021-08-09'),
+('p15','m5','盖碗茶 · 茉莉花茶','goods',28.00,'位',200,316,'/assets/img/spot-bookhouse.svg','on',
+ JSON_ARRAY('盖碗','可续水'),'',
+ '川西盖碗茶，茉莉花茶打底，一碗可续水三次。配一碟花生瓜子，院坝竹椅随便坐。','2023-04-20'),
+('p16','m5','川西农家九大碗','goods',128.00,'人',100,88,'/assets/img/farm.svg','on',
+ JSON_ARRAY('农家菜','需提前一天'),'',
+ '九道川西传统农家菜，含稻香鸭、粉蒸肉、咸烧白、青椒皮蛋等，按人头配菜。需提前一天预定，四人起订。','2023-05-06'),
+('p17','m5','茶舍包间 · 半日','goods',168.00,'间',6,54,'/assets/img/spot-linpan.svg','on',
+ JSON_ARRAY('独立包间','含茶点'),'',
+ '独立包间可坐八人，含四壶茶与两碟茶点，适合家庭聚会或小型谈事。半日为四小时。','2023-06-15'),
+('p18','m5','手工糍粑 · 现打','goods',25.00,'份',60,173,'/assets/img/farm.svg','on',
+ JSON_ARRAY('现打现吃','老少皆宜'),'',
+ '糯米现蒸现打，裹黄豆粉与红糖浆，一份八块。趁热吃最软糯，也可以打包带走。','2023-04-25'),
+('p19','m6','竹编提篮 · 中号','goods',128.00,'个',45,39,'/assets/img/craft.svg','on',
+ JSON_ARRAY('手工编织','可装水果'),'',
+ '本地慈竹剖篾手工编织，中号提篮可装五六斤水果或作为野餐篮。每一只的篾纹略有不同。','2021-11-02'),
+('p20','m6','竹编杯垫 · 四片装','goods',45.00,'套',150,126,'/assets/img/craft.svg','on',
+ JSON_ARRAY('手工','小件伴手礼'),'',
+ '四片一组，直径十厘米，隔热透气。适合配盖碗茶使用，也是轻便的伴手礼。','2021-12-10'),
+('p21','m6','竹编入门体验课','study',88.00,'人',40,28,'/assets/img/craft.svg','on',
+ JSON_ARRAY('亲子','可带走作品'),'',
+ '从剖篾开始，跟师傅学起底、编身、收口，完成一个竹编杯垫带走。约一小时，六岁以上可参加。','2022-03-15'),
+('p22','m6','竹编灯罩 · 圆筒款','goods',198.00,'个',25,17,'/assets/img/craft.svg','on',
+ JSON_ARRAY('家居','手工'),'',
+ '圆筒形竹编灯罩，直径二十五厘米，配暖光灯泡后光影细密。手工制品，篾纹与尺寸略有差异。','2022-07-08'),
+('p23','m3','银杏院下午茶 · 双人','goods',68.00,'份',40,62,'/assets/img/spot-linpan.svg','on',
+ JSON_ARRAY('双人','院中银杏树下'),'',
+ '一壶茶配四样点心，摆在院中银杏树下。深秋落叶时节最出片，建议提前电话留位。','2023-09-20'),
+('p24','m1','战旗新米尝鲜装 · 2.5kg','goods',38.00,'袋',200,154,'/assets/img/spot-rice.svg','on',
+ JSON_ARRAY('当季新米','小包装'),'',
+ '当季新米小包装，适合两口之家先尝后买。与五公斤真空装同一批稻谷，现碾现发。','2023-09-28'),
+('p25','m1','云桥萝卜干 · 250g','goods',18.00,'袋',300,211,'/assets/img/spot-radish.svg','on',
+ JSON_ARRAY('农家自制','下饭'),'',
+ '云桥圆根萝卜切条晾晒，加盐与辣椒面揉制，脆辣爽口。配粥下饭都好，开封后冷藏。','2022-12-05'),
+('p26','m2','唐昌布鞋 · 儿童款','goods',198.00,'双',30,41,'/assets/img/spot-buxie.svg','on',
+ JSON_ARRAY('儿童','纯手工'),'',
+ '儿童千层底布鞋，软底不硌脚，适合学步期与幼儿园室内穿。尺码 22–30，下单请备注。','2022-05-18'),
+('p27','m4','豆瓣礼盒 · 中秋限定','goods',158.00,'盒',0,73,'/assets/img/craft.svg','off',
+ JSON_ARRAY('限定','已售罄'),'',
+ '中秋限定包装，含三年陈酿与红油豆瓣各一瓶、手工月饼模具一只。今年已售罄，明年中秋前上架。','2023-08-20');
 
 -- ------------------------------- 活动 ---------------------------------------
 INSERT IGNORE INTO `activities` (`id`,`title`,`date`,`endDate`,`place`,`tag`,`desc`,`cover`) VALUES
@@ -99,7 +192,12 @@ INSERT IGNORE INTO `activities` (`id`,`title`,`date`,`endDate`,`place`,`tag`,`de
 ('a2','非遗布鞋手作开放日','2026-09-26',NULL,'乡村十八坊 · 唐昌布鞋坊','非遗','李长明师傅现场演示纳鞋底全过程，开放二十个免费体验名额。','/assets/img/spot-buxie.svg'),
 ('a3','林盘夜游 · 萤火虫观测','2026-09-27',NULL,'川西林盘院落群','夜游','晚间七点半集合，由讲解员带队沿林盘水渠步行，观测期约一小时。','/assets/img/spot-linpan.svg'),
 ('a4','农耕研学营 · 秋收专场','2026-10-12','2026-10-13','农耕研学基地','研学','两天一夜研学营，含割稻、晒谷、打糍粑与夜宿林盘小院。','/assets/img/spot-study.svg'),
-('a5','云桥萝卜采摘季开园','2026-11-08',NULL,'云桥圆根萝卜种植园','农事','开园首周采摘八折，可现场品尝萝卜与萝卜干。','/assets/img/spot-radish.svg');
+('a5','云桥萝卜采摘季开园','2026-11-08',NULL,'云桥圆根萝卜种植园','农事','开园首周采摘八折，可现场品尝萝卜与萝卜干。','/assets/img/spot-radish.svg'),
+('a6','战旗豆瓣开缸节','2026-10-24','2026-10-26','战旗豆瓣晒场','非遗','三百口陶缸同时开缸，现场看翻晒、闻酱香，可参与拌料并订购当年新豆瓣。','/assets/img/craft.svg'),
+('a7','竹编手作体验周','2026-11-01','2026-11-07','十八坊竹编铺','非遗','陈国英师傅每天带两场体验课，编好的杯垫可直接带走，亲子同价。','/assets/img/craft.svg'),
+('a8','林盘茶会 · 围炉煮茶','2026-11-15',NULL,'林盘茶舍','休闲','院坝支起炭炉，煮茶配烤红薯与糍粑，限三十人，需提前报名。','/assets/img/spot-bookhouse.svg'),
+('a9','稻田写生 · 亲子场','2026-11-21',NULL,'稻田栈道','亲子','美术老师带队在栈道边写生，画具由村里提供，作品可装框带走。','/assets/img/spot-rice.svg'),
+('a10','冬至萝卜宴','2026-12-20',NULL,'云桥圆根萝卜种植园','节庆','萝卜炖羊肉、萝卜干回锅肉等十道萝卜菜，配新米米饭，按桌预订。','/assets/img/spot-radish.svg');
 
 -- ------------------------------- AI 知识库 ----------------------------------
 INSERT IGNORE INTO `knowledge` (`id`,`title`,`tags`,`content`) VALUES
@@ -134,7 +232,35 @@ INSERT IGNORE INTO `knowledge` (`id`,`title`,`tags`,`content`) VALUES
 ('k15','联系电话与投诉建议',JSON_ARRAY('电话','联系','投诉','咨询','客服'),
  '战旗村游客服务中心咨询电话为 028-8700-1234（工作日八点半至十七点半）。如遇消费纠纷或服务问题，可到游客服务中心现场登记，或通过本平台「我的—意见反馈」提交。平台收到后由运营方在两个工作日内答复。'),
 ('k16','能不能带宠物',JSON_ARRAY('宠物','狗','猫','带宠物'),
- '户外公共区域和街区可以牵绳携带宠物，需自行清理排泄物。村史馆、林盘书屋、唐昌布鞋坊等室内场所不建议携带宠物入内。民宿是否可带宠物需与店家单独确认，林盘小院民宿不接受宠物入住。');
+ '户外公共区域和街区可以牵绳携带宠物，需自行清理排泄物。村史馆、林盘书屋、唐昌布鞋坊等室内场所不建议携带宠物入内。民宿是否可带宠物需与店家单独确认，林盘小院民宿不接受宠物入住。'),
+('k17','郫县豆瓣是什么、怎么做的',JSON_ARRAY('郫县豆瓣','豆瓣','酱','非遗','战旗豆瓣坊','川菜'),
+ '郫县豆瓣是川菜最重要的调味料之一，被称为川菜之魂。传统做法是把蚕豆瓣制成曲，加盐下缸，再拌入辣椒，经过日晒夜露自然发酵，至少三年才出缸。战旗豆瓣坊的露天晒场有三百口陶缸，游客可以参观翻晒过程，也能参加制曲体验课，亲手拌一小坛带走。'),
+('k18','豆瓣有哪些吃法',JSON_ARRAY('豆瓣','怎么做','回锅肉','豆瓣鱼','吃法'),
+ '郫县豆瓣最经典的用法是炒回锅肉和烧豆瓣鱼。炒菜时先把豆瓣剁细，用温油小火炒出红油和酱香，再下主料，这样颜色红亮、辣味柔和。也可以直接拌面、蘸白水菜，或者加蒜末和香油调成蘸碟。战旗豆瓣坊的红油豆瓣已经调好油，开罐就能下锅。'),
+('k19','林盘茶舍喝什么茶',JSON_ARRAY('茶舍','盖碗茶','喝茶','茉莉花茶','林盘茶舍'),
+ '林盘茶舍主打川西盖碗茶，常见的有茉莉花茶和本地绿茶，二十八元一位，可续水三次。盖碗分茶盖、茶碗、茶船三件，茶盖拨茶、茶船防烫。配一碟花生瓜子，在院坝竹椅上坐一下午是本地人的日常。茶舍还有手工糍粑、凉粉等小吃，包间可坐八人。'),
+('k20','竹编工艺与体验课',JSON_ARRAY('竹编','竹器','手艺','体验课','十八坊'),
+ '战旗村周边盛产慈竹，竹匠把竹子剖成细篾，再编成竹篮、竹筐、竹席和灯罩。十八坊竹编铺保留着剖篾、起底、编身、收口的完整工艺。游客可以看师傅现场编织，也可以报名入门体验课，约一小时，亲手编一个杯垫带走，六岁以上都能参加。'),
+('k21','乡村集市什么时候开',JSON_ARRAY('集市','赶集','买菜','土特产','周末'),
+ '乡村集市每周六、周日上午开市，位置在游客服务中心旁边。摆摊的多是本村村民，卖自家地里的时令蔬菜、自晒的萝卜干、自制豆瓣酱和竹编小物件，价格比景区商铺实在。集市不收门票，现金和扫码都可以，中午十二点后陆续收摊，建议上午去。'),
+('k22','百年银杏什么时候黄',JSON_ARRAY('银杏','秋天','落叶','拍照','林盘小院'),
+ '林盘小院民宿院子中央有一棵百年银杏，每年十一月下旬到十二月初转黄，最佳观赏期通常只有十天左右。一阵风后金黄的叶子会铺满青石板院坝，是村里最出片的角落之一。住店客人可以在廊下喝茶看树；不住店也可以点一份银杏院下午茶，提前电话留位。'),
+('k23','稻田栈道怎么走',JSON_ARRAY('稻田','栈道','散步','白鹭','拍照'),
+ '稻田栈道在天府粮仓东侧，全长约八百米，用防腐木铺成，从稻田中间穿过。春天两侧是油菜花，夏天是绿稻浪，秋天一片金黄。清晨和傍晚常有白鹭落在田里。栈道平坦无台阶，推婴儿车和轮椅都能通行，走完全程约二十分钟。'),
+('k24','亲子一日游怎么安排',JSON_ARRAY('亲子','一日游','带孩子','路线','怎么玩'),
+ '上午九点半到游客服务中心领地图，先去农耕研学基地参加打糍粑磨豆浆，约一个半小时；中午在林盘茶舍吃农家菜；下午去十八坊看布鞋和竹编，孩子可以上竹编体验课；傍晚沿稻田栈道散步，最后到乡村集市买点萝卜干。全程步行约三公里，节奏不赶。'),
+('k25','两天一夜怎么玩',JSON_ARRAY('两天一夜','住宿','行程','过夜','周末'),
+ '第一天上午到村，逛林盘院落群和乡村十八坊，中午吃九大碗；下午参加农事体验或竹编课，傍晚在稻田栈道看日落；晚上住林盘小院，院子里喝茶。第二天早上赶乡村集市，上午去战旗豆瓣坊看晒场，中午吃萝卜宴或农家菜，下午返程。旺季民宿建议提前一周订。'),
+('k26','哪里拍照好看',JSON_ARRAY('拍照','机位','出片','摄影','打卡'),
+ '推荐四个机位：一是稻田栈道中段，逆光拍稻穗；二是林盘院落群的竹林小径，早上有雾时最好；三是百年银杏院，十一月下旬落叶铺满青石板；四是战旗豆瓣晒场的陶缸阵列，阴天颜色更饱和。周末人多，想拍空镜建议九点前到。'),
+('k27','下雨天有什么可玩',JSON_ARRAY('下雨','雨天','室内','备选','天气'),
+ '下雨可以改走室内线：战旗村史馆、林盘书屋、唐昌布鞋坊、十八坊竹编铺都在室内或有廊檐。林盘茶舍可以坐着喝茶等雨停，豆瓣坊的晒场有遮雨棚，也能参观。研学基地的手工体验区在室内，打糍粑、磨豆浆不受影响。村里主游线是石板路，雨天略滑，建议穿防滑鞋。'),
+('k28','伴手礼买什么好',JSON_ARRAY('伴手礼','特产','买什么','送礼','手信'),
+ '推荐五样：战旗大米五公斤真空装（耐放、好寄）、云桥萝卜干（轻便下饭）、三年陈酿郫县豆瓣（川菜必备）、唐昌布鞋（送长辈）、竹编杯垫或提篮（手工、不贵）。乡村集市和各家店铺都能买，豆瓣和米支持快递到家，布鞋需按尺码现做，约七到十天发货。'),
+('k29','民宿入住与停车',JSON_ARRAY('民宿','入住','停车','退房','行李'),
+ '林盘小院民宿入住时间为下午两点后，退房为次日十二点前，可免费寄存行李。村口有免费停车场，约两百个车位，节假日建议九点半前到。民宿不提供一次性牙刷，建议自带；院内有地暖与热水，深秋夜间较凉，可加床。整院包栋含八间客房，适合团建与家庭聚会。'),
+('k30','周边还有什么景点',JSON_ARRAY('周边','附近','景点','顺路','一日游'),
+ '战旗村位于郫都区唐昌镇，周边可顺路去唐昌古镇看老街与文庙，车程约十分钟；青杠树村是另一个川西林盘村落，适合骑行；往西可到都江堰景区，车程约四十分钟；往东是郫都城区，有豆瓣博物馆。建议把战旗村和唐昌古镇安排在同一天，上午村里、下午古镇。');
 
 -- ------------------------------- 历史订单 -----------------------------------
 INSERT IGNORE INTO `orders` (`id`,`buyerId`,`buyerName`,`merchantId`,`type`,`category`,`productId`,`productName`,`cover`,`qty`,`amount`,`status`,`bookDate`,`people`,`address`,`remark`,`createdAt`) VALUES
@@ -144,13 +270,76 @@ INSERT IGNORE INTO `orders` (`id`,`buyerId`,`buyerName`,`merchantId`,`type`,`cat
 ('o4','u2','李同学','m2','shop','goods','p3','唐昌布鞋 · 千层底手工款','/assets/img/spot-buxie.svg',1,298.00,'confirmed',NULL,NULL,'成都市武侯区科华北路 66 号','女款 37 码','2026-09-19T20:31:00'),
 ('o5','u1','小王','m1','shop','goods','p2','云桥圆根萝卜 · 5kg 箱装','/assets/img/spot-radish.svg',1,25.00,'used',NULL,NULL,'成都市郫都区唐昌镇战旗村 12 号',NULL,'2026-09-16T11:22:00'),
 ('o6','u2','李同学','m2','booking','study','p6','古法布鞋制作研学课','/assets/img/spot-buxie.svg',2,256.00,'used','2026-09-12',2,NULL,'学生团','2026-09-09T14:18:00'),
-('o7','u2','李同学','m1','booking','experience','p9','林盘农事体验 · 打糍粑磨豆浆','/assets/img/farm.svg',3,204.00,'pending','2026-09-28',3,NULL,'两大人一小孩','2026-09-21T08:40:00');
+('o7','u2','李同学','m1','booking','experience','p9','林盘农事体验 · 打糍粑磨豆浆','/assets/img/farm.svg',3,204.00,'pending','2026-09-28',3,NULL,'两大人一小孩','2026-09-21T08:40:00'),
+-- 以下 38 笔订单用「相对今天」的日期生成：无论哪天重置演示数据，
+-- 运营概览的近 7 日 / 近 30 日走势都有内容，不会因为种子写死日期而变成一条平线。
+('o8','u3','孙倩','m1','shop','goods','p1','战旗大米 · 5kg 真空装','/assets/img/spot-rice.svg',1,68.00,'used',NULL,NULL,'成都市青羊区清江中路 21 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 28 DAY),'%Y-%m-%dT%H:%i')),
+('o9','u4','周乐乐','m2','shop','goods','p4','蜀绣香囊 · 布鞋纹样文创','/assets/img/craft.svg',2,96.00,'used',NULL,NULL,'成都市锦江区东大街 88 号','要两个不同纹样',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 27 DAY),'%Y-%m-%dT%H:%i')),
+('o10','u5','吴佳峰','m3','booking','homestay','p7','林盘小院 · 庭院标准间','/assets/img/spot-linpan.svg',1,328.00,'used','2026-10-04',2,NULL,'带老人，要一楼',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 26 DAY),'%Y-%m-%dT%H:%i')),
+('o11','u3','孙倩','m4','shop','goods','p11','郫县豆瓣 · 三年陈酿 500g','/assets/img/craft.svg',2,64.00,'used',NULL,NULL,'成都市青羊区清江中路 21 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 25 DAY),'%Y-%m-%dT%H:%i')),
+('o12','u6','何欣然','m1','shop','goods','p24','战旗新米尝鲜装 · 2.5kg','/assets/img/spot-rice.svg',1,38.00,'used',NULL,NULL,'成都市金牛区茶店子西街 5 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 24 DAY),'%Y-%m-%dT%H:%i')),
+('o13','u4','周乐乐','m5','shop','goods','p15','盖碗茶 · 茉莉花茶','/assets/img/spot-bookhouse.svg',2,56.00,'used',NULL,NULL,NULL,'两位，坐院坝',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 23 DAY),'%Y-%m-%dT%H:%i')),
+('o14','u7','谭敏','m2','shop','goods','p3','唐昌布鞋 · 千层底手工款','/assets/img/spot-buxie.svg',1,298.00,'confirmed',NULL,NULL,'成都市武侯区人民南路四段 12 号','女款 36 码',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 22 DAY),'%Y-%m-%dT%H:%i')),
+('o15','u5','吴佳峰','m6','shop','goods','p19','竹编提篮 · 中号','/assets/img/craft.svg',1,128.00,'used',NULL,NULL,'成都市成华区建设路 33 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 21 DAY),'%Y-%m-%dT%H:%i')),
+('o16','u8','杨晓雨','m1','shop','goods','p2','云桥圆根萝卜 · 5kg 箱装','/assets/img/spot-radish.svg',1,25.00,'used',NULL,NULL,'成都市郫都区犀浦镇校园路 9 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 20 DAY),'%Y-%m-%dT%H:%i')),
+('o17','u3','孙倩','m3','shop','goods','p23','银杏院下午茶 · 双人','/assets/img/spot-linpan.svg',2,136.00,'used',NULL,NULL,NULL,'周末下午，两位',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 19 DAY),'%Y-%m-%dT%H:%i')),
+('o18','u9','罗海','m4','shop','goods','p12','豆瓣蘸料礼盒 · 双瓶装','/assets/img/craft.svg',1,88.00,'used',NULL,NULL,'成都市高新区天府三街 66 号','送人，帮忙包一下',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 18 DAY),'%Y-%m-%dT%H:%i')),
+('o19','u4','周乐乐','m1','shop','goods','p25','云桥萝卜干 · 250g','/assets/img/spot-radish.svg',3,54.00,'used',NULL,NULL,'成都市锦江区东大街 88 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 17 DAY),'%Y-%m-%dT%H:%i')),
+('o20','u6','何欣然','m5','shop','goods','p16','川西农家九大碗','/assets/img/farm.svg',2,256.00,'used',NULL,NULL,NULL,'两位，不吃太辣',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 16 DAY),'%Y-%m-%dT%H:%i')),
+('o21','u10','邓雅丽','m6','shop','goods','p20','竹编杯垫 · 四片装','/assets/img/craft.svg',2,90.00,'used',NULL,NULL,'成都市青白江区华金大道 18 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 15 DAY),'%Y-%m-%dT%H:%i')),
+('o22','u7','谭敏','m1','booking','study','p5','稻田插秧农事体验','/assets/img/spot-study.svg',2,196.00,'used',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 12 DAY),'%Y-%m-%d'),2,NULL,'带孩子，需要防水裤',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 14 DAY),'%Y-%m-%dT%H:%i')),
+('o23','u5','吴佳峰','m2','shop','goods','p26','唐昌布鞋 · 儿童款','/assets/img/spot-buxie.svg',1,198.00,'used',NULL,NULL,'成都市成华区建设路 33 号','24 码',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 13 DAY),'%Y-%m-%dT%H:%i')),
+('o24','u11','谢明','m4','shop','goods','p14','红油豆瓣 · 1kg 家庭装','/assets/img/craft.svg',1,45.00,'used',NULL,NULL,'成都市温江区光华大道 100 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 12 DAY),'%Y-%m-%dT%H:%i')),
+('o25','u8','杨晓雨','m3','booking','homestay','p7','林盘小院 · 庭院标准间','/assets/img/spot-linpan.svg',2,656.00,'used',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 9 DAY),'%Y-%m-%d'),4,NULL,'两间房，连住一晚',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 DAY),'%Y-%m-%dT%H:%i')),
+('o26','u9','罗海','m1','shop','goods','p1','战旗大米 · 5kg 真空装','/assets/img/spot-rice.svg',1,68.00,'confirmed',NULL,NULL,'成都市高新区天府三街 66 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 10 DAY),'%Y-%m-%dT%H:%i')),
+('o27','u10','邓雅丽','m5','shop','goods','p17','茶舍包间 · 半日','/assets/img/spot-linpan.svg',1,168.00,'used',NULL,NULL,NULL,'八人聚会',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 9 DAY),'%Y-%m-%dT%H:%i')),
+('o28','u3','孙倩','m6','booking','study','p21','竹编入门体验课','/assets/img/craft.svg',2,176.00,'used',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 6 DAY),'%Y-%m-%d'),2,NULL,'两位成人',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 8 DAY),'%Y-%m-%dT%H:%i')),
+('o29','u11','谢明','m2','shop','goods','p4','蜀绣香囊 · 布鞋纹样文创','/assets/img/craft.svg',1,48.00,'used',NULL,NULL,'成都市温江区光华大道 100 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 7 DAY),'%Y-%m-%dT%H:%i')),
+('o30','u4','周乐乐','m1','shop','goods','p24','战旗新米尝鲜装 · 2.5kg','/assets/img/spot-rice.svg',2,76.00,'used',NULL,NULL,'成都市锦江区东大街 88 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 6 DAY),'%Y-%m-%dT%H:%i')),
+('o31','u12','方婷婷','m4','shop','goods','p11','郫县豆瓣 · 三年陈酿 500g','/assets/img/craft.svg',1,32.00,'used',NULL,NULL,'成都市双流区航空港 8 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 5 DAY),'%Y-%m-%dT%H:%i')),
+('o32','u6','何欣然','m3','booking','homestay','p8','林盘小院 · 整院包栋','/assets/img/spot-linpan.svg',1,1280.00,'confirmed',DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 10 DAY),'%Y-%m-%d'),16,NULL,'公司团建，需要投影',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 4 DAY),'%Y-%m-%dT%H:%i')),
+('o33','u8','杨晓雨','m5','shop','goods','p18','手工糍粑 · 现打','/assets/img/farm.svg',2,50.00,'used',NULL,NULL,NULL,'打包带走',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 3 DAY),'%Y-%m-%dT%H:%i')),
+('o34','u9','罗海','m1','shop','goods','p2','云桥圆根萝卜 · 5kg 箱装','/assets/img/spot-radish.svg',1,25.00,'pending',NULL,NULL,'成都市高新区天府三街 66 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 2 DAY),'%Y-%m-%dT%H:%i')),
+('o35','u10','邓雅丽','m6','shop','goods','p22','竹编灯罩 · 圆筒款','/assets/img/craft.svg',1,198.00,'confirmed',NULL,NULL,'成都市青白江区华金大道 18 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 1 DAY),'%Y-%m-%dT%H:%i')),
+('o36','u3','孙倩','m4','shop','goods','p12','豆瓣蘸料礼盒 · 双瓶装','/assets/img/craft.svg',1,88.00,'pending',NULL,NULL,'成都市青羊区清江中路 21 号','下周三前能到吗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 0 DAY),'%Y-%m-%dT%H:%i')),
+('o37','u11','谢明','m2','shop','goods','p3','唐昌布鞋 · 千层底手工款','/assets/img/spot-buxie.svg',1,298.00,'cancelled',NULL,NULL,'成都市温江区光华大道 100 号','临时不要了',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 6 DAY),'%Y-%m-%dT%H:%i')),
+('o38','u12','方婷婷','m1','shop','goods','p1','战旗大米 · 5kg 真空装','/assets/img/spot-rice.svg',2,136.00,'cancelled',NULL,NULL,'成都市双流区航空港 8 号','地址填错了',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 12 DAY),'%Y-%m-%dT%H:%i')),
+('o39','u5','吴佳峰','m5','shop','goods','p15','盖碗茶 · 茉莉花茶','/assets/img/spot-bookhouse.svg',1,28.00,'used',NULL,NULL,NULL,'一位',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 4 DAY),'%Y-%m-%dT%H:%i')),
+('o40','u7','谭敏','m4','booking','study','p13','豆瓣晒场参观与制曲体验','/assets/img/farm.svg',1,78.00,'confirmed',DATE_FORMAT(DATE_ADD(CURDATE(), INTERVAL 6 DAY),'%Y-%m-%d'),1,NULL,'想带孩子一起',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 5 DAY),'%Y-%m-%dT%H:%i')),
+('o41','u12','方婷婷','m6','shop','goods','p19','竹编提篮 · 中号','/assets/img/craft.svg',1,128.00,'used',NULL,NULL,'成都市双流区航空港 8 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 2 DAY),'%Y-%m-%dT%H:%i')),
+('o42','u8','杨晓雨','m2','booking','study','p6','古法布鞋制作研学课','/assets/img/spot-buxie.svg',1,128.00,'used',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 7 DAY),'%Y-%m-%d'),1,NULL,'学生，一个人来',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 9 DAY),'%Y-%m-%dT%H:%i')),
+('o43','u9','罗海','m3','shop','goods','p23','银杏院下午茶 · 双人','/assets/img/spot-linpan.svg',1,68.00,'used',NULL,NULL,NULL,'两位',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 1 DAY),'%Y-%m-%dT%H:%i')),
+('o44','u10','邓雅丽','m1','booking','experience','p9','林盘农事体验 · 打糍粑磨豆浆','/assets/img/farm.svg',2,136.00,'used',DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 DAY),'%Y-%m-%d'),2,NULL,'一大一小',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 3 DAY),'%Y-%m-%dT%H:%i')),
+('o45','u4','周乐乐','m6','shop','goods','p20','竹编杯垫 · 四片装','/assets/img/craft.svg',1,45.00,'used',NULL,NULL,'成都市锦江区东大街 88 号',NULL,DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 0 DAY),'%Y-%m-%dT%H:%i'));
 
 -- ------------------------------- 打卡记录 -----------------------------------
 INSERT IGNORE INTO `stamps` (`id`,`userId`,`spotId`,`spotName`,`stamp`,`stampIcon`,`at`) VALUES
 ('st1','u1','sp1','战旗村游客服务中心','游客中心','旗','2026-09-15T10:02:00'),
 ('st2','u1','sp2','川西林盘院落群','林盘院落','院','2026-09-15T10:41:00'),
-('st3','u1','sp3','乡村十八坊 · 唐昌布鞋坊','唐昌布鞋','鞋','2026-09-15T11:20:00');
+('st3','u1','sp3','乡村十八坊 · 唐昌布鞋坊','唐昌布鞋','鞋','2026-09-15T11:20:00'),
+('st4','u3','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 26 DAY),'%Y-%m-%dT%H:%i')),
+('st5','u3','sp2','川西林盘院落群','林盘院落','院',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 26 DAY),'%Y-%m-%dT%H:%i')),
+('st6','u3','sp9','战旗豆瓣晒场','豆瓣晒场','酱',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 25 DAY),'%Y-%m-%dT%H:%i')),
+('st7','u4','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 24 DAY),'%Y-%m-%dT%H:%i')),
+('st8','u4','sp3','乡村十八坊 · 唐昌布鞋坊','唐昌布鞋','鞋',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 23 DAY),'%Y-%m-%dT%H:%i')),
+('st9','u4','sp10','林盘茶舍','林盘茶舍','茶',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 19 DAY),'%Y-%m-%dT%H:%i')),
+('st10','u5','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 21 DAY),'%Y-%m-%dT%H:%i')),
+('st11','u5','sp12','稻田栈道','稻田栈道','田',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 20 DAY),'%Y-%m-%dT%H:%i')),
+('st12','u5','sp7','云桥圆根萝卜种植园','圆根萝卜','萝',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 18 DAY),'%Y-%m-%dT%H:%i')),
+('st13','u6','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 17 DAY),'%Y-%m-%dT%H:%i')),
+('st14','u6','sp10','林盘茶舍','林盘茶舍','茶',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 16 DAY),'%Y-%m-%dT%H:%i')),
+('st15','u6','sp14','百年银杏院','百年银杏','杏',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 15 DAY),'%Y-%m-%dT%H:%i')),
+('st16','u7','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 14 DAY),'%Y-%m-%dT%H:%i')),
+('st17','u7','sp11','十八坊竹编铺','十八坊竹编','竹',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 13 DAY),'%Y-%m-%dT%H:%i')),
+('st18','u8','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 11 DAY),'%Y-%m-%dT%H:%i')),
+('st19','u8','sp2','川西林盘院落群','林盘院落','院',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 10 DAY),'%Y-%m-%dT%H:%i')),
+('st20','u9','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 8 DAY),'%Y-%m-%dT%H:%i')),
+('st21','u9','sp13','乡村集市','乡村集市','集',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 7 DAY),'%Y-%m-%dT%H:%i')),
+('st22','u10','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 6 DAY),'%Y-%m-%dT%H:%i')),
+('st23','u10','sp6','农耕研学基地','研学基地','学',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 5 DAY),'%Y-%m-%dT%H:%i')),
+('st24','u11','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 3 DAY),'%Y-%m-%dT%H:%i')),
+('st25','u12','sp1','战旗村游客服务中心','游客中心','旗',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 2 DAY),'%Y-%m-%dT%H:%i')),
+('st26','u12','sp5','战旗村史馆','村史馆','史',DATE_FORMAT(DATE_SUB(NOW(), INTERVAL 1 DAY),'%Y-%m-%dT%H:%i'));
 
 -- ------------------------------- 平台参数 -----------------------------------
 -- PC 管理后台「服务器管理 / 连接配置 / AI 设置」读写这张表。

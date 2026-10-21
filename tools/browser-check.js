@@ -394,7 +394,8 @@ function check(name, ok, detail) {
         hasGoods: txt.indexOf('农产文创好物') >= 0,
       };
     })()`);
-    check('首页加载了点位数据', homeOk && homeOk.spots === 8, JSON.stringify(homeOk));
+    // 与 db/seed.sql 的点位数保持一致（扩充种子数据时同步改这里）
+    check('首页加载了点位数据', homeOk && homeOk.spots === 14, JSON.stringify(homeOk));
     check('首页加载了商品数据', homeOk && homeOk.products > 0, JSON.stringify(homeOk));
     check('首页渲染集章进度与功能宫格', homeOk && homeOk.hasStamp && homeOk.hasGrid, JSON.stringify(homeOk));
     await screenshot('visitor-02-home.png');
