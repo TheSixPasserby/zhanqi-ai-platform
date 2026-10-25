@@ -144,6 +144,10 @@
 
         /* 活动 */
         activities: [],
+        currentAct: {},
+        actLoading: false,
+        actForm: { date: '', people: 2, phone: '', remark: '' },
+        myBookings: [],
 
         /* 订单 */
         orders: [],
@@ -207,8 +211,52 @@
         return '再集 ' + (this.total - this.collected) + ' 枚即可通关';
       },
 
+      /** 最后一条回答说完、且不在思考中，才显示「猜你想问」 */
+      showFollowUps: function () {
+        var last = this.messages[this.messages.length - 1];
+        return !!last && last.role === 'assistant' && !last.streaming && !this.thinking;
+      },
+
+      /** 与电脑端同一套规则：按问答命中的关键词给 4 条追问，不足用常见问题补齐 */
+      followUps: function () {
+        var q = '';
+        for (var i = this.messages.length - 1; i >= 0; i--) {
+          if (this.messages[i].role === 'user') { q = this.messages[i].text || ''; break; }
+        }
+        var last = this.messages[this.messages.length - 1];
+        var text = q + ' ' + (last ? (last.text || '') : '');
+        var pool = [
+          { k: ['交通', '怎么去', '地址', '自驾', '地铁'], q: '从成都市区怎么过去？' },
+          { k: ['吃', '餐', '菜', '美食', '小吃'], q: '村里有什么好吃的？' },
+          { k: ['住', '民宿', '过夜', '房间'], q: '民宿怎么订？大概多少钱？' },
+          { k: ['亲子', '孩', '小孩', '带娃'], q: '适合带老人小孩来吗？' },
+          { k: ['非遗', '布鞋', '手作', '竹编', '豆瓣'], q: '非遗体验课怎么预约？' },
+          { k: ['季节', '什么时候', '几月', '风景'], q: '什么季节来最好？' },
+          { k: ['伴手礼', '特产', '买什么', '礼盒'], q: '有什么值得带的伴手礼？' },
+          { k: ['门票', '开放', '营业', '时间'], q: '要门票吗？几点开门？' },
+          { k: ['停车', '车位', '开车'], q: '停车方便吗？有充电桩吗？' },
+          { k: ['宠物', '狗', '猫'], q: '可以带宠物进村吗？' }
+        ];
+        var out = [];
+        for (var a = 0; a < pool.length; a++) {
+          if (out.length >= 4) { break; }
+          for (var b = 0; b < pool[a].k.length; b++) {
+            if (text.indexOf(pool[a].k[b]) >= 0) { out.push(pool[a].q); break; }
+          }
+        }
+        for (var c = 0; c < pool.length && out.length < 4; c++) {
+          if (out.indexOf(pool[c].q) < 0) { out.push(pool[c].q); }
+        }
+        return out.slice(0, 4);
+      },
+
       avatarUrl: function () {
         return window.ZQProfile.avatarOf(this.me);
+      },
+
+      /* 有自定义照片就用照片，没有就用游客端的默认艺术头像（斗笠与竹影） */
+      avatarSrc: function () {
+        return this.avatarUrl || window.ZQProfile.defaultFor('buyer');
       },
 
       percent: function () {
@@ -332,6 +380,11 @@
 
       first: function (name) { return String(name || '游').slice(0, 1); },
 
+      /** 登录页「登录过的账号」卡片头像：有照片用照片，没有用默认艺术头像 */
+      knownAvatar: function (a) {
+        return window.ZQProfile.src(a, a && a.role === 'merchant' ? 'merchant' : 'buyer');
+      },
+
       /** 图片地址：H5 与后端同源，直接用后端给的相对路径即可 */
       asset: function (path) {
         var p = String(path || '').trim();
@@ -386,6 +439,10 @@
       statusText: function (s) { return STATUS_TEXT[s] || s || '未知'; },
       statusClass: function (s) { return STATUS_CLASS[s] || 'tag-muted'; },
       canCancel: function (o) { return o.status === 'pending' || o.status === 'confirmed'; },
+
+      bookingStatusText: function (s) {
+        return { pending: '待村里确认', confirmed: '已确认', cancelled: '已取消' }[s] || s || '待确认';
+      },
 
       toast: function (msg) {
         var self = this;
@@ -667,6 +724,7 @@
         this.loadActivities();
         this.loadStamps();
         this.loadOrders();
+        this.loadMyBookings();
       },
 
       loadSpots: function () {
@@ -718,6 +776,70 @@
         });
       },
 
+      /* ---------------------------- 活动详情与预约 ---------------------------- */
+
+      openActivity: function (id) {
+        var self = this;
+        this.go('activityDetail');
+        this.currentAct = {};
+        this.actLoading = true;
+        api.get('/api/tour/activities/' + id).then(function (res) {
+          self.actLoading = false;
+          if (!res || !res.ok) { return; }
+          var a = res.activity || {};
+          self.currentAct = a;
+          self.actForm = {
+            date: (a.date || ''),
+            people: a.myBooking ? a.myBooking.people : 2,
+            phone: (a.myBooking && a.myBooking.phone) || (self.me && self.me.phone) || '',
+            remark: (a.myBooking && a.myBooking.remark) || ''
+          };
+        });
+      },
+
+      bookActivity: function () {
+        var self = this;
+        var a = this.currentAct;
+        if (!this.user) { this.toast('请先登录再预约', 'warn'); return; }
+        if (!a.id) { return; }
+        if (!this.actForm.date) { this.toast('请选择参加日期', 'warn'); return; }
+        this.actLoading = true;
+        api.post('/api/tour/activities/' + a.id + '/book', {
+          date: this.actForm.date,
+          people: Number(this.actForm.people) || 1,
+          phone: this.actForm.phone,
+          remark: this.actForm.remark
+        }).then(function (res) {
+          self.actLoading = false;
+          if (!res || !res.ok) { return; }
+          self.toast(res.message || '预约成功');
+          self.loadMyBookings();
+          self.loadActivities();
+          self.openActivity(a.id);
+        });
+      },
+
+      cancelBooking: function (b) {
+        var self = this;
+        api.post('/api/tour/bookings/' + b.id + '/cancel').then(function (res) {
+          if (!res || !res.ok) { return; }
+          self.toast(res.message || '已取消预约');
+          self.loadMyBookings();
+          self.loadActivities();
+          if (self.currentAct && self.currentAct.id === b.activityId) {
+            self.openActivity(b.activityId);
+          }
+        });
+      },
+
+      loadMyBookings: function () {
+        var self = this;
+        if (!this.user) { this.myBookings = []; return; }
+        api.get('/api/tour/bookings', null, { silent: true }).then(function (res) {
+          if (res && res.ok) { self.myBookings = res.list || []; }
+        });
+      },
+
       loadStamps: function () {
         var self = this;
         if (!this.user) { this.stamps = []; return; }
@@ -741,13 +863,22 @@
 
       /* ---------------------------- 点位打卡 ---------------------------- */
 
-      openSpot: function (id) {
+      openSpot: function (id, autoSpeak) {
         var self = this;
-        this.go('spotDetail');
+        this.stopSpeak();
+        // 已经在这一页就别再压一层返回栈，否则要连点两次返回
+        if (this.view !== 'spotDetail') { this.go('spotDetail'); }
         this.current = {};
+        this.showScript = !!autoSpeak;
         window.scrollTo(0, 0);
         api.get('/api/tour/spots/' + id).then(function (res) {
-          if (res && res.ok) { self.current = res.spot || {}; }
+          if (res && res.ok) {
+            self.current = res.spot || {};
+            // 打卡后自动进详情并开讲：等 DOM 渲染完再调，否则按钮状态还没跟上
+            if (autoSpeak) {
+              self.$nextTick(function () { self.toggleSpeak(); });
+            }
+          }
         });
       },
 
@@ -776,6 +907,8 @@
           if (res.total) { self.total = res.total; }
           self.allDone = !!res.allDone;
           self.loadStamps();
+          // 打完卡直接进这个点位的介绍页，并自动播放语音讲解
+          self.openSpot(spot.id, true);
         });
       },
 

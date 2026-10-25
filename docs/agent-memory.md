@@ -62,11 +62,13 @@
 
 ## 数据与业务
 
-- **给账号表加列时必须同时改三处**：`schema.sql`（只对新库生效，因为用的是
-  `CREATE TABLE IF NOT EXISTS`）、`DatabaseBootstrap.ensureColumn()`（给老库补列）、
-  以及 **`Tables.java` 里硬编码的列清单**。漏了第三处，`db.update()` 会静默丢掉该列，
-  接口报「服务异常」但日志里看不出原因（2026-10-25 加 avatar 时踩过）。
-  （2026-10-25，来源：2026-10-25-profile-avatar-and-visual-polish.md）
+- **加业务表必须同步四处**：`schema.sql`、`Tables.java` 列清单、
+  `DatabaseBootstrap.dropAll()` 的清空清单、`ServerService.tableCounts()`。
+  漏了 `dropAll` 时 reset.bat 清不干净——新表里的测试数据会活过重置
+  （2026-10-25 加 activityBookings 时实测残留 2 条）。
+  给**已有表加列**则是三处：schema.sql / ensureColumn() / Tables.java，
+  漏 Tables.java 时 `db.update()` 会静默丢列（2026-10-25 加 avatar 时踩过）。
+  （2026-10-25，来源：2026-10-25-booking-and-final-polish.md）
 - 头像存 `avatar TEXT`（dataURL，前端压到 160×160 JPEG q0.82，约 6–12KB），
   不做文件上传 —— 项目要能双击部署，不引入静态目录写权限。
   （2026-10-25，来源：同上）
@@ -103,6 +105,15 @@
   表现为「卡片只有标题、图表区空白、控制台零报错」（生产版 vue.min.js 不警告）。
   此坑在 admin 与 merchant 两端同时存在过。
   （2026-10-21，来源：2026-10-21-admin-merchant-render-and-demo-data.md）
+- **带参数的辅助函数放 `methods`，别放 `computed`**：computed 属性被无参求值，
+  模板里 `fn(x)` 会抛 not a function 且浏览器只报一行 TypeError（2026-10-25
+  `knownAvatar(a)` 在 admin/merchant 踩过）。
+- **`assets/css/app.css` 是三端共享的**，里面有为 PC 后台写的全局 `.topbar`
+  （space-between + 58px + 白底）；手机端 visitor.css 的同名类必须逐项覆盖
+  position/height/justify，否则子页标题会被推到右边（2026-10-25 踩过）。
+- 新页面里给「默认头像」取图统一走 `ZQProfile.src(profile, role)`
+  （buyer/merchant/admin 三套 SVG 在 `assets/img/avatar-*.svg`），
+  不要再写姓名首字兜底。
 - `zq-bars` 默认读 `amount` 字段。传其他字段名（如商家的 `revenue`）必须显式
   写 `value-key`，否则柱子恒为 0 —— 这类「有数据但显示 0」的问题不会报错。
   （2026-10-21，来源：同上）

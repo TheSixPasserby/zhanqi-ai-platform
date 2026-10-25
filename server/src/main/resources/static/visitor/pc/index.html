@@ -26,7 +26,7 @@
 <div id="pc" v-cloak>
 
   <div v-if="!booted" class="boot">
-    <div class="boot-mark">旗</div>
+    <img class="boot-mark" src="../../assets/img/logo.svg" alt="">
     <div class="boot-text">{{ site.shortName || '战旗云' }} · 电脑版</div>
     <div class="boot-bar"><i></i></div>
   </div>
@@ -35,67 +35,75 @@
 
     <!-- ==================== 未登录：登录 / 注册 ==================== -->
     <div v-if="!user" class="auth-page">
-      <div class="auth-visual">
+      <!-- 整幅实景底图只负责氛围，信息全部收进中间那块卡片 -->
+      <div class="auth-bg">
         <img src="../../assets/img/photos/spot-linpan.jpg" alt="川西林盘">
-        <div class="auth-visual-mask"></div>
-        <div class="auth-visual-text">
-          <span class="auth-badge">郫都区 · 唐昌镇</span>
-          <h1>{{ site.name || '战旗村 · 川西林盘农商文旅智慧服务平台' }}</h1>
-          <p>{{ site.slogan || '院在林中 · 林在田中 · 农商文旅一站通' }}</p>
-        </div>
+        <span class="auth-bg-mask"></span>
       </div>
 
-      <div class="auth-panel">
-        <div class="auth-brand">
-          <img class="brand-logo lg" src="../../assets/img/logo.svg" alt="">
-          <div>
-            <b>{{ site.shortName || '战旗云' }}</b>
-            <span>游客端 · 电脑版</span>
+      <div class="auth-topbar">
+        <img class="brand-logo" src="../../assets/img/logo.svg" alt="">
+        <span class="auth-topbar-text">
+          <b>{{ site.shortName || '战旗云' }}</b>
+          <em>游客端 · 电脑版</em>
+        </span>
+      </div>
+
+      <div class="auth-stage">
+        <section class="auth-card">
+          <header class="auth-head">
+            <span class="auth-badge">郫都区 · 唐昌镇 · 战旗村</span>
+            <h1>欢迎来到{{ site.shortName || '战旗云' }}</h1>
+            <p>{{ site.slogan || '院在林中 · 林在田中 · 农商文旅一站通' }}</p>
+          </header>
+
+          <div class="auth-tabs">
+            <button :class="{ on: authTab === 'login' }" @click="authTab = 'login'">登录</button>
+            <button :class="{ on: authTab === 'register' }" @click="authTab = 'register'">注册新账号</button>
           </div>
-        </div>
 
-        <div class="auth-tabs">
-          <button :class="{ on: authTab === 'login' }" @click="authTab = 'login'">登录</button>
-          <button :class="{ on: authTab === 'register' }" @click="authTab = 'register'">注册新账号</button>
-        </div>
+          <template v-if="authTab === 'login'">
+            <label class="field"><span>账号</span>
+              <input v-model.trim="loginForm.account" placeholder="请输入账号" @keyup.enter="doLogin"></label>
+            <label class="field"><span>密码</span>
+              <input v-model="loginForm.password" type="password" placeholder="请输入密码" @keyup.enter="doLogin"></label>
+            <button class="btn-primary block" :disabled="loading" @click="doLogin">{{ loading ? '登录中…' : '登 录' }}</button>
 
-        <template v-if="authTab === 'login'">
-          <label class="field"><span>账号</span>
-            <input v-model.trim="loginForm.account" placeholder="请输入账号" @keyup.enter="doLogin"></label>
-          <label class="field"><span>密码</span>
-            <input v-model="loginForm.password" type="password" placeholder="请输入密码" @keyup.enter="doLogin"></label>
-          <button class="btn-primary block" :disabled="loading" @click="doLogin">{{ loading ? '登录中…' : '登 录' }}</button>
-
-          <div v-if="known.length" class="quick">
-            <div class="quick-head">快捷登录 <em>点卡片免密进入</em></div>
-            <div class="quick-list">
-              <button v-for="a in known" :key="a.account" class="quick-card" @click="quickLogin(a)">
-                <span class="quick-avatar">{{ (a.name || '游').slice(0, 1) }}</span>
-                <span class="quick-name">{{ a.name }}</span>
-                <span class="quick-acc">{{ a.account }}</span>
-              </button>
+            <div v-if="known.length" class="quick">
+              <div class="quick-head">快捷登录 <em>点卡片免密进入</em></div>
+              <div class="quick-list">
+                <button v-for="a in known" :key="a.account" class="quick-card" @click="quickLogin(a)">
+                  <img class="quick-avatar" :src="knownAvatar(a)" alt="">
+                  <span class="quick-name">{{ a.name }}</span>
+                  <span class="quick-acc">{{ a.account }}</span>
+                </button>
+              </div>
             </div>
-          </div>
-        </template>
+          </template>
 
-        <template v-else>
-          <label class="field"><span>账号</span>
-            <input v-model.trim="regForm.account" placeholder="字母开头，4–20 位"></label>
-          <label class="field"><span>昵称</span>
-            <input v-model.trim="regForm.name" placeholder="怎么称呼你"></label>
-          <label class="field"><span>密码</span>
-            <input v-model="regForm.password" type="password" placeholder="至少 6 位"></label>
-          <label class="field"><span>确认密码</span>
-            <input v-model="regForm.confirm" type="password" placeholder="再输一次"></label>
-          <label class="field"><span>手机号</span>
-            <input v-model.trim="regForm.phone" placeholder="选填，11 位"></label>
-          <button class="btn-primary block" :disabled="loading" @click="doRegister">{{ loading ? '提交中…' : '注册并登录' }}</button>
-        </template>
+          <template v-else>
+            <div class="field-row">
+              <label class="field"><span>账号</span>
+                <input v-model.trim="regForm.account" placeholder="字母开头，4–20 位"></label>
+              <label class="field"><span>昵称</span>
+                <input v-model.trim="regForm.name" placeholder="怎么称呼你"></label>
+            </div>
+            <label class="field"><span>密码</span>
+              <input v-model="regForm.password" type="password" placeholder="至少 6 位"></label>
+            <label class="field"><span>确认密码</span>
+              <input v-model="regForm.confirm" type="password" placeholder="再输一次"></label>
+            <label class="field"><span>手机号</span>
+              <input v-model.trim="regForm.phone" placeholder="选填，11 位"></label>
+            <button class="btn-primary block" :disabled="loading" @click="doRegister">{{ loading ? '提交中…' : '注册并登录' }}</button>
+          </template>
 
-        <a class="to-mobile" href="../?pc=0">
-          <svg class="i"><use href="../../assets/img/icons.svg#i-phone"></use></svg>
-          用手机打开手机版
-        </a>
+          <a class="to-mobile" href="../?pc=0">
+            <svg class="i"><use href="../../assets/img/icons.svg#i-phone"></use></svg>
+            用手机打开手机版
+          </a>
+        </section>
+
+        <p class="auth-foot">登录后可集章打卡、预约村内活动、下单农产文创</p>
       </div>
     </div>
 
@@ -135,8 +143,7 @@
             </button>
             <div class="nav-user">
               <span class="avatar" title="点击更换头像" @click.stop="$refs.pcAvatar.click()">
-                <img v-if="avatarUrl" :src="avatarUrl" alt="头像">
-                <template v-else>{{ profileInitial }}</template>
+                <img :src="avatarSrc" alt="头像">
               </span>
               <input ref="pcAvatar" type="file" accept="image/*" hidden @change="onAvatarPick">
               <div class="user-menu">
@@ -215,7 +222,7 @@
                   <p>{{ s.intro }}</p>
                   <div class="spot-meta">
                     <span><svg class="i"><use :href="icon('i-location')"></use></svg>{{ s.location }}</span>
-                    <span class="stamp-chip">{{ s.stampIcon }} · {{ s.stamp }}</span>
+                    <span class="stamp-chip"><svg class="i"><use :href="icon(spotIcon(s))"></use></svg>{{ s.stamp }}</span>
                   </div>
                 </div>
               </article>
@@ -293,7 +300,7 @@
                 <h3>{{ s.name }}</h3>
                 <p>{{ s.intro }}</p>
                 <div class="spot-foot">
-                  <span class="stamp-chip">{{ s.stampIcon }} · {{ s.stamp }}</span>
+                  <span class="stamp-chip"><svg class="i"><use :href="icon(spotIcon(s))"></use></svg>{{ s.stamp }}</span>
                   <button class="btn-mini" :disabled="isChecked(s.id)" @click.stop="checkin(s)">
                     {{ isChecked(s.id) ? '已完成' : '打卡' }}</button>
                 </div>
@@ -376,19 +383,25 @@
         <template v-else-if="view === 'activities'">
           <div class="page-head"><div><h1>活动日历</h1><p>非遗节庆、农事体验与时令活动</p></div></div>
           <div class="act-list">
-            <article v-for="a in activities" :key="a.id" class="act-row">
+            <article v-for="a in activities" :key="a.id" class="act-row" @click="openActivity(a)">
               <div class="act-row-date">
                 <b>{{ (a.date || '').slice(5) }}</b><em>{{ (a.date || '').slice(0, 4) }}</em>
               </div>
               <img :src="asset(a.cover)" :alt="a.title">
               <div class="act-row-body">
-                <div class="act-row-head"><h3>{{ a.title }}</h3><span class="tag">{{ a.tag }}</span></div>
+                <div class="act-row-head">
+                  <h3>{{ a.title }}</h3>
+                  <span class="tag">{{ a.tag }}</span>
+                  <span v-if="a.myBooked" class="pill booked">已预约</span>
+                </div>
                 <p>{{ a.desc }}</p>
                 <div class="act-meta">
                   <span><svg class="i"><use :href="icon('i-location')"></use></svg>{{ a.place }}</span>
                   <span v-if="a.endDate"><svg class="i"><use :href="icon('i-clock')"></use></svg>至 {{ a.endDate }}</span>
+                  <span><svg class="i"><use :href="icon('i-user')"></use></svg>已约 {{ a.bookedPeople || 0 }} 人<template v-if="a.seatsLeft >= 0"> · 余 {{ a.seatsLeft }} 位</template></span>
                 </div>
               </div>
+              <span class="act-row-go">查看与预约<svg class="i"><use :href="icon('i-arrow-right')"></use></svg></span>
             </article>
           </div>
         </template>
@@ -424,17 +437,20 @@
 
               <template v-else>
                 <div class="ai-q">
-                  <span class="ai-q-avatar">{{ profileInitial }}</span>
+                  <img class="ai-q-avatar" :src="avatarSrc" alt="">
                   <p>{{ ai.question }}</p>
                 </div>
                 <div class="ai-a">
                   <span class="ai-orb sm"><svg class="i"><use :href="icon('i-ai')"></use></svg></span>
                   <div class="ai-a-body">
                     <p v-if="ai.loading" class="ai-typing"><i></i><i></i><i></i></p>
-                    <p v-else>{{ ai.answer }}</p>
+                    <template v-else>
+                      <p class="ai-a-text">{{ ai.shown }}<i v-if="ai.streaming" class="ai-caret"></i></p>
+                      <p v-if="!ai.streaming && ai.answer" class="ai-a-hint dim">回答已生成，可以继续追问</p>
+                    </template>
                   </div>
                 </div>
-                <div v-if="!ai.loading && ai.answer" class="ai-follow">
+                <div v-if="!ai.loading && !ai.streaming && ai.answer" class="ai-follow">
                   <span class="ai-follow-title">猜你想问</span>
                   <div class="ai-follow-list">
                     <button v-for="q in suggestions" :key="q" class="chip" @click="presetAsk(q)">{{ q }}</button>
@@ -456,7 +472,7 @@
         <!-- ---------- 我的 ---------- -->
         <template v-else-if="view === 'mine'">
           <div class="profile-card">
-            <span class="profile-avatar">{{ (me.name || '游').slice(0, 1) }}</span>
+            <img class="profile-avatar" :src="avatarSrc" alt="头像">
             <div class="profile-main">
               <h2>{{ me.name }}</h2>
               <p>{{ me.profile.account || '' }} · 注册于 {{ me.profile.createdAt || '—' }}</p>
@@ -529,8 +545,64 @@
             <svg class="i"><use :href="icon('i-stamp')"></use></svg>{{ isChecked(currentSpot.id) ? '已打卡' : '打卡集章' }}</button>
         </div>
         <div class="drawer-stamp">
-          <span class="seal-icon lg">{{ currentSpot.stampIcon }}</span>
+          <span class="seal-icon lg"><svg class="i"><use :href="icon(spotIcon(currentSpot))"></use></svg></span>
           <div><b>{{ currentSpot.stamp }}</b><em>集齐全部印章可领纪念品</em></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==================== 活动详情与预约抽屉 ==================== -->
+  <div v-if="currentAct" class="drawer-mask" @click.self="currentAct = null">
+    <aside class="drawer">
+      <button class="drawer-close" @click="currentAct = null">
+        <svg class="i"><use :href="icon('i-close')"></use></svg></button>
+      <div class="drawer-cover"><img :src="asset(currentAct.cover)" :alt="currentAct.title"></div>
+      <div class="drawer-body">
+        <span class="tag">{{ currentAct.tag }}</span>
+        <h2>{{ currentAct.title }}</h2>
+        <p class="drawer-loc"><svg class="i"><use :href="icon('i-calendar')"></use></svg>{{ actRange(currentAct) }}</p>
+        <p class="drawer-loc"><svg class="i"><use :href="icon('i-location')"></use></svg>{{ currentAct.place }}</p>
+        <p class="drawer-intro">{{ currentAct.desc }}</p>
+
+        <div class="act-capacity">
+          <span>已约 {{ currentAct.bookedPeople || 0 }} 人<template v-if="currentAct.seatsLeft >= 0">，余 {{ currentAct.seatsLeft }} 位</template></span>
+          <span class="dim tiny">预约信息由村委会在管理后台统一确认</span>
+        </div>
+
+        <!-- 已预约 -->
+        <div v-if="currentAct.myBooking" class="book-panel">
+          <div class="book-panel-head">我的预约 · {{ bookingStatusText(currentAct.myBooking.status) }}</div>
+          <div class="book-facts">
+            <div><span>参加日期</span><b>{{ currentAct.myBooking.date }}</b></div>
+            <div><span>人数</span><b>{{ currentAct.myBooking.people }} 人</b></div>
+            <div><span>联系手机</span><b>{{ currentAct.myBooking.phone || '未填写' }}</b></div>
+            <div v-if="currentAct.myBooking.remark"><span>备注</span><b>{{ currentAct.myBooking.remark }}</b></div>
+          </div>
+          <button class="btn-ghost dark block" v-if="currentAct.myBooking.status !== 'cancelled'" @click="cancelBooking(currentAct.myBooking)">取消预约</button>
+        </div>
+
+        <!-- 未预约 -->
+        <div v-else class="book-panel">
+          <div class="book-panel-head">预约参加</div>
+          <div v-if="!user" class="book-guest">
+            <p class="dim">登录后填写人数与手机号即可预约。</p>
+            <button class="btn-primary" @click="currentAct = null; go('mine')">去个人中心登录</button>
+          </div>
+          <template v-else>
+            <div class="field-row">
+              <label class="field"><span>参加日期</span>
+                <input type="date" v-model="actForm.date"></label>
+              <label class="field"><span>人数</span>
+                <input type="number" min="1" max="20" v-model.number="actForm.people"></label>
+            </div>
+            <label class="field"><span>联系手机</span>
+              <input type="tel" v-model.trim="actForm.phone" placeholder="方便村里联系你"></label>
+            <label class="field"><span>备注</span>
+              <input v-model.trim="actForm.remark" placeholder="选填，例如需要儿童座椅"></label>
+            <button class="btn-primary block" :disabled="booking || isActPast(currentAct)" @click="bookActivity">
+              {{ isActPast(currentAct) ? '活动已结束' : (booking ? '提交中…' : '提交预约') }}</button>
+          </template>
         </div>
       </div>
     </aside>

@@ -428,8 +428,198 @@ public class AdminService {
         return out;
     }
 
-    /* ============================ 在线会话 ============================ */
+    /** 订单详情：列表字段 + 买家/商户联系方式 + 全量订单字段 */
+    public Map<String, Object> orderDetail(String id) {
+        Map<String, Object> o = db.find("orders", id);
+        if (o == null) {
+            throw ApiException.notFound("订单不存在");
+        }
+        Map<String, Object> item = new LinkedHashMap<>(o);
+        item.put("statusText", Dict.statusText(o.get("status")));
+        Map<String, Object> m = db.find("merchants", String.valueOf(o.get("merchantId")));
+        item.put("merchantName", m == null ? "未知商户" : m.get("short"));
+        item.put("merchantPhone", m == null ? null : m.get("phone"));
+        Map<String, Object> b = db.find("users", String.valueOf(o.get("buyerId")));
+        item.put("buyerPhone", b == null ? null : b.get("phone"));
+        Map<String, Object> p = db.find("products", String.valueOf(o.get("productId")));
+        item.put("productUnit", p == null ? null : p.get("unit"));
+        item.put("productCategory", p == null ? null : Dict.categoryText(p.get("category")));
+        item.put("statusOptions", Dict.STATUS_TEXT);
+        return item;
+    }
 
+    /**
+     * 编辑订单详情。允许改的是「履约信息」：状态、地址、人数、预约日期、备注。
+     * 商品、数量、金额属于交易凭证，一律不允许后台改（要改只能取消后重新下单）。
+     * 取消订单走 {@code ShopService.cancel}，那里有库存回滚，所以这里拒绝直接写 cancelled。
+     */
+    public Map<String, Object> updateOrder(String id, Map<String, Object> body) {
+        Map<String, Object> o = db.find("orders", id);
+        if (o == null) {
+            throw ApiException.notFound("订单不存在");
+        }
+        Map<String, Object> patch = new LinkedHashMap<>();
+
+        if (body.containsKey("status")) {
+            String st = text(body.get("status"));
+            if (!Dict.STATUS_TEXT.containsKey(st)) {
+                throw ApiException.badRequest("未知的订单状态：" + st);
+            }
+            if ("cancelled".equals(st)) {
+                throw ApiException.badRequest("请使用「强制取消」按钮取消订单，以便同步回滚库存");
+            }
+            if ("cancelled".equals(text(o.get("status")))) {
+                throw ApiException.badRequest("已取消的订单不能再改状态");
+            }
+            patch.put("status", st);
+            if ("confirmed".equals(st) && o.get("confirmedAt") == null) {
+                patch.put("confirmedAt", Instant.now().toString());
+            }
+            if ("used".equals(st) && o.get("verifiedAt") == null) {
+                patch.put("verifiedAt", Instant.now().toString());
+            }
+        }
+
+        if (body.containsKey("address")) {
+            patch.put("address", text(body.get("address")));
+        }
+        if (body.containsKey("remark")) {
+            String remark = text(body.get("remark"));
+            if (remark.length() > 200) {
+                throw ApiException.badRequest("备注请控制在 200 字以内");
+            }
+            patch.put("remark", remark);
+        }
+        if (body.containsKey("bookDate")) {
+            String d = text(body.get("bookDate"));
+            if (!d.isEmpty() && d.length() != 10) {
+                throw ApiException.badRequest("预约日期格式应为 YYYY-MM-DD");
+            }
+            patch.put("bookDate", d.isEmpty() ? null : d);
+        }
+        if (body.containsKey("people")) {
+            int people = intOf(body.get("people"), 1);
+            if (people < 1 || people > 999) {
+                throw ApiException.badRequest("人数应在 1–999 之间");
+            }
+            patch.put("people", people);
+        }
+
+        if (patch.isEmpty()) {
+            throw ApiException.badRequest("没有需要保存的改动");
+        }
+        db.update("orders", id, patch);
+        return orderDetail(id);
+    }
+
+    /** 商品详情：列表字段 + 描述 + 商户信息 + 该商品的有效订单数 */
+    public Map<String, Object> productDetail(String id) {
+        Map<String, Object> p = db.find("products", id);
+        if (p == null) {
+            throw ApiException.notFound("商品不存在");
+        }
+        Map<String, Object> item = new LinkedHashMap<>(p);
+        item.put("categoryText", Dict.categoryText(p.get("category")));
+        Map<String, Object> m = db.find("merchants", String.valueOf(p.get("merchantId")));
+        item.put("merchantName", m == null ? "未知商户" : (m.get("short") == null ? m.get("name") : m.get("short")));
+        item.put("merchantPhone", m == null ? null : m.get("phone"));
+        item.put("categories", Dict.CATEGORY_TEXT);
+        long orders = 0;
+        for (Map<String, Object> o : db.eq("orders", "productId", id)) {
+            if (!"cancelled".equals(text(o.get("status")))) {
+                orders++;
+            }
+        }
+        item.put("orderCount", orders);
+        return item;
+    }
+
+    /** 编辑商品。归属商户不允许改：改归属会让历史订单与现有商品对不上 */
+    public Map<String, Object> updateProduct(String id, Map<String, Object> body) {
+        Map<String, Object> p = db.find("products", id);
+        if (p == null) {
+            throw ApiException.notFound("商品不存在");
+        }
+        Map<String, Object> patch = new LinkedHashMap<>();
+
+        if (body.containsKey("name")) {
+            String name = text(body.get("name"));
+            if (name.isEmpty()) {
+                throw ApiException.badRequest("商品名称不能为空");
+            }
+            patch.put("name", name);
+        }
+        if (body.containsKey("category")) {
+            String c = text(body.get("category"));
+            if (!Dict.CATEGORY_TEXT.containsKey(c)) {
+                throw ApiException.badRequest("未知的商品分类：" + c);
+            }
+            patch.put("category", c);
+        }
+        if (body.containsKey("price")) {
+            double price = doubleOf(body.get("price"), -1);
+            if (price < 0) {
+                throw ApiException.badRequest("价格不能为负数");
+            }
+            patch.put("price", price);
+        }
+        if (body.containsKey("stock")) {
+            int stock = intOf(body.get("stock"), -1);
+            if (stock < 0) {
+                throw ApiException.badRequest("库存不能为负数");
+            }
+            patch.put("stock", stock);
+        }
+        if (body.containsKey("unit")) {
+            patch.put("unit", text(body.get("unit")));
+        }
+        if (body.containsKey("status")) {
+            patch.put("status", "off".equals(text(body.get("status"))) ? "off" : "on");
+        }
+        if (body.containsKey("cover")) {
+            patch.put("cover", text(body.get("cover")));
+        }
+        if (body.containsKey("intro")) {
+            patch.put("intro", text(body.get("intro")));
+        }
+        if (body.containsKey("desc")) {
+            patch.put("desc", text(body.get("desc")));
+        }
+        if (body.containsKey("tags")) {
+            Object tags = body.get("tags");
+            patch.put("tags", tags instanceof List ? tags : List.of(text(tags).split("[,，、\\s]+")));
+        }
+
+        if (patch.isEmpty()) {
+            throw ApiException.badRequest("没有需要保存的改动");
+        }
+        db.update("products", id, patch);
+        return productDetail(id);
+    }
+
+    private double doubleOf(Object v, double fallback) {
+        if (v instanceof Number n) {
+            return n.doubleValue();
+        }
+        try {
+            return Double.parseDouble(text(v));
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    private int intOf(Object v, int fallback) {
+        if (v instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(text(v));
+        } catch (Exception e) {
+            return fallback;
+        }
+    }
+
+    /* ============================ 在线会话 ============================ */
     public Map<String, Object> sessions() {
         List<Map<String, Object>> list = new ArrayList<>();
         long now = System.currentTimeMillis();

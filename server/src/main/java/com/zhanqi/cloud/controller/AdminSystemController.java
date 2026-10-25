@@ -165,6 +165,51 @@ public class AdminSystemController {
         return R.ok("message", "已删除");
     }
 
+    /**
+     * 某场活动的全部预约人员 —— 「内容管理—文旅活动」的人员管理抽屉用它拉数据。
+     * 已经取消的预约也一并返回（带 status），管理员能看出谁退掉了。
+     */
+    @GetMapping("/activities/{id}/bookings")
+    public Map<String, Object> activityBookings(@PathVariable String id) {
+        Map<String, Object> act = db.find("activities", id);
+        if (act == null) {
+            throw ApiException.notFound("活动不存在");
+        }
+        List<Map<String, Object>> list = db.eq("activityBookings", "activityId", id);
+        list.sort((a, b) -> String.valueOf(a.get("createdAt")).compareTo(String.valueOf(b.get("createdAt"))));
+        int people = 0;
+        for (Map<String, Object> b : list) {
+            if (!"cancelled".equals(String.valueOf(b.get("status")))) {
+                people += intOf(b.get("people"));
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("activity", act);
+        out.put("list", list);
+        out.put("bookedPeople", people);
+        out.put("capacity", intOf(act.get("capacity")) > 0 ? intOf(act.get("capacity")) : 30);
+        return out;
+    }
+
+    /** 全部预约人员（跨活动），支持按姓名 / 手机号 / 活动名筛选 */
+    @GetMapping("/bookings")
+    public Map<String, Object> allBookings(@org.springframework.web.bind.annotation.RequestParam(defaultValue = "") String keyword) {
+        String kw = keyword == null ? "" : keyword.trim().toLowerCase();
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Map<String, Object> b : db.all("activityBookings")) {
+            if (!kw.isEmpty()) {
+                String blob = (b.get("userName") + " " + b.get("phone") + " " + b.get("activityTitle")).toLowerCase();
+                if (!blob.contains(kw)) {
+                    continue;
+                }
+            }
+            list.add(b);
+        }
+        list.sort((a, b) -> String.valueOf(b.get("createdAt")).compareTo(String.valueOf(a.get("createdAt"))));
+        return R.ok("total", list.size(), "list", list);
+    }
+
     /** 数据总览：一次性把平台全部业务数据的规模列出来 */
     @GetMapping("/data-overview")
     public Map<String, Object> dataOverview() {
@@ -200,5 +245,16 @@ public class AdminSystemController {
             list.add(item);
         }
         return R.ok("list", list);
+    }
+
+    private static int intOf(Object v) {
+        if (v instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(v).trim());
+        } catch (Exception e) {
+            return 0;
+        }
     }
 }

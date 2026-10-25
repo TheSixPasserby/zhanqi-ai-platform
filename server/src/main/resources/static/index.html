@@ -19,7 +19,7 @@
 
   <header class="top">
     <div class="brand">
-      <div class="mark">旗</div>
+      <img class="mark-logo" src="./assets/img/logo.svg" alt="战旗云">
       <div>
         <h1 id="platform-name">郫都区战旗村 · 川西林盘农商文旅智慧服务平台</h1>
         <div class="sub" id="platform-slogan">院在林中 · 林在田中 · 农商文旅一站通</div>
@@ -33,20 +33,10 @@
   </header>
 
   <main class="main">
-    <section class="hero">
-      <img class="hero-img anim-float" src="./assets/img/hero.svg" alt="战旗村川西林盘">
-      <div class="hero-text">
-        <h2>一台电脑当服务器，三个端扫码即用</h2>
-        <p>
-          服务端自带 PC 管理后台、商户工作台与游客端页面，数据库自动建库建表。
-          手机不用装任何东西、也不用输入服务器地址 —— 扫右边的二维码直接进游客端；
-          安卓 App 首次启动同样用扫码完成连接。
-        </p>
-        <div class="notice" id="notice-box" hidden>
-          <i>公告</i><span id="notice"></span>
-        </div>
-      </div>
-    </section>
+    <!-- 公告（管理后台可配）：单条浅色横幅，不再配大插画 -->
+    <div class="notice" id="notice-box" hidden>
+      <i>公告</i><span id="notice"></span>
+    </div>
 
     <section class="ends">
       <article class="end-card anim-up" style="--i:0">
@@ -89,7 +79,8 @@
             <li>营收看板与 <b>AI 商品文案</b></li>
           </ul>
           <div class="enter">
-            <a class="btn" id="merchant-url" href="/merchant/" target="_blank">进入商户工作台</a>
+            <a class="btn" id="merchant-url" data-keep-text href="/merchant/" target="_blank">进入商户工作台</a>
+            <div class="dim tiny mono" id="merchant-url-text"></div>
             <div class="dim tiny">演示账号 zhangmm / 123456</div>
           </div>
         </div>
@@ -110,7 +101,8 @@
             <li><b>服务器状态与连接配置</b>（其他端地址在这里统一设置）</li>
           </ul>
           <div class="enter">
-            <a class="btn primary" id="admin-url" href="/admin/" target="_blank">进入 PC 管理后台</a>
+            <a class="btn primary" id="admin-url" data-keep-text href="/admin/" target="_blank">进入 PC 管理后台</a>
+            <div class="dim tiny mono" id="admin-url-text"></div>
             <div class="dim tiny">演示账号 admin / admin123</div>
           </div>
         </div>
@@ -192,7 +184,12 @@
     }
     function href(id, url) {
       var el = document.getElementById(id);
-      if (el && url) { el.href = url; el.textContent = url; }
+      if (!el || !url) { return; }
+      el.href = url;
+      // 按钮类链接保留中文文案，URL 另起一行展示（id + '-text'）
+      if (!el.hasAttribute('data-keep-text')) { el.textContent = url; }
+      var text = document.getElementById(id + '-text');
+      if (text) { text.textContent = url; }
     }
   })();
 </script>

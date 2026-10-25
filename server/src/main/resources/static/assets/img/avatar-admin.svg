@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <!--
+    管理端默认头像 · 「印中山河」
+    一枚方印压住山川与朝阳，冷蓝配色，和后台的沉稳调性一致。
+  -->
+  <defs>
+    <linearGradient id="aaBg" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#F1F6FC"/>
+      <stop offset="1" stop-color="#DCE7F4"/>
+    </linearGradient>
+    <linearGradient id="aaSeal" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#3F7CB8"/>
+      <stop offset="1" stop-color="#244F7C"/>
+    </linearGradient>
+    <clipPath id="aaClip"><circle cx="80" cy="80" r="80"/></clipPath>
+    <clipPath id="aaSealClip"><rect x="36" y="38" width="88" height="88" rx="18"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#aaClip)">
+    <rect width="160" height="160" fill="url(#aaBg)"/>
+    <circle cx="126" cy="36" r="28" fill="#8FB6DD" opacity="0.24"/>
+
+    <!-- 方印 -->
+    <rect x="36" y="38" width="88" height="88" rx="18" fill="url(#aaSeal)"/>
+    <rect x="41.5" y="43.5" width="77" height="77" rx="14" fill="none" stroke="#DCEBF9" stroke-opacity="0.38" stroke-width="1.6"/>
+
+    <g clip-path="url(#aaSealClip)">
+      <!-- 朝阳 -->
+      <circle cx="103" cy="62" r="7.4" fill="#F5D493"/>
+      <!-- 山 -->
+      <path d="M36 118l22-30 14 18 12-14 30 26v14H36z" fill="#E7F1FB" opacity="0.92"/>
+      <path d="M36 118l22-30 8 10-14 20z" fill="#C6DDF1" opacity="0.8"/>
+      <!-- 水纹 -->
+      <path d="M36 118c10-4 20-4 30 0s20 4 30 0 14-3 28 0v20H36z" fill="#9CC0DF" opacity="0.55"/>
+      <path d="M40 126c9-3 18-3 27 0s18 3 27 0" fill="none" stroke="#F4FAFF" stroke-opacity="0.45" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>

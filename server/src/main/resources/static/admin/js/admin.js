@@ -55,6 +55,10 @@
         if (isMerchant) { this.loadTypes(); }
       },
       methods: {
+        /** 列表/详情里的头像：用户上传过的用照片，否则按角色给默认艺术头像 */
+        avatarOfAccount: function (row) {
+          return window.ZQProfile.src(row, isMerchant ? 'merchant' : 'buyer');
+        },
         loadTypes: function () {
           var self = this;
           api.get('/api/auth/options').then(function (res) {
@@ -241,6 +245,7 @@
       return {
         loading: false, status: '', keyword: '', list: [], total: 0,
         statusText: { pending: '待确认', confirmed: '已确认', used: '已核销', cancelled: '已取消' },
+        detailVisible: false, detail: {}, detailSaving: false,
         fmt: fmt
       };
     },
@@ -254,6 +259,30 @@
           if (!res.ok) { return; }
           self.list = res.list || [];
           self.total = res.total || 0;
+        });
+      },
+      /** 打开订单详情：拉全量字段（含买卖双方电话）后再展示 */
+      openDetail: function (row) {
+        var self = this;
+        api.get('/api/admin/orders/' + row.id).then(function (res) {
+          if (!res.ok) { return; }
+          self.detail = res.order || {};
+          self.detailVisible = true;
+        });
+      },
+      saveDetail: function () {
+        var self = this;
+        var d = this.detail;
+        this.detailSaving = true;
+        api.put('/api/admin/orders/' + d.id, {
+          status: d.status, address: d.address, remark: d.remark,
+          bookDate: d.bookDate, people: d.people
+        }).then(function (res) {
+          self.detailSaving = false;
+          if (!res.ok) { return; }
+          self.$message.success(res.message || '订单已更新');
+          self.detailVisible = false;
+          self.load();
         });
       },
       cancel: function (row) {
@@ -272,7 +301,13 @@
   var viewProducts = {
     name: 'view-products',
     template: '#tpl-products',
-    data: function () { return { loading: false, keyword: '', list: [], total: 0, fmt: fmt }; },
+    data: function () {
+      return {
+        loading: false, keyword: '', list: [], total: 0,
+        editVisible: false, saving: false, form: {}, tagsText: '',
+        fmt: fmt
+      };
+    },
     created: function () { this.load(); },
     methods: {
       load: function () {
@@ -283,6 +318,32 @@
           if (!res.ok) { return; }
           self.list = res.list || [];
           self.total = res.total || 0;
+        });
+      },
+      openEdit: function (row) {
+        var self = this;
+        api.get('/api/admin/products/' + row.id).then(function (res) {
+          if (!res.ok) { return; }
+          self.form = res.product || {};
+          self.tagsText = (self.form.tags || []).join('，');
+          self.editVisible = true;
+        });
+      },
+      save: function () {
+        var self = this;
+        var f = this.form;
+        this.saving = true;
+        api.put('/api/admin/products/' + f.id, {
+          name: f.name, category: f.category, price: f.price, unit: f.unit,
+          stock: f.stock, status: f.status,
+          tags: String(this.tagsText || '').split(/[,，、\s]+/).filter(Boolean),
+          intro: f.intro, desc: f.desc
+        }).then(function (res) {
+          self.saving = false;
+          if (!res.ok) { return; }
+          self.$message.success(res.message || '商品已更新');
+          self.editVisible = false;
+          self.load();
         });
       }
     }
@@ -297,6 +358,7 @@
       return {
         tab: 'spots', loading: false, saving: false, list: [], formVisible: false,
         form: {}, tagsText: '',
+        bookVisible: false, bookingActivity: {}, bookings: [], bookingSaving: false,
         covers: [
           '/assets/img/photos/spot-center.jpg', '/assets/img/photos/spot-linpan.jpg', '/assets/img/photos/spot-buxie.jpg',
           '/assets/img/photos/spot-rice.jpg', '/assets/img/photos/spot-museum.jpg', '/assets/img/photos/spot-study.jpg',
@@ -313,6 +375,46 @@
     created: function () { this.load(); },
     methods: {
       switchTab: function () { this.load(); },
+
+      /* ---------- 活动人员管理（本模块统一维护全部预约信息） ---------- */
+      openBookings: function (row) {
+        var self = this;
+        this.bookingActivity = row;
+        this.bookings = [];
+        this.bookVisible = true;
+        api.get('/api/admin/activities/' + row.id + '/bookings').then(function (res) {
+          if (!res.ok) { return; }
+          self.bookingActivity = res.activity || row;
+          self.bookings = res.list || [];
+        });
+      },
+      saveBooking: function (b) {
+        var self = this;
+        this.bookingSaving = true;
+        api.put('/api/admin/data/activityBookings/' + b.id, {
+          userName: b.userName, phone: b.phone, people: b.people,
+          date: b.date, remark: b.remark, status: b.status
+        }).then(function (res) {
+          self.bookingSaving = false;
+          if (!res.ok) { return; }
+          self.$message.success('人员信息已保存');
+          self.openBookings(self.bookingActivity);
+          self.load();
+        });
+      },
+      removeBooking: function (b) {
+        var self = this;
+        this.$confirm('删除这条预约记录？删除后人数统计会同步减少。', '删除预约', { type: 'warning' }).then(function () {
+          api.del('/api/admin/data/activityBookings/' + b.id).then(function (res) {
+            if (res.ok) {
+              self.$message.success(res.message);
+              self.openBookings(self.bookingActivity);
+              self.load();
+            }
+          });
+        }).catch(function () { /* 取消 */ });
+      },
+
       load: function () {
         var self = this;
         this.loading = true;
@@ -320,6 +422,25 @@
           self.loading = false;
           if (!res.ok) { return; }
           self.list = res.list || [];
+          if (self.tab === 'activities') { self.fillBookingCounts(); }
+        });
+      },
+      /** 活动列表补一列「已约人数」：这条数据只有预约表里有 */
+      fillBookingCounts: function () {
+        var self = this;
+        api.get('/api/admin/bookings', null, { silent: true }).then(function (res) {
+          if (!res.ok) { return; }
+          var people = {};
+          var count = {};
+          (res.list || []).forEach(function (b) {
+            if (b.status === 'cancelled') { return; }
+            people[b.activityId] = (people[b.activityId] || 0) + (Number(b.people) || 1);
+            count[b.activityId] = (count[b.activityId] || 0) + 1;
+          });
+          self.list.forEach(function (a) {
+            self.$set(a, 'bookedPeople', people[a.id] || 0);
+            self.$set(a, 'bookedCount', count[a.id] || 0);
+          });
         });
       },
       openCreate: function () {
@@ -525,6 +646,11 @@
         var profile = (this.user && this.user.profile) || {};
         return window.ZQProfile.avatarOf(profile);
       },
+      /* 没上传照片时用管理员专属艺术头像（印中山河） */
+      avatarSrc: function () {
+        var profile = (this.user && this.user.profile) || {};
+        return window.ZQProfile.src(profile, 'admin');
+      },
       initial: function () {
         return window.ZQProfile.initials(this.user && this.user.name);
       },
@@ -556,6 +682,10 @@
       this.bootstrap();
     },
     methods: {
+      /** 登录页「登录过的账号」卡片头像 */
+      knownAvatar: function (a) {
+        return window.ZQProfile.src(a, 'admin');
+      },
       /* ---------------- 启动 ---------------- */
       bootstrap: function () {
         var self = this;

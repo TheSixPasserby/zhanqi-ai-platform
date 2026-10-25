@@ -148,12 +148,38 @@ public class AdminController {
         return R.ok("message", message);
     }
 
+    /** 订单详情：后台「编辑」弹窗用它拉全量字段 */
+    @GetMapping("/orders/{id}")
+    public Map<String, Object> orderDetail(@PathVariable String id) {
+        return R.ok("order", admin.orderDetail(id));
+    }
+
+    /** 编辑订单履约信息（状态 / 地址 / 人数 / 日期 / 备注） */
+    @PutMapping("/orders/{id}")
+    public Map<String, Object> updateOrder(@PathVariable String id,
+                                           @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> order = admin.updateOrder(id, body == null ? Map.of() : body);
+        return R.ok("order", order, "message", "订单已更新");
+    }
+
     @GetMapping("/products")
     public Map<String, Object> products(@RequestParam(defaultValue = "") String keyword) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);
         out.putAll(admin.products(keyword));
         return out;
+    }
+
+    @GetMapping("/products/{id}")
+    public Map<String, Object> productDetail(@PathVariable String id) {
+        return R.ok("product", admin.productDetail(id));
+    }
+
+    @PutMapping("/products/{id}")
+    public Map<String, Object> updateProduct(@PathVariable String id,
+                                             @RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> product = admin.updateProduct(id, body == null ? Map.of() : body);
+        return R.ok("product", product, "message", "商品已更新");
     }
 
     /* ============================ 对称逻辑 ============================ */

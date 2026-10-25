@@ -245,7 +245,7 @@ public class ServerService {
     public Map<String, Object> tableCounts() {
         Map<String, Object> out = new LinkedHashMap<>();
         String[] tables = {"users", "merchants", "admins", "spots", "stamps", "products",
-                "orders", "activities", "knowledge", "sessions", "settings"};
+                "orders", "activities", "activityBookings", "knowledge", "sessions", "settings"};
         for (String t : tables) {
             try {
                 Long n = jdbc.queryForObject("SELECT COUNT(*) FROM `" + t + "`", Long.class);

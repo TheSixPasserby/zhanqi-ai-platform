@@ -214,12 +214,37 @@ CREATE TABLE IF NOT EXISTS `activities` (
   `endDate`   VARCHAR(16)  DEFAULT NULL COMMENT '结束日期，单日活动为空',
   `place`     VARCHAR(128) DEFAULT NULL COMMENT '活动地点',
   `tag`       VARCHAR(32)  DEFAULT NULL COMMENT '活动标签：非遗 / 农事 / 节庆…',
+  `capacity`  INT          DEFAULT 30      COMMENT '可预约人数上限',
   `desc`      TEXT                     COMMENT '活动说明',
   `cover`     VARCHAR(128) DEFAULT NULL COMMENT '活动配图',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_activities_seq` (`seq`),
   KEY `idx_activities_date` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='村内文旅活动';
+
+
+-- ---------------------------------------------------------------------------
+-- 8.1 activityBookings —— 活动预约（人员信息由 PC 后台「内容管理—文旅活动」统一维护）
+--   同一游客对同一活动只保留一条预约，(activityId, userId) 唯一。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `activityBookings` (
+  `seq`           BIGINT       NOT NULL AUTO_INCREMENT COMMENT '写入顺序号',
+  `id`            VARCHAR(32)  NOT NULL COMMENT '主键，形如 ab1712…',
+  `activityId`    VARCHAR(32)  NOT NULL COMMENT '活动 id',
+  `activityTitle` VARCHAR(128) DEFAULT NULL COMMENT '活动标题快照（活动改名后仍可追溯）',
+  `userId`        VARCHAR(32)  DEFAULT NULL COMMENT '游客账号 id',
+  `userName`      VARCHAR(64)  DEFAULT NULL COMMENT '游客昵称',
+  `phone`         VARCHAR(32)  DEFAULT NULL COMMENT '联系手机号',
+  `people`        INT          DEFAULT 1     COMMENT '预约人数',
+  `date`          VARCHAR(16)  DEFAULT NULL COMMENT '参加日期 YYYY-MM-DD',
+  `remark`        VARCHAR(255) DEFAULT NULL COMMENT '备注',
+  `status`        VARCHAR(16)  DEFAULT 'pending' COMMENT '状态：pending 待确认 / confirmed 已确认 / cancelled 已取消',
+  `createdAt`     VARCHAR(32)  DEFAULT NULL COMMENT '提交时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_activityBookings_seq` (`seq`),
+  UNIQUE KEY `uk_activityBookings_user` (`activityId`, `userId`),
+  KEY `idx_ab_activity` (`activityId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='活动预约与人员信息';
 
 
 -- ---------------------------------------------------------------------------
