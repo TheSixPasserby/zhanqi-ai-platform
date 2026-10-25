@@ -6,6 +6,23 @@
   <meta name="theme-color" content="#146B57">
   <meta name="format-detection" content="telephone=no">
   <title>战旗云 · 游客端</title>
+  <script>
+    /* 设备检测：电脑浏览器（宽屏 + 精确指针）自动进电脑版 /visitor/pc/。
+       · 手机 / 平板保持本页；
+       · 手动切到手机版时带 ?pc=0，会写 sessionStorage，本次会话不再跳；
+       · 电脑版那边有对称的检测，防止手机误入。
+       注意：这段必须在 CSS 与 Vue 之前执行，否则会先闪一下手机版布局。 */
+    (function () {
+      var q = location.search || '';
+      if (q.indexOf('pc=0') >= 0) { sessionStorage.setItem('zq.visitor.forceMobile', '1'); return; }
+      if (sessionStorage.getItem('zq.visitor.forceMobile') === '1') { return; }
+      var ua = navigator.userAgent || '';
+      var isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua);
+      var wide = window.matchMedia && window.matchMedia('(min-width: 900px)').matches;
+      var fine = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+      if (!isMobile && wide && fine) { location.replace('pc/' + q); }
+    })();
+  </script>
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
   <link rel="stylesheet" href="../assets/css/app.css">
   <link rel="stylesheet" href="./css/visitor.css">
@@ -162,7 +179,9 @@
         <div class="grid">
           <div class="grid-item" v-for="(e, i) in entries" :key="e.key"
                :style="{ animationDelay: (i * 45) + 'ms' }" @click="go(e.view, e.tab)">
-            <div class="grid-icon" :style="{ background: e.bg }"><span :style="{ color: e.color }">{{ e.glyph }}</span></div>
+            <div class="grid-icon" :style="{ background: e.bg, color: e.color }">
+              <svg class="ico" aria-hidden="true"><use :href="iconHref(e.icon)"></use></svg>
+            </div>
             <div class="grid-text">{{ e.text }}</div>
           </div>
         </div>
@@ -369,9 +388,11 @@
           <div class="card menu">
             <div class="menu-item" v-for="(m, i) in menus" :key="m.key"
                  :class="{ 'menu-line': i !== menus.length - 1 }" @click="go(m.view, m.tab)">
-              <div class="menu-icon" :style="{ background: m.bg }"><span :style="{ color: m.color }">{{ m.glyph }}</span></div>
+              <div class="menu-icon" :style="{ background: m.bg, color: m.color }">
+                <svg class="ico" aria-hidden="true"><use :href="iconHref(m.icon)"></use></svg>
+              </div>
               <div class="menu-body"><b>{{ m.text }}</b><span>{{ m.desc }}</span></div>
-              <div class="menu-arrow">›</div>
+              <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
             </div>
           </div>
 
@@ -781,16 +802,16 @@
       <!-- 底部 Tab 栏：只在顶层四个页面显示 -->
       <nav class="tabbar" v-if="isTopView">
         <div class="tabbar-item" :class="{ on: view === 'home' }" @click="go('home', true)">
-          <span class="tabbar-glyph">首</span><em>首页</em>
+          <svg class="ico tabbar-ico"><use :href="iconHref('i-home')"></use></svg><em>首页</em>
         </div>
         <div class="tabbar-item" :class="{ on: view === 'spots' }" @click="go('spots', true)">
-          <span class="tabbar-glyph">印</span><em>打卡</em>
+          <svg class="ico tabbar-ico"><use :href="iconHref('i-stamp')"></use></svg><em>打卡</em>
         </div>
         <div class="tabbar-item" :class="{ on: view === 'shop' }" @click="go('shop', true)">
-          <span class="tabbar-glyph">购</span><em>商城</em>
+          <svg class="ico tabbar-ico"><use :href="iconHref('i-shop')"></use></svg><em>商城</em>
         </div>
         <div class="tabbar-item" :class="{ on: view === 'mine' }" @click="go('mine', true)">
-          <span class="tabbar-glyph">我</span><em>我的</em>
+          <svg class="ico tabbar-ico"><use :href="iconHref('i-user')"></use></svg><em>我的</em>
         </div>
       </nav>
     </div>

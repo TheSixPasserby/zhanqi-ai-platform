@@ -33,8 +33,8 @@
         @tap="go(e.path, e.tab)"
       >
         <view class="entry__icon" :style="{ background: e.bg }">
-          <!-- 图标统一用文字符号，避免依赖图标字体，打包体积也小 -->
-          <text class="entry__glyph" :style="{ color: e.color }">{{ e.glyph }}</text>
+          <!-- 图标用本地 PNG（static/icons），不依赖图标字体，也不走网络 -->
+          <image class="entry__img" :src="e.icon" mode="aspectFit" />
         </view>
         <text class="entry__text">{{ e.text }}</text>
         <text v-if="e.badge" class="entry__badge">{{ e.badge }}</text>
@@ -170,12 +170,12 @@ export default {
       loading: true,
       user: null,
       entries: [
-        { key: 'spots', text: '点位打卡', glyph: '印', path: '/pages/spots/index', tab: true, bg: '#E6F2ED', color: '#146B57' },
-        { key: 'booking', text: '研学民宿', glyph: '宿', path: '/pages/booking/index', bg: '#EAF1F9', color: '#2F6BA8' },
-        { key: 'ai', text: 'AI 助手', glyph: 'AI', path: '/pages/ai/index', bg: '#FBEDE7', color: '#BE5230' },
-        { key: 'plan', text: '行程规划', glyph: '程', path: '/pages/plan/index', bg: '#FCF4E2', color: '#B07A18' },
-        { key: 'acts', text: '活动日历', glyph: '日', path: '/pages/activities/index', bg: '#F1EEE7', color: '#5C6B65' },
-        { key: 'orders', text: '我的订单', glyph: '单', path: '/pages/orders/index', bg: '#E8F4EE', color: '#2C7A57' },
+        { key: 'spots', text: '点位打卡', icon: '/static/icons/stamp.png', path: '/pages/spots/index', tab: true, bg: '#E6F2ED', color: '#146B57' },
+        { key: 'booking', text: '研学民宿', icon: '/static/icons/bed.png', path: '/pages/booking/index', bg: '#EAF1F9', color: '#2F6BA8' },
+        { key: 'ai', text: 'AI 助手', icon: '/static/icons/ai.png', path: '/pages/ai/index', bg: '#FBEDE7', color: '#BE5230' },
+        { key: 'plan', text: '行程规划', icon: '/static/icons/map.png', path: '/pages/plan/index', bg: '#FCF4E2', color: '#B07A18' },
+        { key: 'acts', text: '活动日历', icon: '/static/icons/calendar.png', path: '/pages/activities/index', bg: '#F1EEE7', color: '#5C6B65' },
+        { key: 'orders', text: '我的订单', icon: '/static/icons/ticket.png', path: '/pages/orders/index', bg: '#E8F4EE', color: '#2C7A57' },
       ],
     };
   },
@@ -393,9 +393,9 @@ export default {
   margin-bottom: 14rpx;
 }
 
-.entry__glyph {
-  font-size: 34rpx;
-  font-weight: 700;
+.entry__img {
+  width: 46rpx;
+  height: 46rpx;
 }
 
 .entry__text {

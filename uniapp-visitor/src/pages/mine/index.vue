@@ -63,13 +63,13 @@
     <view class="menu zq-card zq-rise">
       <view v-for="(m, i) in menus" :key="m.key" class="menu__item" :class="{ 'menu__item--line': i !== menus.length - 1 }" @tap="onMenu(m)">
         <view class="menu__icon" :style="{ background: m.bg }">
-          <text class="menu__glyph" :style="{ color: m.color }">{{ m.glyph }}</text>
+          <image class="menu__img" :src="m.icon" mode="aspectFit" />
         </view>
         <view class="menu__body">
           <text class="menu__text">{{ m.text }}</text>
           <text v-if="m.desc" class="menu__desc">{{ m.desc }}</text>
         </view>
-        <text class="menu__arrow">›</text>
+        <image class="menu__arrow" src="/static/icons/arrow-right.png" mode="aspectFit" />
       </view>
     </view>
 
@@ -127,12 +127,12 @@ export default {
       isApp: false,
       avatarColor: '#146B57',
       menus: [
-        { key: 'orders', text: '我的订单', desc: '查看订单状态与取消', glyph: '单', bg: '#E6F2ED', color: '#146B57' },
-        { key: 'wall', text: '我的印章墙', desc: '集齐 8 枚印章领纪念品', glyph: '印', bg: '#FBEDE7', color: '#BE5230' },
-        { key: 'ai', text: 'AI 文旅助手', desc: '问村内的事，有知识库出处', glyph: 'AI', bg: '#EAF1F9', color: '#2F6BA8' },
-        { key: 'plan', text: 'AI 行程规划', desc: '按偏好编排 1-3 天路线', glyph: '程', bg: '#FCF4E2', color: '#B07A18' },
-        { key: 'acts', text: '村内活动日历', desc: '非遗节庆与农事体验', glyph: '日', bg: '#F1EEE7', color: '#5C6B65' },
-        { key: 'shop', text: '去逛商城', desc: '农产文创好物', glyph: '购', bg: '#E8F4EE', color: '#2C7A57' },
+        { key: 'orders', text: '我的订单', desc: '查看订单状态与取消', icon: '/static/icons/ticket.png', bg: '#E6F2ED', color: '#146B57' },
+        { key: 'wall', text: '我的印章墙', desc: '集齐全部印章领纪念品', icon: '/static/icons/stamp.png', bg: '#FBEDE7', color: '#BE5230' },
+        { key: 'ai', text: 'AI 文旅助手', desc: '问村内的事，有知识库出处', icon: '/static/icons/ai.png', bg: '#EAF1F9', color: '#2F6BA8' },
+        { key: 'plan', text: 'AI 行程规划', desc: '按偏好编排 1-3 天路线', icon: '/static/icons/map.png', bg: '#FCF4E2', color: '#B07A18' },
+        { key: 'acts', text: '村内活动日历', desc: '非遗节庆与农事体验', icon: '/static/icons/calendar.png', bg: '#F1EEE7', color: '#5C6B65' },
+        { key: 'shop', text: '去逛商城', desc: '农产文创好物', icon: '/static/icons/shop.png', bg: '#E8F4EE', color: '#2C7A57' },
       ],
     };
   },
@@ -439,9 +439,9 @@ export default {
   flex: none;
 }
 
-.menu__glyph {
-  font-size: 28rpx;
-  font-weight: 700;
+.menu__img {
+  width: 38rpx;
+  height: 38rpx;
 }
 
 .menu__body {
@@ -465,9 +465,9 @@ export default {
 }
 
 .menu__arrow {
-  font-size: 36rpx;
-  color: #D8D3C6;
-  line-height: 1;
+  width: 24rpx;
+  height: 24rpx;
+  opacity: 0.45;
 }
 
 /* ------------------------------ 服务器连接 ------------------------------ */

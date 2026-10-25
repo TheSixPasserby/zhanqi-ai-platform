@@ -298,10 +298,10 @@
         tab: 'spots', loading: false, saving: false, list: [], formVisible: false,
         form: {}, tagsText: '',
         covers: [
-          '/assets/img/spot-center.svg', '/assets/img/spot-linpan.svg', '/assets/img/spot-buxie.svg',
-          '/assets/img/spot-rice.svg', '/assets/img/spot-museum.svg', '/assets/img/spot-study.svg',
-          '/assets/img/spot-radish.svg', '/assets/img/spot-bookhouse.svg',
-          '/assets/img/craft.svg', '/assets/img/farm.svg'
+          '/assets/img/photos/spot-center.jpg', '/assets/img/photos/spot-linpan.jpg', '/assets/img/photos/spot-buxie.jpg',
+          '/assets/img/photos/spot-rice.jpg', '/assets/img/photos/spot-museum.jpg', '/assets/img/photos/spot-study.jpg',
+          '/assets/img/photos/spot-radish.jpg', '/assets/img/photos/spot-bookhouse.jpg',
+          '/assets/img/photos/goods-douban.jpg', '/assets/img/photos/goods-ninebowls.jpg'
         ]
       };
     },
