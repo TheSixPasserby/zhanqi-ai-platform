@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#146B57">
+  <title>战旗云 · 游客端（电脑版）</title>
+  <link rel="icon" type="image/svg+xml" href="../../assets/img/favicon.svg">
+  <link rel="stylesheet" href="../../assets/css/app.css">
+  <link rel="stylesheet" href="./pc.css">
+  <script>
+    /* 设备检测：电脑版被手机打开时自动回到手机版。
+       手动切换过的会写 sessionStorage，避免来回跳。 */
+    (function () {
+      var q = location.search || '';
+      if (q.indexOf('pc=1') >= 0) { sessionStorage.setItem('zq.visitor.forceDesktop', '1'); return; }
+      if (sessionStorage.getItem('zq.visitor.forceDesktop') === '1') { return; }
+      var ua = navigator.userAgent || '';
+      var isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua);
+      var narrow = window.matchMedia && window.matchMedia('(max-width: 820px)').matches;
+      if (isMobile || narrow) { location.replace('../' + q); }
+    })();
+  </script>
+</head>
+<body>
+<div id="pc" v-cloak>
+
+  <div v-if="!booted" class="boot">
+    <div class="boot-mark">旗</div>
+    <div class="boot-text">{{ site.shortName || '战旗云' }} · 电脑版</div>
+    <div class="boot-bar"><i></i></div>
+  </div>
+
+  <template v-else>
+
+    <!-- ==================== 未登录：登录 / 注册 ==================== -->
+    <div v-if="!user" class="auth-page">
+      <div class="auth-visual">
+        <img src="../../assets/img/photos/spot-linpan.jpg" alt="川西林盘">
+        <div class="auth-visual-mask"></div>
+        <div class="auth-visual-text">
+          <span class="auth-badge">郫都区 · 唐昌镇</span>
+          <h1>{{ site.name || '战旗村 · 川西林盘农商文旅智慧服务平台' }}</h1>
+          <p>{{ site.slogan || '院在林中 · 林在田中 · 农商文旅一站通' }}</p>
+        </div>
+      </div>
+
+      <div class="auth-panel">
+        <div class="auth-brand">
+          <div class="brand-mark">旗</div>
+          <div>
+            <b>{{ site.shortName || '战旗云' }}</b>
+            <span>游客端 · 电脑版</span>
+          </div>
+        </div>
+
+        <div class="auth-tabs">
+          <button :class="{ on: authTab === 'login' }" @click="authTab = 'login'">登录</button>
+          <button :class="{ on: authTab === 'register' }" @click="authTab = 'register'">注册新账号</button>
+        </div>
+
+        <template v-if="authTab === 'login'">
+          <label class="field"><span>账号</span>
+            <input v-model.trim="loginForm.account" placeholder="请输入账号" @keyup.enter="doLogin"></label>
+          <label class="field"><span>密码</span>
+            <input v-model="loginForm.password" type="password" placeholder="请输入密码" @keyup.enter="doLogin"></label>
+          <button class="btn-primary block" :disabled="loading" @click="doLogin">{{ loading ? '登录中…' : '登 录' }}</button>
+
+          <div v-if="known.length" class="quick">
+            <div class="quick-head">快捷登录 <em>点卡片免密进入</em></div>
+            <div class="quick-list">
+              <button v-for="a in known" :key="a.account" class="quick-card" @click="quickLogin(a)">
+                <span class="quick-avatar">{{ (a.name || '游').slice(0, 1) }}</span>
+                <span class="quick-name">{{ a.name }}</span>
+                <span class="quick-acc">{{ a.account }}</span>
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <label class="field"><span>账号</span>
+            <input v-model.trim="regForm.account" placeholder="字母开头，4–20 位"></label>
+          <label class="field"><span>昵称</span>
+            <input v-model.trim="regForm.name" placeholder="怎么称呼你"></label>
+          <label class="field"><span>密码</span>
+            <input v-model="regForm.password" type="password" placeholder="至少 6 位"></label>
+          <label class="field"><span>确认密码</span>
+            <input v-model="regForm.confirm" type="password" placeholder="再输一次"></label>
+          <label class="field"><span>手机号</span>
+            <input v-model.trim="regForm.phone" placeholder="选填，11 位"></label>
+          <button class="btn-primary block" :disabled="loading" @click="doRegister">{{ loading ? '提交中…' : '注册并登录' }}</button>
+        </template>
+
+        <a class="to-mobile" href="../?pc=0">
+          <svg class="i"><use href="../../assets/img/icons.svg#i-phone"></use></svg>
+          用手机打开手机版
+        </a>
+      </div>
+    </div>
+
+    <!-- ==================== 已登录：主界面 ==================== -->
+    <template v-else>
+      <header class="topnav">
+        <div class="nav-inner">
+          <a class="nav-brand" @click="go('home')">
+            <span class="brand-mark sm">旗</span>
+            <span class="brand-text">
+              <b>{{ site.shortName || '战旗云' }}</b>
+              <em>游客端</em>
+            </span>
+          </a>
+
+          <nav class="nav-links">
+            <a :class="{ on: view === 'home' }" @click="go('home')">
+              <svg class="i"><use :href="icon('i-home')"></use></svg>首页</a>
+            <a :class="{ on: view === 'spots' }" @click="go('spots')">
+              <svg class="i"><use :href="icon('i-stamp')"></use></svg>点位打卡</a>
+            <a :class="{ on: view === 'shop' }" @click="go('shop')">
+              <svg class="i"><use :href="icon('i-shop')"></use></svg>商城</a>
+            <a :class="{ on: view === 'activities' }" @click="go('activities')">
+              <svg class="i"><use :href="icon('i-calendar')"></use></svg>活动</a>
+            <a :class="{ on: view === 'ai' }" @click="go('ai')">
+              <svg class="i"><use :href="icon('i-ai')"></use></svg>AI 助手</a>
+          </nav>
+
+          <div class="nav-right">
+            <div class="nav-search">
+              <svg class="i"><use :href="icon('i-search')"></use></svg>
+              <input v-model.trim="keyword" placeholder="搜商品" @keyup.enter="go('shop')">
+            </div>
+            <button class="icon-btn" title="购物车" @click="cartOpen = true">
+              <svg class="i"><use :href="icon('i-cart')"></use></svg>
+              <span v-if="cartCount" class="badge">{{ cartCount }}</span>
+            </button>
+            <div class="nav-user">
+              <span class="avatar">{{ (me.name || '游').slice(0, 1) }}</span>
+              <div class="user-menu">
+                <b>{{ me.name }}</b>
+                <a @click="go('orders')">我的订单</a>
+                <a @click="go('mine')">个人中心</a>
+                <a @click="logout">退出登录</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page">
+
+        <!-- ---------- 首页 ---------- -->
+        <template v-if="view === 'home'">
+          <section class="hero">
+            <img src="../../assets/img/photos/spot-linpan.jpg" alt="川西林盘">
+            <div class="hero-mask"></div>
+            <div class="hero-content">
+              <span class="hero-badge">全国乡村振兴示范村</span>
+              <h1>{{ site.name || '战旗村 · 川西林盘农商文旅智慧服务平台' }}</h1>
+              <p>{{ site.slogan || '院在林中 · 林在田中 · 农商文旅一站通' }}</p>
+              <div class="hero-actions">
+                <button class="btn-primary" @click="go('spots')">
+                  <svg class="i"><use :href="icon('i-stamp')"></use></svg>开始集章打卡</button>
+                <button class="btn-ghost" @click="go('shop')">
+                  <svg class="i"><use :href="icon('i-shop')"></use></svg>逛农产好物</button>
+              </div>
+            </div>
+            <div class="hero-stat">
+              <div><b>{{ spots.length }}</b><span>林盘点位</span></div>
+              <div><b>{{ products.length }}</b><span>在售好物</span></div>
+              <div><b>{{ stampCount }}</b><span>已集印章</span></div>
+            </div>
+          </section>
+
+          <section v-if="site.announcement" class="notice">
+            <svg class="i"><use :href="icon('i-star')"></use></svg>
+            <span>{{ site.announcement }}</span>
+          </section>
+
+          <section class="quick-grid">
+            <a class="quick-item" @click="go('spots')">
+              <span class="qi-icon"><svg class="i"><use :href="icon('i-stamp')"></use></svg></span>
+              <b>点位打卡</b><em>走遍林盘集印章</em></a>
+            <a class="quick-item" @click="go('shop')">
+              <span class="qi-icon info"><svg class="i"><use :href="icon('i-shop')"></use></svg></span>
+              <b>农产好物</b><em>米面油菜，产地直发</em></a>
+            <a class="quick-item" @click="go('activities')">
+              <span class="qi-icon warn"><svg class="i"><use :href="icon('i-calendar')"></use></svg></span>
+              <b>活动日历</b><em>非遗节庆与时令体验</em></a>
+            <a class="quick-item" @click="go('ai')">
+              <span class="qi-icon accent"><svg class="i"><use :href="icon('i-ai')"></use></svg></span>
+              <b>AI 文旅助手</b><em>问路线、问吃住</em></a>
+          </section>
+
+          <section class="block">
+            <div class="block-head">
+              <h2><i></i>林盘点位</h2>
+              <a @click="go('spots')">查看全部
+                <svg class="i"><use :href="icon('i-arrow-right')"></use></svg></a>
+            </div>
+            <div class="spot-grid">
+              <article v-for="s in spots.slice(0, 6)" :key="s.id" class="spot-card" @click="openSpot(s)">
+                <div class="spot-cover">
+                  <img :src="asset(s.cover)" :alt="s.name">
+                  <span class="tag-type">{{ s.type }}</span>
+                  <span v-if="isChecked(s.id)" class="tag-done">
+                    <svg class="i"><use :href="icon('i-check')"></use></svg>已打卡</span>
+                </div>
+                <div class="spot-body">
+                  <h3>{{ s.name }}</h3>
+                  <p>{{ s.intro }}</p>
+                  <div class="spot-meta">
+                    <span><svg class="i"><use :href="icon('i-location')"></use></svg>{{ s.location }}</span>
+                    <span class="stamp-chip">{{ s.stampIcon }} · {{ s.stamp }}</span>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="block">
+            <div class="block-head">
+              <h2><i></i>热门好物</h2>
+              <a @click="go('shop')">进商城
+                <svg class="i"><use :href="icon('i-arrow-right')"></use></svg></a>
+            </div>
+            <div class="goods-grid">
+              <article v-for="p in products.slice(0, 8)" :key="p.id" class="goods-card" @click="openProduct(p)">
+                <div class="goods-cover"><img :src="asset(p.cover)" :alt="p.name"></div>
+                <div class="goods-body">
+                  <h3>{{ p.name }}</h3>
+                  <div class="goods-foot">
+                    <span class="price">¥{{ p.price }}<em>/{{ p.unit }}</em></span>
+                    <button class="mini-cart" @click.stop="addCart(p, 1)">
+                      <svg class="i"><use :href="icon('i-cart')"></use></svg></button>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="block" v-if="upcoming.length">
+            <div class="block-head">
+              <h2><i></i>近期活动</h2>
+              <a @click="go('activities')">活动日历
+                <svg class="i"><use :href="icon('i-arrow-right')"></use></svg></a>
+            </div>
+            <div class="act-grid">
+              <article v-for="a in upcoming.slice(0, 3)" :key="a.id" class="act-card">
+                <div class="act-cover"><img :src="asset(a.cover)" :alt="a.title">
+                  <span class="act-tag">{{ a.tag }}</span></div>
+                <div class="act-body">
+                  <h3>{{ a.title }}</h3>
+                  <p>{{ a.desc }}</p>
+                  <div class="act-meta">
+                    <span><svg class="i"><use :href="icon('i-calendar')"></use></svg>{{ a.date }}{{ a.endDate ? ' 至 ' + a.endDate : '' }}</span>
+                    <span><svg class="i"><use :href="icon('i-location')"></use></svg>{{ a.place }}</span>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </section>
+        </template>
+
+        <!-- ---------- 点位打卡 ---------- -->
+        <template v-else-if="view === 'spots'">
+          <div class="page-head">
+            <div>
+              <h1>点位打卡</h1>
+              <p>走遍 {{ spots.length }} 个林盘点位，集齐印章可在游客中心领取纪念品</p>
+            </div>
+            <div class="stamp-progress">
+              <div class="ring" :style="{ background: 'conic-gradient(var(--brand) 0% ' + stampPercent + '%, var(--surface-3) ' + stampPercent + '% 100%)' }">
+                <span>{{ stampCount }}/{{ spots.length }}</span>
+              </div>
+              <em>已集印章</em>
+            </div>
+          </div>
+
+          <div class="spot-grid">
+            <article v-for="s in spots" :key="s.id" class="spot-card" @click="openSpot(s)">
+              <div class="spot-cover">
+                <img :src="asset(s.cover)" :alt="s.name">
+                <span class="tag-type">{{ s.type }}</span>
+                <span v-if="isChecked(s.id)" class="tag-done">
+                  <svg class="i"><use :href="icon('i-check')"></use></svg>已打卡</span>
+              </div>
+              <div class="spot-body">
+                <h3>{{ s.name }}</h3>
+                <p>{{ s.intro }}</p>
+                <div class="spot-foot">
+                  <span class="stamp-chip">{{ s.stampIcon }} · {{ s.stamp }}</span>
+                  <button class="btn-mini" :disabled="isChecked(s.id)" @click.stop="checkin(s)">
+                    {{ isChecked(s.id) ? '已完成' : '打卡' }}</button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </template>
+
+        <!-- ---------- 商城 ---------- -->
+        <template v-else-if="view === 'shop'">
+          <div class="page-head">
+            <div>
+              <h1>农产文创好物</h1>
+              <p>产地直发，线上下单，支持快递到家</p>
+            </div>
+            <div class="shop-search">
+              <svg class="i"><use :href="icon('i-search')"></use></svg>
+              <input v-model.trim="keyword" placeholder="搜索商品名">
+            </div>
+          </div>
+
+          <div class="shop-layout">
+            <aside class="shop-side">
+              <h3>分类</h3>
+              <a :class="{ on: !category }" @click="category = ''">全部商品</a>
+              <a v-for="(text, key) in categories" :key="key" :class="{ on: category === key }"
+                 @click="category = key">{{ text }}</a>
+            </aside>
+
+            <div class="goods-grid wide">
+              <article v-for="p in filteredProducts" :key="p.id" class="goods-card" @click="openProduct(p)">
+                <div class="goods-cover"><img :src="asset(p.cover)" :alt="p.name"></div>
+                <div class="goods-body">
+                  <h3>{{ p.name }}</h3>
+                  <p class="goods-desc">{{ p.desc }}</p>
+                  <div class="goods-foot">
+                    <span class="price">¥{{ p.price }}<em>/{{ p.unit }}</em></span>
+                    <button class="mini-cart" @click.stop="addCart(p, 1)">
+                      <svg class="i"><use :href="icon('i-cart')"></use></svg></button>
+                  </div>
+                </div>
+              </article>
+              <div v-if="!filteredProducts.length" class="empty">
+                <svg class="i big"><use :href="icon('i-shop')"></use></svg>
+                <p>这个分类下暂时没有商品</p>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- ---------- 订单 ---------- -->
+        <template v-else-if="view === 'orders'">
+          <div class="page-head"><div><h1>我的订单</h1><p>共 {{ orders.length }} 笔</p></div></div>
+          <div class="table-card">
+            <table>
+              <thead><tr><th>商品</th><th>数量</th><th>金额</th><th>状态</th><th>下单时间</th><th></th></tr></thead>
+              <tbody>
+                <tr v-for="o in orders" :key="o.id">
+                  <td>
+                    <div class="order-item">
+                      <img :src="asset(o.cover)" alt="">
+                      <div><b>{{ o.productName }}</b><span>{{ o.type === 'booking' ? '预约单' : '商品单' }}</span></div>
+                    </div>
+                  </td>
+                  <td>{{ o.qty }}</td>
+                  <td class="mono">{{ money(o.amount) }}</td>
+                  <td><span class="pill" :class="o.status">{{ o.statusText }}</span></td>
+                  <td class="dim">{{ time(o.createdAt) }}</td>
+                  <td class="right">
+                    <button v-if="o.status === 'pending'" class="btn-mini ghost" @click="cancelOrder(o)">取消</button>
+                  </td>
+                </tr>
+                <tr v-if="!orders.length"><td colspan="6" class="empty-cell">还没有订单，去商城逛逛吧</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
+
+        <!-- ---------- 活动 ---------- -->
+        <template v-else-if="view === 'activities'">
+          <div class="page-head"><div><h1>活动日历</h1><p>非遗节庆、农事体验与时令活动</p></div></div>
+          <div class="act-list">
+            <article v-for="a in activities" :key="a.id" class="act-row">
+              <div class="act-row-date">
+                <b>{{ (a.date || '').slice(5) }}</b><em>{{ (a.date || '').slice(0, 4) }}</em>
+              </div>
+              <img :src="asset(a.cover)" :alt="a.title">
+              <div class="act-row-body">
+                <div class="act-row-head"><h3>{{ a.title }}</h3><span class="tag">{{ a.tag }}</span></div>
+                <p>{{ a.desc }}</p>
+                <div class="act-meta">
+                  <span><svg class="i"><use :href="icon('i-location')"></use></svg>{{ a.place }}</span>
+                  <span v-if="a.endDate"><svg class="i"><use :href="icon('i-clock')"></use></svg>至 {{ a.endDate }}</span>
+                </div>
+              </div>
+            </article>
+          </div>
+        </template>
+
+        <!-- ---------- AI 助手 ---------- -->
+        <template v-else-if="view === 'ai'">
+          <div class="page-head"><div><h1>AI 文旅助手</h1><p>只依据村内知识库回答，找不到会明确说「资料里没有」</p></div></div>
+          <div class="ai-layout">
+            <div class="ai-main">
+              <div class="ai-tabs">
+                <button :class="{ on: ai.mode === 'ask' }" @click="ai.mode = 'ask'">问村内的事</button>
+                <button :class="{ on: ai.mode === 'plan' }" @click="ai.mode = 'plan'">帮我排行程</button>
+              </div>
+
+              <div v-if="ai.mode === 'plan'" class="ai-params">
+                <label>天数
+                  <select v-model="ai.planDays"><option :value="1">1 天</option><option :value="2">2 天</option><option :value="3">3 天</option></select></label>
+                <label>偏好
+                  <select v-model="ai.planPref"><option>亲子</option><option>非遗</option><option>摄影</option><option>美食</option></select></label>
+              </div>
+
+              <div class="ai-input">
+                <textarea v-model="ai.question" rows="3"
+                          :placeholder="ai.mode === 'plan' ? '例如：两大一小，想轻松一点，想看非遗' : '例如：战旗村怎么去？有什么好吃的？'"></textarea>
+                <button class="btn-primary" :disabled="ai.loading" @click="askAi">
+                  <svg class="i"><use :href="icon('i-ai')"></use></svg>{{ ai.loading ? '思考中…' : '发送' }}</button>
+              </div>
+
+              <div v-if="ai.answer" class="ai-answer">
+                <div class="ai-answer-head">
+                  <svg class="i"><use :href="icon('i-ai')"></use></svg>回答
+                </div>
+                <p>{{ ai.answer }}</p>
+                <div v-if="ai.sources.length" class="ai-sources">
+                  <span class="dim">依据：</span>
+                  <span v-for="(s, i) in ai.sources" :key="i" class="tag">{{ s.title || s }}</span>
+                </div>
+              </div>
+
+              <div v-else class="ai-presets">
+                <span class="dim">可以这样问：</span>
+                <button v-for="q in ['战旗村怎么去？', '有什么好吃的？', '适合带孩子来吗？', '伴手礼买什么好？']"
+                        :key="q" class="chip" @click="presetAsk(q)">{{ q }}</button>
+              </div>
+            </div>
+
+            <aside class="ai-side">
+              <h3>小提示</h3>
+              <p>AI 只会回答知识库里有的事，不确定的会直说。想了解实时价格与库存，请到商城查看。</p>
+              <div class="ai-card">
+                <svg class="i"><use :href="icon('i-map')"></use></svg>
+                <b>要路线？</b>
+                <span>切到「帮我排行程」，按天数和偏好生成。</span>
+              </div>
+            </aside>
+          </div>
+        </template>
+
+        <!-- ---------- 我的 ---------- -->
+        <template v-else-if="view === 'mine'">
+          <div class="profile-card">
+            <span class="profile-avatar">{{ (me.name || '游').slice(0, 1) }}</span>
+            <div class="profile-main">
+              <h2>{{ me.name }}</h2>
+              <p>{{ me.profile.account || '' }} · 注册于 {{ me.profile.createdAt || '—' }}</p>
+            </div>
+            <div class="profile-stats">
+              <div><b>{{ orders.length }}</b><span>订单</span></div>
+              <div><b>{{ stampCount }}</b><span>印章</span></div>
+              <div><b>{{ stampPercent }}%</b><span>集章进度</span></div>
+            </div>
+          </div>
+
+          <section class="block">
+            <div class="block-head"><h2><i></i>我的印章墙</h2></div>
+            <div class="seal-wall">
+              <div v-for="(s, i) in stamps" :key="s.id" class="seal">
+                <span class="seal-icon">{{ s.stampIcon }}</span>
+                <b>{{ s.stamp }}</b>
+                <em>{{ s.spotName }}</em>
+              </div>
+              <div v-if="!stamps.length" class="empty">
+                <svg class="i big"><use :href="icon('i-stamp')"></use></svg>
+                <p>还没有印章，去点位打卡吧</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="block">
+            <div class="block-head"><h2><i></i>账号</h2></div>
+            <div class="mine-links">
+              <a @click="go('orders')"><svg class="i"><use :href="icon('i-ticket')"></use></svg>我的订单
+                <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
+              <a @click="go('ai')"><svg class="i"><use :href="icon('i-ai')"></use></svg>AI 文旅助手
+                <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
+              <a @click="logout"><svg class="i"><use :href="icon('i-close')"></use></svg>退出登录
+                <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
+            </div>
+          </section>
+        </template>
+      </main>
+
+      <footer class="site-foot">
+        <div>
+          <b>{{ site.shortName || '战旗云' }}</b>
+          <span>{{ site.name || '郫都区战旗村 · 川西林盘农商文旅智慧服务平台' }}</span>
+        </div>
+        <div class="foot-links">
+          <a href="../?pc=0">手机版</a>
+          <a :href="links.merchantUrl || '/merchant/'">商户工作台</a>
+          <a :href="links.adminUrl || '/admin/'">管理后台</a>
+        </div>
+      </footer>
+    </template>
+  </template>
+
+  <!-- ==================== 点位详情抽屉 ==================== -->
+  <div v-if="currentSpot" class="drawer-mask" @click.self="currentSpot = null">
+    <aside class="drawer">
+      <button class="drawer-close" @click="currentSpot = null">
+        <svg class="i"><use :href="icon('i-close')"></use></svg></button>
+      <div class="drawer-cover"><img :src="asset(currentSpot.cover)" :alt="currentSpot.name"></div>
+      <div class="drawer-body">
+        <span class="tag">{{ currentSpot.type }}</span>
+        <h2>{{ currentSpot.name }}</h2>
+        <p class="drawer-loc"><svg class="i"><use :href="icon('i-location')"></use></svg>{{ currentSpot.location }}</p>
+        <p class="drawer-intro">{{ currentSpot.intro }}</p>
+        <div class="drawer-actions">
+          <button class="btn-ghost" @click="speak(currentSpot)">
+            <svg class="i"><use :href="icon('i-mic')"></use></svg>语音讲解</button>
+          <button class="btn-primary" :disabled="isChecked(currentSpot.id)" @click="checkin(currentSpot)">
+            <svg class="i"><use :href="icon('i-stamp')"></use></svg>{{ isChecked(currentSpot.id) ? '已打卡' : '打卡集章' }}</button>
+        </div>
+        <div class="drawer-stamp">
+          <span class="seal-icon lg">{{ currentSpot.stampIcon }}</span>
+          <div><b>{{ currentSpot.stamp }}</b><em>集齐全部印章可领纪念品</em></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==================== 商品详情抽屉 ==================== -->
+  <div v-if="currentProduct" class="drawer-mask" @click.self="currentProduct = null">
+    <aside class="drawer">
+      <button class="drawer-close" @click="currentProduct = null">
+        <svg class="i"><use :href="icon('i-close')"></use></svg></button>
+      <div class="drawer-cover"><img :src="asset(currentProduct.cover)" :alt="currentProduct.name"></div>
+      <div class="drawer-body">
+        <span class="tag">{{ categories[currentProduct.category] || currentProduct.category }}</span>
+        <h2>{{ currentProduct.name }}</h2>
+        <p class="drawer-price">¥{{ currentProduct.price }}<em>/{{ currentProduct.unit }}</em></p>
+        <p class="drawer-intro">{{ currentProduct.desc }}</p>
+        <div class="drawer-tags">
+          <span v-for="t in (currentProduct.tags || [])" :key="t" class="chip">{{ t }}</span>
+        </div>
+        <div class="drawer-actions">
+          <button class="btn-primary block" :disabled="currentProduct.stock <= 0" @click="addCart(currentProduct, 1); currentProduct = null">
+            <svg class="i"><use :href="icon('i-cart')"></use></svg>
+            {{ currentProduct.stock > 0 ? '加入购物车' : '已售罄' }}</button>
+        </div>
+        <p class="drawer-stock">库存 {{ currentProduct.stock }} · 已售 {{ currentProduct.sold }}</p>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==================== 购物车 ==================== -->
+  <div v-if="cartOpen" class="drawer-mask" @click.self="cartOpen = false">
+    <aside class="drawer cart-drawer">
+      <button class="drawer-close" @click="cartOpen = false">
+        <svg class="i"><use :href="icon('i-close')"></use></svg></button>
+      <div class="drawer-body">
+        <h2>购物车 <em class="dim">{{ cartCount }} 件</em></h2>
+        <div v-if="!cart.length" class="empty">
+          <svg class="i big"><use :href="icon('i-cart')"></use></svg>
+          <p>购物车是空的</p>
+        </div>
+        <div v-for="c in cart" :key="c.id" class="cart-row">
+          <img :src="asset(c.cover)" alt="">
+          <div class="cart-info">
+            <b>{{ c.name }}</b>
+            <span class="mono">¥{{ c.price }}/{{ c.unit }}</span>
+          </div>
+          <div class="qty">
+            <button @click="changeQty(c, -1)"><svg class="i"><use :href="icon('i-minus')"></use></svg></button>
+            <span>{{ c.qty }}</span>
+            <button @click="changeQty(c, 1)"><svg class="i"><use :href="icon('i-plus')"></use></svg></button>
+          </div>
+        </div>
+        <template v-if="cart.length">
+          <label class="field mt"><span>收货地址</span>
+            <input v-model.trim="address" placeholder="成都市…（快递到家）"></label>
+          <label class="field"><span>备注</span>
+            <input v-model.trim="remark" placeholder="选填"></label>
+          <div class="cart-total">合计 <b>{{ money(cartTotal) }}</b></div>
+          <button class="btn-primary block" :disabled="submitting" @click="checkout">
+            {{ submitting ? '提交中…' : '提交订单' }}</button>
+        </template>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toasts">
+    <div v-for="t in toastList" :key="t.id" class="toast" :class="t.type">{{ t.text }}</div>
+  </div>
+</div>
+
+<script src="../../vendors/vue.min.js"></script>
+<script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/charts.js"></script>
+<script src="./pc.js"></script>
+</body>
+</html>

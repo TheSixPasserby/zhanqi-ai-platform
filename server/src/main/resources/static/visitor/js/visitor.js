@@ -212,23 +212,23 @@
 
       entries: function () {
         return [
-          { key: 'spots', text: '点位打卡', glyph: '印', view: 'spots', tab: true, bg: '#E6F2ED', color: '#146B57' },
-          { key: 'booking', text: '研学民宿', glyph: '宿', view: 'booking', bg: '#EAF1F9', color: '#2F6BA8' },
-          { key: 'ai', text: 'AI 助手', glyph: 'AI', view: 'ai', bg: '#FBEDE7', color: '#BE5230' },
-          { key: 'plan', text: '行程规划', glyph: '程', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
-          { key: 'acts', text: '活动日历', glyph: '日', view: 'activities', bg: '#F1EEE7', color: '#5C6B65' },
-          { key: 'orders', text: '我的订单', glyph: '单', view: 'orders', bg: '#E8F4EE', color: '#2C7A57' },
+          { key: 'spots', text: '点位打卡', icon: 'i-stamp', view: 'spots', tab: true, bg: '#E6F2ED', color: '#146B57' },
+          { key: 'booking', text: '研学民宿', icon: 'i-bed', view: 'booking', bg: '#EAF1F9', color: '#2F6BA8' },
+          { key: 'ai', text: 'AI 助手', icon: 'i-ai', view: 'ai', bg: '#FBEDE7', color: '#BE5230' },
+          { key: 'plan', text: '行程规划', icon: 'i-map', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
+          { key: 'acts', text: '活动日历', icon: 'i-calendar', view: 'activities', bg: '#F1EEE7', color: '#5C6B65' },
+          { key: 'orders', text: '我的订单', icon: 'i-ticket', view: 'orders', bg: '#E8F4EE', color: '#2C7A57' },
         ];
       },
 
       menus: function () {
         return [
-          { key: 'orders', text: '我的订单', desc: '查看订单状态与取消', glyph: '单', view: 'orders', bg: '#E6F2ED', color: '#146B57' },
-          { key: 'wall', text: '我的印章墙', desc: '集齐 8 枚印章领纪念品', glyph: '印', view: 'spots', tab: true, bg: '#FBEDE7', color: '#BE5230' },
-          { key: 'ai', text: 'AI 文旅助手', desc: '问村内的事，有知识库出处', glyph: 'AI', view: 'ai', bg: '#EAF1F9', color: '#2F6BA8' },
-          { key: 'plan', text: 'AI 行程规划', desc: '按偏好编排 1-3 天路线', glyph: '程', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
-          { key: 'acts', text: '村内活动日历', desc: '非遗节庆与农事体验', glyph: '日', view: 'activities', bg: '#F1EEE7', color: '#5C6B65' },
-          { key: 'shop', text: '去逛商城', desc: '农产文创好物', glyph: '购', view: 'shop', tab: true, bg: '#E8F4EE', color: '#2C7A57' },
+          { key: 'orders', text: '我的订单', desc: '查看订单状态与取消', icon: 'i-ticket', view: 'orders', bg: '#E6F2ED', color: '#146B57' },
+          { key: 'wall', text: '我的印章墙', desc: '集齐全部印章领纪念品', icon: 'i-stamp', view: 'spots', tab: true, bg: '#FBEDE7', color: '#BE5230' },
+          { key: 'ai', text: 'AI 文旅助手', desc: '问村内的事，有知识库出处', icon: 'i-ai', view: 'ai', bg: '#EAF1F9', color: '#2F6BA8' },
+          { key: 'plan', text: 'AI 行程规划', desc: '按偏好编排 1-3 天路线', icon: 'i-map', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
+          { key: 'acts', text: '村内活动日历', desc: '非遗节庆与农事体验', icon: 'i-calendar', view: 'activities', bg: '#F1EEE7', color: '#5C6B65' },
+          { key: 'shop', text: '去逛商城', desc: '农产文创好物', icon: 'i-shop', view: 'shop', tab: true, bg: '#E8F4EE', color: '#2C7A57' },
         ];
       },
 
@@ -288,6 +288,12 @@
     methods: {
       /* ---------------------------- 基础工具 ---------------------------- */
 
+      /* 统一图标：三端共用 assets/img/icons.svg，用 <use> 引用 symbol。
+         不要改回 emoji 或单字 —— 各端图标风格要一致。 */
+      iconHref: function (name) {
+        return '../assets/img/icons.svg#' + (name || 'i-home');
+      },
+
       money: function (v) { return fmt.money(v); },
       time: function (v) { return fmt.time(v); },
       date: function (v) { return fmt.date(v); },
@@ -305,9 +311,10 @@
 
       cover: function (cover, category) {
         if (cover) { return this.asset(cover); }
-        var fb = { goods: '/assets/img/craft.svg', study: '/assets/img/spot-study.svg',
-                   homestay: '/assets/img/spot-bookhouse.svg', experience: '/assets/img/spot-rice.svg' };
-        return this.asset(fb[category] || '/assets/img/hero.svg');
+        // 兜底用同一套写实照片，别再退回插画，否则新旧视觉会混在一起
+        var fb = { goods: '/assets/img/photos/goods-rice.jpg', study: '/assets/img/photos/spot-study.jpg',
+                   homestay: '/assets/img/photos/goods-homestay.jpg', experience: '/assets/img/photos/spot-study.jpg' };
+        return this.asset(fb[category] || '/assets/img/photos/spot-center.jpg');
       },
 
       /**

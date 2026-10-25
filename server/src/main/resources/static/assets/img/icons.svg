@@ -1,0 +1,200 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <!--
+    战旗云 · 统一图标集（线性艺术图标，24×24，描边用 currentColor）
+    用法：
+      <svg class="ico"><use href="../assets/img/icons.svg#i-home"></use></svg>
+    三端共用同一个文件，避免各写一套导致风格漂移。
+    设计约束：stroke-width 1.8、圆角端点、只用轮廓不用实心块，保证在浅底/深底上都清晰。
+  -->
+  <defs>
+    <g id="i-base" fill="none" stroke="currentColor" stroke-width="1.8"
+       stroke-linecap="round" stroke-linejoin="round"></g>
+  </defs>
+
+  <!-- 首页：屋顶 + 门 -->
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 10.6 12 3.8l8.5 6.8"/>
+    <path d="M5.6 9.6V20h12.8V9.6"/>
+    <path d="M9.8 20v-5.2h4.4V20"/>
+  </symbol>
+
+  <!-- 打卡：印章 + 印迹 -->
+  <symbol id="i-stamp" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9.2 4.6a2.8 2.8 0 0 1 5.6 0c0 1.5-.7 2.3-1.2 3.2-.3.6-.4 1.2-.4 1.9h-2.4c0-.7-.1-1.3-.4-1.9-.5-.9-1.2-1.7-1.2-3.2Z"/>
+    <path d="M7.4 9.7h9.2l1.1 4.1H6.3l1.1-4.1Z"/>
+    <path d="M4.2 16.6c2.4-1.2 5-1.8 7.8-1.8s5.4.6 7.8 1.8V19H4.2v-2.4Z"/>
+  </symbol>
+
+  <!-- 商城：购物袋 -->
+  <symbol id="i-shop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5.4 8h13.2l-1 12H6.4L5.4 8Z"/>
+    <path d="M9 8V6.4a3 3 0 0 1 6 0V8"/>
+    <path d="M9.6 12.2v1.4a2.4 2.4 0 0 0 4.8 0v-1.4"/>
+  </symbol>
+
+  <!-- 我的：头像 -->
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="8.4" r="3.6"/>
+    <path d="M4.8 20c.6-3.4 3.5-5.6 7.2-5.6s6.6 2.2 7.2 5.6"/>
+  </symbol>
+
+  <!-- 活动日历：日历 + 高亮日 -->
+  <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.6" y="5.4" width="16.8" height="14.4" rx="2.2"/>
+    <path d="M3.6 9.6h16.8M8.2 3.6v3.2M15.8 3.6v3.2"/>
+    <circle cx="12" cy="14.2" r="1.7" fill="currentColor" stroke="none"/>
+  </symbol>
+
+  <!-- AI 助手：对话泡 + 星芒 -->
+  <symbol id="i-ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 6.8A2.2 2.2 0 0 1 6.2 4.6h8.4a2.2 2.2 0 0 1 2.2 2.2v6.4a2.2 2.2 0 0 1-2.2 2.2H9.4L5.6 18.6v-3.2H6.2A2.2 2.2 0 0 1 4 13.2V6.8Z"/>
+    <path d="M18.4 8.2h.6a2 2 0 0 1 2 2v5.4a2 2 0 0 1-2 2h-.4v2.6l-3-2.6h-3"/>
+    <path d="M10.2 6.9l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7.7-1.6Z" fill="currentColor" stroke="none"/>
+  </symbol>
+
+  <!-- 导览地图：折叠地图 + 定位 -->
+  <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.4 6.4 8.6 4.4l6.8 2.4 5.2-2v13.8l-5.2 2-6.8-2.4-5.2 2V6.4Z"/>
+    <path d="M8.6 4.4v13.8M15.4 6.8v13.8"/>
+  </symbol>
+
+  <!-- 盖碗茶 -->
+  <symbol id="i-tea" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5.4 10.4h13.2c0 4.2-2.4 7-6.6 7s-6.6-2.8-6.6-7Z"/>
+    <path d="M4 19.6h16"/>
+    <path d="M8.6 7.2a3.4 3.4 0 0 1 6.8 0"/>
+    <path d="M12 3.4v1"/>
+  </symbol>
+
+  <!-- 非遗手作：针线 / 梭子 -->
+  <symbol id="i-craft" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.4 19.6c6-1.2 10.4-5 12.8-11.2"/>
+    <path d="M15.6 4.2l4.2 4.2-2.6 2.6-4.2-4.2 2.6-2.6Z"/>
+    <path d="M4.2 14.6c2.2-.4 3.6.4 4 2.4"/>
+  </symbol>
+
+  <!-- 相机 -->
+  <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.6 8.6A1.8 1.8 0 0 1 5.4 6.8h2.2l1.2-2h6.4l1.2 2h2.2a1.8 1.8 0 0 1 1.8 1.8v9.6a1.8 1.8 0 0 1-1.8 1.8H5.4a1.8 1.8 0 0 1-1.8-1.8V8.6Z"/>
+    <circle cx="12" cy="13" r="3.2"/>
+  </symbol>
+
+  <!-- 订单 / 票券 -->
+  <symbol id="i-ticket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.8 8.4V6.6h16.4v1.8a2.4 2.4 0 0 0 0 4.8v1.8H3.8v-1.8a2.4 2.4 0 0 0 0-4.8Z"/>
+    <path d="M9.4 6.8v2M9.4 11.4v2M9.4 15.4v2"/>
+  </symbol>
+
+  <!-- 搜索 -->
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="10.6" cy="10.6" r="6.2"/>
+    <path d="M15.2 15.2 20 20"/>
+  </symbol>
+
+  <!-- 收藏 / 心 -->
+  <symbol id="i-heart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 20s-7.2-4.4-7.2-9.2A3.9 3.9 0 0 1 12 8.2a3.9 3.9 0 0 1 7.2 2.6C19.2 15.6 12 20 12 20Z"/>
+  </symbol>
+
+  <!-- 购物车 -->
+  <symbol id="i-cart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.4 4.4h2.2l2.2 10.4h9.6l2-7.4H6.2"/>
+    <circle cx="9.4" cy="18.6" r="1.4"/>
+    <circle cx="17" cy="18.6" r="1.4"/>
+  </symbol>
+
+  <!-- 时钟 -->
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8.2"/>
+    <path d="M12 7.4V12l3.2 2"/>
+  </symbol>
+
+  <!-- 定位 -->
+  <symbol id="i-location" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 21s6.2-5.4 6.2-10A6.2 6.2 0 0 0 5.8 11c0 4.6 6.2 10 6.2 10Z"/>
+    <circle cx="12" cy="10.8" r="2.2"/>
+  </symbol>
+
+  <!-- 电话 -->
+  <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7.2 3.8 9.6 8l-1.8 1.8a11.4 11.4 0 0 0 6.4 6.4L16 14.4l4.2 2.4-1 3a1.6 1.6 0 0 1-1.7 1A16.4 16.4 0 0 1 3.2 6.5a1.6 1.6 0 0 1 1-1.7l3-1Z"/>
+  </symbol>
+
+  <!-- 星级 -->
+  <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m12 3.8 2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 17l-5.2 2.8 1-5.8L3.6 9.9l5.8-.8L12 3.8Z"/>
+  </symbol>
+
+  <!-- 勾选 -->
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m5 12.6 4.6 4.4L19 6.8"/>
+  </symbol>
+
+  <!-- 关闭 -->
+  <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 6l12 12M18 6 6 18"/>
+  </symbol>
+
+  <!-- 加 / 减 -->
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 5v14M5 12h14"/>
+  </symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12h14"/>
+  </symbol>
+
+  <!-- 语音讲解 -->
+  <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="3.4" width="6" height="10.2" rx="3"/>
+    <path d="M5.6 11.4a6.4 6.4 0 0 0 12.8 0M12 17.8V21M8.6 21h6.8"/>
+  </symbol>
+
+  <!-- 播放 -->
+  <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="8.4"/>
+    <path d="M10.2 8.8 15.4 12l-5.2 3.2V8.8Z" fill="currentColor" stroke="none"/>
+  </symbol>
+
+  <!-- 右箭头 -->
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12h13M13.4 6.6 18.8 12l-5.4 5.4"/>
+  </symbol>
+
+  <!-- 刷新 -->
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19.4 12a7.4 7.4 0 1 1-2.2-5.2"/>
+    <path d="M19.6 4.6v4.6h-4.6"/>
+  </symbol>
+
+  <!-- 伴手礼 -->
+  <symbol id="i-gift" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 9.6h16V20H4V9.6ZM3.2 6.4h17.6v3.2H3.2V6.4ZM12 6.4V20"/>
+    <path d="M12 6.4S10.8 3 8.6 3a1.9 1.9 0 0 0 0 3.4H12ZM12 6.4S13.2 3 15.4 3a1.9 1.9 0 0 1 0 3.4H12Z"/>
+  </symbol>
+
+  <!-- 盾牌（账号安全） -->
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.4 19 6v6c0 4.2-2.8 7.4-7 8.6-4.2-1.2-7-4.4-7-8.6V6l7-2.6Z"/>
+    <path d="m9.2 12 2 2 3.6-3.8"/>
+  </symbol>
+
+  <!-- 稻田（打卡点位类型） -->
+  <symbol id="i-rice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 21V7.4"/>
+    <path d="M12 9.4c-2.6 0-4.2-1.6-4.2-4.2 2.6 0 4.2 1.6 4.2 4.2ZM12 9.4c2.6 0 4.2-1.6 4.2-4.2-2.6 0-4.2 1.6-4.2 4.2Z"/>
+    <path d="M12 14.4c-2.6 0-4.2-1.6-4.2-4.2M12 14.4c2.6 0 4.2-1.6 4.2-4.2M3.4 21h17.2"/>
+  </symbol>
+
+  <!-- 竹编（纹样） -->
+  <symbol id="i-bamboo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 4v16M12 4v16M18 4v16"/>
+    <path d="M4 8h16M4 13h16M4 18h16"/>
+  </symbol>
+
+  <!-- 民宿 / 住宿 -->
+  <symbol id="i-bed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.4 19V8.4M3.4 15.4h17.2V19M20.6 15.4v-3a2.2 2.2 0 0 0-2.2-2.2h-6.6v5.2"/>
+    <path d="M7.6 12.8h2.4"/>
+    <circle cx="6.4" cy="10.6" r="1.6"/>
+  </symbol>
+</svg>

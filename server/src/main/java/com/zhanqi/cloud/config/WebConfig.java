@@ -41,6 +41,10 @@ public class WebConfig implements WebMvcConfigurer {
             registry.addRedirectViewController(end, end + "/");
             registry.addViewController(end + "/").setViewName("forward:" + end + "/index.html");
         }
+        // 游客端电脑版是独立目录，Spring 不会把 /visitor/pc/ 自动当目录首页，
+        // 必须和上面三端一样显式 forward，否则会落到「资源不存在：visitor/pc」。
+        registry.addRedirectViewController("/visitor/pc", "/visitor/pc/");
+        registry.addViewController("/visitor/pc/").setViewName("forward:/visitor/pc/index.html");
     }
 
     @Override

@@ -98,6 +98,18 @@
 - `smoke-test.js` / `browser-check.js` 里的数量断言与 `seed.sql` 硬绑定
   （如「点位数量为 14」）。扩数据必须同步改断言，**但不要放宽成 `> 0`**。
   （2026-10-21，来源：同上）
+- **图标统一走 `static/assets/img/icons.svg` 的 `<use>`，禁止再用 emoji 或单字顶替**。
+  三端共用同一份，颜色靠 `currentColor` 继承。uni-app（安卓）不支持外部 SVG sprite，
+  用 `uniapp-visitor/src/static/icons/*.png`（由同一套 SVG 渲染出来的 2 倍图）。
+  例外：印章上的单字（旗/院/鞋/稻）是业务语义，不是图标，别替换。
+  （2026-10-25，来源：2026-10-25-visitor-pc-and-visual-refresh.md）
+- **新增静态页面目录后，必须在 `WebConfig.addViewControllers` 里补
+  「目录 → index.html」的 forward**。Spring 不会把 `/visitor/pc/` 自动当目录首页，
+  漏了会返回 `{"ok":false,"error":"资源不存在：visitor/pc"}`。
+  （2026-10-25，来源：同上）
+- 商品/点位/活动/订单的封面统一在 `static/assets/img/photos/*.jpg`。
+  换真实照片时直接覆盖同名文件即可，不需要改代码或数据库。
+  （2026-10-25，来源：同上）
 
 ## 协作
 
