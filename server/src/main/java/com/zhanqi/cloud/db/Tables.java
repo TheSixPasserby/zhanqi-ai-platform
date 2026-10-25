@@ -31,15 +31,15 @@ public final class Tables {
 
     static {
         put("users", "u", List.of(
-                "id", "account", "password", "name", "phone", "role", "avatarColor",
+                "id", "account", "password", "name", "phone", "role", "avatarColor", "avatar",
                 "loginCount", "lastLoginAt", "rememberToken", "status", "createdAt"), Set.of());
 
         put("merchants", "m", List.of(
-                "id", "account", "password", "name", "short", "type", "phone", "intro", "since",
+                "id", "account", "password", "name", "short", "type", "phone", "intro", "since", "avatar",
                 "loginCount", "lastLoginAt", "rememberToken", "status", "createdAt"), Set.of());
 
         put("admins", "ad", List.of(
-                "id", "account", "password", "name", "phone", "role",
+                "id", "account", "password", "name", "phone", "role", "avatar",
                 "loginCount", "lastLoginAt", "rememberToken", "status", "createdAt"), Set.of());
 
         put("spots", "sp", List.of(

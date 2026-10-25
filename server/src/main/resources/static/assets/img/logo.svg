@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!--
+    战旗云 · 统一项目图标
+    造型：川西屋檐（三角）+ 林盘院落（墙体）+ 田垄（底部双弧线），
+    整体收在一个圆角方印里 —— 和平台“集章打卡”的活动逻辑呼应。
+    三端左上角统一使用这一个 mark，不要再各画一个。
+  -->
+  <defs>
+    <linearGradient id="zqLogoGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1D9E75"/>
+      <stop offset="1" stop-color="#0E4C3E"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#zqLogoGrad)"/>
+  <!-- 屋檐 -->
+  <path d="M13.5 27.5 32 13.8l18.5 13.7"
+        fill="none" stroke="#FFFFFF" stroke-width="3.4"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 院落墙体 + 门洞 -->
+  <path d="M18.8 27.2V45.6h26.4V27.2"
+        fill="none" stroke="#FFFFFF" stroke-width="3"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M28.6 45.6v-8.4h6.8v8.4"
+        fill="none" stroke="#FFFFFF" stroke-width="2.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 田垄 -->
+  <path d="M11.6 51.2c3.4-3.1 6.8-3.1 10.2 0s6.8 3.1 10.2 0 6.8-3.1 10.2 0 6.8 3.1 10.2 0"
+        fill="none" stroke="#9BE0C4" stroke-width="2.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

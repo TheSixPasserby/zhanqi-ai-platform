@@ -486,6 +486,9 @@
       return {
         loading: false,
         view: 'summary',
+        pwdVisible: false,
+        pwdSaving: false,
+        pwdForm: { old: '', new: '', confirm: '' },
         user: null,
         site: {},
         links: {},
@@ -518,6 +521,13 @@
       };
     },
     computed: {
+      avatarUrl: function () {
+        var profile = (this.user && this.user.profile) || {};
+        return window.ZQProfile.avatarOf(profile);
+      },
+      initial: function () {
+        return window.ZQProfile.initials(this.user && this.user.name);
+      },
       currentMenu: function () {
         var v = this.view;
         return this.menus.filter(function (m) { return m.key === v; })[0] || this.menus[0];
@@ -637,8 +647,47 @@
           self.loadServer();
         });
       },
+      /* ---------------- 个人资料（头像 / 改密） ---------------- */
+      pickAvatar: function () {
+        if (this.$refs.adminAvatar) { this.$refs.adminAvatar.click(); }
+      },
+      onAvatarPick: function (e) {
+        var self = this;
+        var file = (e.target.files || [])[0];
+        e.target.value = '';
+        if (!file) { return; }
+        window.ZQProfile.compress(file, function (dataUrl) {
+          if (!dataUrl) { return self.$message.error('图片读取失败，换一张试试'); }
+          window.ZQProfile.upload(dataUrl).then(function (res) {
+            if (!res.ok) { return; }
+            self.$set(self.user, 'profile', Object.assign({}, self.user.profile, { avatar: dataUrl }));
+            self.$message.success('头像已更新');
+          });
+        });
+      },
+      openPwd: function () {
+        this.pwdForm = { old: '', new: '', confirm: '' };
+        this.pwdVisible = true;
+      },
+      savePwd: function () {
+        var self = this;
+        var f = this.pwdForm;
+        if (!f.old) { return this.$message.warning('请填写原密码'); }
+        if (!f.new || f.new.length < 6) { return this.$message.warning('新密码至少 6 位'); }
+        if (f.new !== f.confirm) { return this.$message.warning('两次输入的新密码不一致'); }
+        this.pwdSaving = true;
+        api.post('/api/auth/password', { oldPassword: f.old, newPassword: f.new }).then(function (res) {
+          self.pwdSaving = false;
+          if (!res.ok) { return; }
+          self.pwdVisible = false;
+          self.$message.success(res.message || '密码已修改');
+        });
+      },
+
       onUserCommand: function (cmd) {
         var self = this;
+        if (cmd === 'avatar') { this.pickAvatar(); return; }
+        if (cmd === 'password') { this.openPwd(); return; }
         if (cmd === 'logout') {
           api.post('/api/auth/logout').then(function () {
             store.clear();

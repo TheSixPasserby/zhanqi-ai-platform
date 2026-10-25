@@ -95,10 +95,16 @@
         spots: [],
         stamps: [],
         collected: 0,
-        total: 8,
+        total: 14,
         allDone: false,
         loadingSpots: true,
         spotTab: 'spots',
+
+        /* 个人资料：头像与改密弹窗 */
+        me: {},
+        pwdVisible: false,
+        pwdSaving: false,
+        pwdForm: { old: '', new: '', confirm: '' },
         current: {},
         speaking: false,
         showScript: false,
@@ -201,13 +207,33 @@
         return '再集 ' + (this.total - this.collected) + ' 枚即可通关';
       },
 
+      avatarUrl: function () {
+        return window.ZQProfile.avatarOf(this.me);
+      },
+
       percent: function () {
         return this.total > 0 ? Math.round((this.collected / this.total) * 100) : 0;
       },
 
-      ringStyle: function () {
-        var p = this.percent;
-        return { background: 'conic-gradient(#fff 0% ' + p + '%, rgba(255,255,255,.22) ' + p + '% 100%)' };
+      /* 集章扇形图：每个点位一段，已打卡的那段点亮。
+         以前中间是个「印」字、外面是 conic-gradient 圆环，既像文字占位，也看不出细粒度进度。 */
+      ringSegments: function () {
+        var spots = this.spots || [];
+        var total = spots.length || 14;
+        var step = 360 / total;
+        var gap = Math.min(3.2, step * 0.2);
+        var done = {};
+        (this.stamps || []).forEach(function (s) { done[s.spotId] = true; });
+        var out = [];
+        for (var i = 0; i < total; i++) {
+          var a0 = i * step - 90 + gap / 2;
+          var a1 = (i + 1) * step - 90 - gap / 2;
+          out.push({
+            d: window.ZQSpotIcons.ringSegment(64, 64, 60, 45, a0, a1),
+            checked: !!(spots[i] && done[spots[i].id])
+          });
+        }
+        return out;
       },
 
       entries: function () {
@@ -294,6 +320,11 @@
         return '../assets/img/icons.svg#' + (name || 'i-home');
       },
 
+      /* 点位印章图标（替代原来的单字印章） */
+      spotIcon: function (spot) {
+        return window.ZQSpotIcons.iconOf(spot);
+      },
+
       money: function (v) { return fmt.money(v); },
       time: function (v) { return fmt.time(v); },
       date: function (v) { return fmt.date(v); },
@@ -360,6 +391,53 @@
         var self = this;
         this.toasts.push(String(msg));
         setTimeout(function () { self.toasts.shift(); }, 2600);
+      },
+
+      /* ---------------------------- 个人资料 ---------------------------- */
+
+      refreshMe: function () {
+        var self = this;
+        if (!this.user) { return; }
+        api.get('/api/auth/me', null, { silent: true }).then(function (res) {
+          if (res && res.ok) { self.me = res.profile || {}; }
+        });
+      },
+
+      /** 选图 → 压到 160×160 → 上传 → 就地刷新 */
+      onAvatarPick: function (e) {
+        var self = this;
+        var file = (e.target.files || [])[0];
+        e.target.value = ''; // 允许重复选同一张
+        if (!file) { return; }
+        window.ZQProfile.compress(file, function (dataUrl) {
+          if (!dataUrl) { self.toast('图片读取失败，换一张试试'); return; }
+          self.toast('正在上传头像…');
+          window.ZQProfile.upload(dataUrl).then(function (res) {
+            if (!res.ok) { return; }
+            self.me = Object.assign({}, self.me, { avatar: dataUrl });
+            self.toast('头像已更新');
+          });
+        });
+      },
+
+      openPwd: function () {
+        this.pwdForm = { old: '', new: '', confirm: '' };
+        this.pwdVisible = true;
+      },
+
+      savePwd: function () {
+        var self = this;
+        var f = this.pwdForm;
+        if (!f.old) { return this.toast('请填写原密码'); }
+        if (!f.new || f.new.length < 6) { return this.toast('新密码至少 6 位'); }
+        if (f.new !== f.confirm) { return this.toast('两次输入的新密码不一致'); }
+        this.pwdSaving = true;
+        api.post('/api/auth/password', { oldPassword: f.old, newPassword: f.new }).then(function (res) {
+          self.pwdSaving = false;
+          if (!res.ok) { return; }
+          self.pwdVisible = false;
+          self.toast(res.message || '密码已修改');
+        });
       },
 
       /**
@@ -436,6 +514,7 @@
               ZQ.store.save(ZQ.store.token, res.role, res.name);
               self.user = ZQ.store.user;
             }
+            self.me = res.profile || {};
             self.loadAll();
           } else {
             ZQ.store.clear();
@@ -582,6 +661,7 @@
       /* ---------------------------- 首页数据 ---------------------------- */
 
       loadAll: function () {
+        this.refreshMe(); // 头像等资料每次登录/刷新都跟着更新，避免显示上一个账号的
         this.loadSpots();
         this.loadProducts();
         this.loadActivities();

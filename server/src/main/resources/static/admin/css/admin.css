@@ -329,3 +329,7 @@
 .fade-enter-active, .fade-leave-active { transition: opacity .22s ease, transform .22s ease; }
 .fade-enter { opacity: 0; transform: translateY(8px); }
 .fade-leave-to { opacity: 0; transform: translateY(-6px); }
+
+/* ---------------------------- 统一项目图标 ---------------------------- */
+.mark-logo { width: 44px; height: 44px; border-radius: 13px; display: block; }
+.logo-img { width: 34px; height: 34px; border-radius: 10px; display: block; flex: none; }

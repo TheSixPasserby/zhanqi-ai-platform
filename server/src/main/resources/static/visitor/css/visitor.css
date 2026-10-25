@@ -299,18 +299,37 @@ body {
   background: #fff; color: var(--brand); font-size: 12.5px; font-weight: 600;
   font-family: inherit; cursor: pointer;
 }
-.hero-ring { width: 88px; height: 88px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-.hero-ring > div {
-  width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  background: rgba(14, 76, 62, .45);
+/* 集章扇形图：一个点位一段，已打卡的那段点亮 */
+.hero-ring {
+  position: relative; width: 96px; height: 96px; flex: none;
+  display: flex; align-items: center; justify-content: center;
 }
-.hero-ring i { color: #fff; font-size: 25px; font-weight: 700; font-style: normal; }
+.ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ring-seg { fill: rgba(255, 255, 255, .18); transition: fill .25s ease; }
+.ring-seg.on { fill: #FFFFFF; }
+.ring-core {
+  position: relative; z-index: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px;
+}
+.ring-ico { width: 22px; height: 22px; color: #fff; }
+.ring-core em {
+  font-style: normal; font-size: 10.5px; color: rgba(255, 255, 255, .86);
+  font-family: var(--mono); letter-spacing: .3px;
+}
 
+/* 我的页头像：真实头像 + 可点击更换 */
 .my-avatar {
-  width: 52px; height: 52px; flex: none; border-radius: 16px; display: flex;
-  align-items: center; justify-content: center; background: rgba(255, 255, 255, .2);
-  border: 2px solid rgba(255, 255, 255, .34); color: #fff; font-size: 22px; font-weight: 700;
+  width: 56px; height: 56px; flex: none; border-radius: 18px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; position: relative;
+  background: rgba(255, 255, 255, .2); border: 2px solid rgba(255, 255, 255, .38);
+  color: #fff; font-size: 22px; font-weight: 700; cursor: pointer;
 }
+.my-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.my-avatar .avatar-edit {
+  position: absolute; right: 0; bottom: 0; width: 19px; height: 19px; border-radius: 50%;
+  background: var(--brand); border: 2px solid #fff; display: grid; place-items: center;
+}
+.my-avatar .avatar-edit .ico { width: 10px; height: 10px; color: #fff; }
 .my-body { flex: 1; min-width: 0; }
 .my-body b { display: block; color: #fff; font-size: 17px; font-weight: 700; }
 .my-body span { display: block; color: rgba(255, 255, 255, .78); font-size: 11.5px; margin-top: 3px; }
@@ -688,3 +707,27 @@ body {
 .alert { margin-top: 12px; padding: 11px 13px; border-radius: 12px; font-size: 12.5px; line-height: 1.7; }
 .alert-ok { background: var(--ok-soft); color: var(--ok); }
 .alert-bad { background: var(--danger-soft); color: var(--danger); }
+
+/* --------------------------- 印章图标（替代单字） --------------------------- */
+.spot-seal .ico { width: 14px; height: 14px; }
+.seal-circle .ico { width: 22px; height: 22px; }
+.seal-box .seal-circle .ico { width: 26px; height: 26px; }
+.seal-off .ico { opacity: .45; }
+
+/* --------------------------- 修改密码弹窗 --------------------------- */
+.pwd-modal {
+  position: fixed; left: 0; right: 0; bottom: 0; top: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  pointer-events: none;
+}
+.pwd-card {
+  pointer-events: auto; width: 100%; max-width: 360px; padding: 22px 20px 18px;
+  border-radius: 20px; background: #fff; box-shadow: 0 24px 60px rgba(20, 30, 26, .26);
+  animation: pwd-in .22s cubic-bezier(.22, .8, .3, 1);
+}
+@keyframes pwd-in { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+.pwd-card h3 { margin: 0 0 6px; font-size: 17px; }
+.pwd-card > p { margin: 0 0 16px; font-size: 11.5px; line-height: 1.65; }
+.pwd-card .field { margin-bottom: 12px; }
+.pwd-card .row { display: flex; gap: 10px; }
+.pwd-card .row .btn { flex: 1; }

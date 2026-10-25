@@ -35,7 +35,7 @@
     <div class="login-panel">
       <div class="login-card card anim-up">
         <div class="login-head">
-          <div class="mark">旗</div>
+          <img class="mark-logo" src="../assets/img/logo.svg" alt="战旗云">
           <div>
             <h2>管理员登录</h2>
             <div class="dim" style="font-size:12.5px">管理商家与买家账号，也负责服务器与连接配置</div>
@@ -91,7 +91,7 @@
   <div v-else class="shell" :class="{ loading: loading }">
     <aside class="side">
       <div class="side-brand">
-        <div class="logo">旗</div>
+        <img class="logo-img" src="../assets/img/logo.svg" alt="战旗云">
         <div>
           <div class="title">{{ site.shortName || '战旗云' }}</div>
           <div class="sub">PC 管理后台</div>
@@ -122,13 +122,19 @@
           <el-tag size="mini" type="success" effect="plain">管理员</el-tag>
           <span class="muted">{{ user.name }}</span>
           <el-dropdown @command="onUserCommand">
-            <span class="avatar sm" :style="{ background: '#35506E' }">{{ user.name.slice(0, 1) }}</span>
+            <span class="avatar sm" style="overflow:hidden;background:#35506E">
+              <img v-if="avatarUrl" :src="avatarUrl" alt="" style="width:100%;height:100%;object-fit:cover">
+              <template v-else>{{ initial }}</template>
+            </span>
             <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="avatar"><i class="el-icon-camera"></i> 更换头像</el-dropdown-item>
+              <el-dropdown-item command="password"><i class="el-icon-lock"></i> 修改密码</el-dropdown-item>
               <el-dropdown-item command="refresh"><i class="el-icon-refresh"></i> 刷新当前页</el-dropdown-item>
               <el-dropdown-item command="qr"><i class="el-icon-mobile"></i> 手机端连接二维码</el-dropdown-item>
               <el-dropdown-item command="logout" divided><i class="el-icon-switch-button"></i> 退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </el-dropdown>
+          <input ref="adminAvatar" type="file" accept="image/*" hidden @change="onAvatarPick">
         </div>
       </header>
 
@@ -166,6 +172,22 @@
       </div>
       <span slot="footer">
         <el-button @click="qrDialog = false">关闭</el-button>
+      </span>
+    </el-dialog>
+
+    <!-- 修改密码 -->
+    <el-dialog title="修改密码" :visible.sync="pwdVisible" width="420px">
+      <el-form label-width="96px">
+        <el-form-item label="原密码">
+          <el-input v-model="pwdForm.old" type="password" show-password placeholder="请输入当前密码"></el-input></el-form-item>
+        <el-form-item label="新密码">
+          <el-input v-model="pwdForm.new" type="password" show-password placeholder="至少 6 位"></el-input></el-form-item>
+        <el-form-item label="确认新密码">
+          <el-input v-model="pwdForm.confirm" type="password" show-password placeholder="再输一次"></el-input></el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="pwdVisible = false">取消</el-button>
+        <el-button type="primary" :loading="pwdSaving" @click="savePwd">确定修改</el-button>
       </span>
     </el-dialog>
   </div>
@@ -1030,6 +1052,7 @@
 <script src="../vendors/element-ui.js"></script>
 <script src="../assets/js/api.js"></script>
 <script src="../assets/js/charts.js"></script>
+<script src="../assets/js/profile.js"></script>
 <script src="./js/admin.js"></script>
 </body>
 </html>

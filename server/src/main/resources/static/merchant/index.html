@@ -101,7 +101,7 @@
   <div v-else class="m-shell" :class="{ loading: loading }">
     <header class="m-top">
       <div class="m-brand">
-        <div class="mark">坊</div>
+        <img class="mark-logo" src="../assets/img/logo.svg" alt="">
         <div>
           <div class="title">{{ me.profile.short || me.name }}</div>
           <div class="sub">{{ me.profile.type || '商家' }} · 商户工作台</div>
@@ -119,8 +119,12 @@
         <el-tag size="mini" type="success" effect="plain">商家</el-tag>
         <span class="muted">{{ me.name }}</span>
         <el-dropdown @command="onCommand">
-          <span class="avatar sm" style="background:#BE5230">{{ (me.profile.short || me.name).slice(0, 1) }}</span>
+          <span class="avatar sm" style="overflow:hidden;background:#BE5230">
+            <img v-if="avatarUrl" :src="avatarUrl" alt="" style="width:100%;height:100%;object-fit:cover">
+            <template v-else>{{ initial }}</template>
+          </span>
           <el-dropdown-menu slot="dropdown">
+            <el-dropdown-item command="profile"><i class="el-icon-user"></i> 个人中心</el-dropdown-item>
             <el-dropdown-item command="refresh"><i class="el-icon-refresh"></i> 刷新数据</el-dropdown-item>
             <el-dropdown-item command="logout" divided><i class="el-icon-switch-button"></i> 退出登录</el-dropdown-item>
           </el-dropdown-menu>
@@ -130,7 +134,8 @@
 
     <main class="m-main">
       <transition name="fade" mode="out-in">
-        <component :is="'tab-' + tab" :key="tab" :kpi="kpi" @refresh="loadAll" @open-orders="tab = 'orders'"></component>
+        <component :is="'tab-' + tab" :key="tab" :kpi="kpi" :me="me"
+                   @refresh="loadAll" @open-orders="tab = 'orders'" @logout="onCommand('logout')"></component>
       </transition>
     </main>
 
@@ -461,10 +466,55 @@
   </div>
 </script>
 
+<!-- ==================== 个人中心 ==================== -->
+<script type="text/x-template" id="tpl-tab-profile">
+  <div>
+    <div class="card">
+      <div class="profile-head">
+        <div class="profile-avatar" title="点击更换头像" @click="pickAvatar">
+          <img v-if="avatar" :src="avatar" alt="头像">
+          <template v-else>{{ initial }}</template>
+          <span class="avatar-edit"><i class="el-icon-camera"></i></span>
+        </div>
+        <input ref="avatarInput" type="file" accept="image/*" hidden @change="onAvatarPick">
+        <div class="profile-info">
+          <h2>{{ me.profile.short || me.name }}</h2>
+          <p>{{ me.profile.type || '商家' }} · 联系人 {{ me.profile.contact || me.name }}</p>
+          <p class="dim">{{ me.profile.account || '' }} · 入驻 {{ me.profile.since || '—' }}</p>
+        </div>
+        <el-tag size="small" type="success" effect="plain">商家账号</el-tag>
+      </div>
+    </div>
+
+    <div class="card mt-16">
+      <div class="card-head"><h3>修改密码</h3><span class="hint">改完后需用新密码重新登录其它设备</span></div>
+      <div class="card-body">
+        <el-form label-width="104px" style="max-width:440px">
+          <el-form-item label="原密码">
+            <el-input v-model="pwdForm.old" type="password" show-password placeholder="请输入当前密码"></el-input></el-form-item>
+          <el-form-item label="新密码">
+            <el-input v-model="pwdForm.new" type="password" show-password placeholder="至少 6 位"></el-input></el-form-item>
+          <el-form-item label="确认新密码">
+            <el-input v-model="pwdForm.confirm" type="password" show-password placeholder="再输一次"></el-input></el-form-item>
+        </el-form>
+        <el-button type="primary" :loading="saving" @click="savePwd">保存新密码</el-button>
+      </div>
+    </div>
+
+    <div class="card mt-16">
+      <div class="card-head"><h3>账号</h3></div>
+      <div class="card-body">
+        <el-button type="danger" plain icon="el-icon-switch-button" @click="$emit('logout')">退出登录</el-button>
+      </div>
+    </div>
+  </div>
+</script>
+
 <script src="../vendors/vue.min.js"></script>
 <script src="../vendors/element-ui.js"></script>
 <script src="../assets/js/api.js"></script>
 <script src="../assets/js/charts.js"></script>
+<script src="../assets/js/profile.js"></script>
 <script src="./js/merchant.js"></script>
 </body>
 </html>
