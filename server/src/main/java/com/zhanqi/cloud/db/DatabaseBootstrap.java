@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -102,6 +103,13 @@ public class DatabaseBootstrap {
                 // ② 建表（幂等）
                 runScript(conn, "db/schema.sql");
 
+                // ②.5 补列（幂等）：老库里的账号表是 v1 建的，没有 avatar 列。
+                //      schema.sql 用的是 CREATE TABLE IF NOT EXISTS，改它不会影响已存在的表，
+                //      所以必须在这里单独 ALTER 一次，否则老用户升级后改头像会直接报错。
+                ensureColumn(conn, "users", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
+                ensureColumn(conn, "merchants", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
+                ensureColumn(conn, "admins", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
+
                 // ③ 灌演示数据（幂等）
                 if (db.isSeedOnStart()) {
                     runScript(conn, "db/seed.sql");
@@ -154,6 +162,34 @@ public class DatabaseBootstrap {
             }
         }
         return null;
+    }
+
+    /**
+     * 幂等补列：列已存在就什么都不做，不存在才 ALTER。
+     * MySQL 没有 {@code ADD COLUMN IF NOT EXISTS}，只能先查 information_schema。
+     */
+    private void ensureColumn(Connection conn, String table, String column, String definition) {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?")) {
+            ps.setString(1, table);
+            ps.setString(2, column);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    return;
+                }
+            }
+        } catch (SQLException e) {
+            // 查不到（非 MySQL / 权限不足）就别硬改，交给运行时报错更清楚
+            log.warn("[db] 检查 {} . {} 是否存在失败：{}", table, column, e.getMessage());
+            return;
+        }
+        try (Statement st = conn.createStatement()) {
+            st.executeUpdate("ALTER TABLE `" + table + "` ADD COLUMN `" + column + "` " + definition);
+            log.info("[db] 已为 {} 补上 {} 列", table, column);
+        } catch (SQLException e) {
+            log.warn("[db] 为 {} 补 {} 列失败（可能有并发启动）：{}", table, column, e.getMessage());
+        }
     }
 
     /** 执行 classpath 下的 SQL 脚本 */

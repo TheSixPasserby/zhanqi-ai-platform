@@ -223,6 +223,60 @@
     }
   };
 
+  /* ---------------------------- 个人中心 ---------------------------- */
+
+  var tabProfile = {
+    name: 'tab-profile',
+    template: '#tpl-tab-profile',
+    props: {
+      me: { type: Object, default: function () { return { profile: {} }; } },
+      kpi: { type: Object, default: function () { return {}; } }
+    },
+    data: function () {
+      return { saving: false, pwdForm: { old: '', new: '', confirm: '' } };
+    },
+    computed: {
+      avatar: function () {
+        return window.ZQProfile.avatarOf(this.me.profile || {});
+      },
+      initial: function () {
+        return window.ZQProfile.initials(this.me.profile.short || this.me.name);
+      }
+    },
+    methods: {
+      pickAvatar: function () { this.$refs.avatarInput.click(); },
+      onAvatarPick: function (e) {
+        var self = this;
+        var file = (e.target.files || [])[0];
+        e.target.value = '';
+        if (!file) { return; }
+        window.ZQProfile.compress(file, function (dataUrl) {
+          if (!dataUrl) { return self.$message.error('图片读取失败，换一张试试'); }
+          window.ZQProfile.upload(dataUrl).then(function (res) {
+            if (!res.ok) { return; }
+            // 直接写回同一个 profile 对象，顶栏头像会跟着更新
+            self.$set(self.me, 'profile', Object.assign({}, self.me.profile, { avatar: dataUrl }));
+            self.$message.success('头像已更新');
+          });
+        });
+      },
+      savePwd: function () {
+        var self = this;
+        var f = this.pwdForm;
+        if (!f.old) { return this.$message.warning('请填写原密码'); }
+        if (!f.new || f.new.length < 6) { return this.$message.warning('新密码至少 6 位'); }
+        if (f.new !== f.confirm) { return this.$message.warning('两次输入的新密码不一致'); }
+        this.saving = true;
+        api.post('/api/auth/password', { oldPassword: f.old, newPassword: f.new }).then(function (res) {
+          self.saving = false;
+          if (!res.ok) { return; }
+          self.$message.success(res.message || '密码已修改');
+          self.pwdForm = { old: '', new: '', confirm: '' };
+        });
+      }
+    }
+  };
+
   /* ---------------------------- 根实例 ---------------------------- */
 
   // 图表组件必须【全局】注册：tab-home / tab-stat 是根实例的子组件，
@@ -237,7 +291,8 @@
   new Vue({
     el: '#app',
     components: {
-      'tab-home': tabHome, 'tab-goods': tabGoods, 'tab-orders': tabOrders, 'tab-stat': tabStat
+      'tab-home': tabHome, 'tab-goods': tabGoods, 'tab-orders': tabOrders,
+      'tab-stat': tabStat, 'tab-profile': tabProfile
     },
     data: function () {
       return {
@@ -262,13 +317,20 @@
           { key: 'home', name: '工作台概览', icon: 'el-icon-data-line' },
           { key: 'goods', name: '商品管理', icon: 'el-icon-goods' },
           { key: 'orders', name: '订单管理', icon: 'el-icon-tickets' },
-          { key: 'stat', name: '营收统计', icon: 'el-icon-pie-chart' }
+          { key: 'stat', name: '营收统计', icon: 'el-icon-pie-chart' },
+          { key: 'profile', name: '个人中心', icon: 'el-icon-user' }
         ]
       };
     },
     computed: {
       knownMerchants: function () {
         return this.knownAll.filter(function (a) { return a.role === 'merchant'; });
+      },
+      avatarUrl: function () {
+        return window.ZQProfile.avatarOf(this.me.profile || {});
+      },
+      initial: function () {
+        return window.ZQProfile.initials(this.me.profile.short || this.me.name);
       }
     },
     created: function () {
@@ -397,6 +459,8 @@
         } else if (cmd === 'refresh') {
           this.loadKpi();
           this.$message.success('已刷新');
+        } else if (cmd === 'profile') {
+          this.tab = 'profile';
         }
       }
     }

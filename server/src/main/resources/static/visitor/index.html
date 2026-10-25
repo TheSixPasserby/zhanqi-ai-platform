@@ -172,7 +172,17 @@
               <div class="hero-tip">{{ progressText }}</div>
               <button class="hero-btn" @click="go('spots', true)">继续打卡</button>
             </div>
-            <div class="hero-ring" :style="ringStyle"><div><i>印</i></div></div>
+            <div class="hero-ring">
+              <!-- 每段对应一个点位，已打卡的点亮；中间是印章图标 + 百分比，不再用「印」字 -->
+              <svg viewBox="0 0 128 128" class="ring-svg" aria-hidden="true">
+                <path v-for="(seg, i) in ringSegments" :key="i" :d="seg.d"
+                      class="ring-seg" :class="{ on: seg.checked }"></path>
+              </svg>
+              <div class="ring-core">
+                <svg class="ico ring-ico"><use :href="iconHref('i-stamp')"></use></svg>
+                <em>{{ percent }}%</em>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -196,7 +206,7 @@
               <div class="spot-cover">
                 <img :src="asset(s.cover)" :alt="s.name" loading="lazy" @error="imgFail">
                 <span class="spot-type">{{ s.type }}</span>
-                <span v-if="s.checked" class="spot-seal">{{ s.stampIcon || '印' }}</span>
+                <span v-if="s.checked" class="spot-seal"><svg class="ico"><use :href="iconHref(spotIcon(s))"></use></svg></span>
               </div>
               <b>{{ s.name }}</b>
               <span>{{ s.location }}</span>
@@ -289,7 +299,7 @@
           <template v-else>
             <div class="wall">
               <div class="seal" v-for="st in stamps" :key="st.id">
-                <div class="seal-circle">{{ st.stampIcon || '印' }}</div>
+                <div class="seal-circle"><svg class="ico"><use :href="iconHref(spotIcon(st))"></use></svg></div>
                 <b>{{ st.stamp || st.spotName }}</b>
                 <span>{{ date(st.at) }}</span>
               </div>
@@ -351,10 +361,17 @@
         <div class="hero hero-mine">
           <div class="blob b1"></div><div class="blob b2"></div>
           <div class="hero-inner">
-            <div class="my-avatar">{{ first(user.name) }}</div>
+            <div class="my-avatar" @click="$refs.avatarInput.click()">
+              <img v-if="avatarUrl" :src="avatarUrl" alt="头像">
+              <template v-else>{{ first(user.name) }}</template>
+              <span class="avatar-edit">
+                <svg class="ico"><use :href="iconHref('i-camera')"></use></svg>
+              </span>
+            </div>
+            <input ref="avatarInput" type="file" accept="image/*" hidden @change="onAvatarPick">
             <div class="my-body">
               <b>{{ user.name }}</b>
-              <span>战旗村游客</span>
+              <span>{{ avatarUrl ? '点击头像可更换' : '点击头像上传照片' }}</span>
             </div>
             <button class="btn-ghost-light" @click="doLogout">退出</button>
           </div>
@@ -375,11 +392,11 @@
             <div class="card-title"><i></i>我的印章墙</div>
             <div class="wall wall-mini">
               <div class="seal" v-for="(st, i) in stamps.slice(0, 8)" :key="i">
-                <div class="seal-circle">{{ st.stampIcon || '印' }}</div>
+                <div class="seal-circle"><svg class="ico"><use :href="iconHref(spotIcon(st))"></use></svg></div>
                 <b>{{ st.stamp || st.spotName }}</b>
               </div>
               <div class="seal" v-for="n in Math.max(0, 8 - stamps.length)" :key="'e' + n">
-                <div class="seal-circle seal-off">?</div>
+                <div class="seal-circle seal-off"><svg class="ico"><use :href="iconHref('i-stamp')"></use></svg></div>
                 <b class="dim">未获得</b>
               </div>
             </div>
@@ -392,6 +409,13 @@
                 <svg class="ico" aria-hidden="true"><use :href="iconHref(m.icon)"></use></svg>
               </div>
               <div class="menu-body"><b>{{ m.text }}</b><span>{{ m.desc }}</span></div>
+              <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
+            </div>
+            <div class="menu-item menu-line" @click="openPwd">
+              <div class="menu-icon" style="background:#FCF4E2;color:#B07A18">
+                <svg class="ico" aria-hidden="true"><use :href="iconHref('i-shield')"></use></svg>
+              </div>
+              <div class="menu-body"><b>修改密码</b><span>定期更换，账号更安全</span></div>
               <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
             </div>
           </div>
@@ -438,7 +462,7 @@
             </div>
 
             <div class="card seal-box">
-              <div class="seal-circle" :class="{ 'seal-off': !current.checked }">{{ current.stampIcon || '印' }}</div>
+              <div class="seal-circle" :class="{ 'seal-off': !current.checked }"><svg class="ico"><use :href="iconHref(spotIcon(current))"></use></svg></div>
               <div>
                 <b>「{{ current.stamp }}」印章</b>
                 <p class="dim small">{{ current.checked ? '已于 ' + time(current.checkedAt) + ' 收入集章册' : '到点位打卡即可获得这枚印章' }}</p>
@@ -800,6 +824,27 @@
       </section>
 
       <!-- 底部 Tab 栏：只在顶层四个页面显示 -->
+      <!-- 修改密码 -->
+      <template v-if="pwdVisible">
+        <div class="mask" @click="pwdVisible = false"></div>
+        <div class="pwd-modal">
+          <div class="pwd-card">
+            <h3>修改密码</h3>
+            <p class="dim small">改完后其他设备上的免密登录会失效，需要用新密码重新登录。</p>
+            <label class="field"><span>原密码</span>
+              <input class="input" v-model="pwdForm.old" type="password" placeholder="请输入当前密码"></label>
+            <label class="field"><span>新密码</span>
+              <input class="input" v-model="pwdForm.new" type="password" placeholder="至少 6 位"></label>
+            <label class="field"><span>确认新密码</span>
+              <input class="input" v-model="pwdForm.confirm" type="password" placeholder="再输一次"></label>
+            <div class="row gap mt">
+              <button class="btn btn-ghost" @click="pwdVisible = false">取消</button>
+              <button class="btn" :disabled="pwdSaving" @click="savePwd">{{ pwdSaving ? '提交中…' : '确定修改' }}</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <nav class="tabbar" v-if="isTopView">
         <div class="tabbar-item" :class="{ on: view === 'home' }" @click="go('home', true)">
           <svg class="ico tabbar-ico"><use :href="iconHref('i-home')"></use></svg><em>首页</em>
@@ -852,6 +897,8 @@
 
 <script src="../vendors/vue.min.js"></script>
 <script src="../assets/js/api.js"></script>
+<script src="../assets/js/spot-icons.js"></script>
+<script src="../assets/js/profile.js"></script>
 <script src="./js/visitor.js"></script>
 </body>
 </html>

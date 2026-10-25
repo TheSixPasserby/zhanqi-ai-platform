@@ -28,6 +28,9 @@
         view: 'home',
         user: null,
         me: { name: '', profile: {} },
+        pwdVisible: false,
+        pwdSaving: false,
+        pwdForm: { old: '', new: '', confirm: '' },
         site: {},
         links: {},
         authTab: 'login',
@@ -55,6 +58,42 @@
       };
     },
     computed: {
+      avatarUrl: function () {
+        return window.ZQProfile.avatarOf(this.me.profile || {});
+      },
+      profileInitial: function () {
+        return window.ZQProfile.initials(this.me.name);
+      },
+      /**
+       * 「猜你想问」：按当前问答里出现的关键词命中相关追问，不够 4 个用常见问题补齐。
+       * 纯前端生成，不额外调接口 —— 演示时点一下就有下一步，不用自己想问题。
+       */
+      suggestions: function () {
+        var text = (this.ai.question || '') + ' ' + (this.ai.answer || '');
+        var pool = [
+          { k: ['交通', '怎么去', '地址', '自驾', '地铁'], q: '从成都市区怎么过去？' },
+          { k: ['吃', '餐', '菜', '美食', '小吃'], q: '村里有什么好吃的？' },
+          { k: ['住', '民宿', '过夜', '房间'], q: '民宿怎么订？大概多少钱？' },
+          { k: ['亲子', '孩', '小孩', '带娃'], q: '适合带老人小孩来吗？' },
+          { k: ['非遗', '布鞋', '手作', '竹编', '豆瓣'], q: '非遗体验课怎么预约？' },
+          { k: ['季节', '什么时候', '几月', '风景'], q: '什么季节来最好？' },
+          { k: ['伴手礼', '特产', '买什么', '礼盒'], q: '有什么值得带的伴手礼？' },
+          { k: ['门票', '开放', '营业', '时间'], q: '要门票吗？几点开门？' },
+          { k: ['停车', '车位', '开车'], q: '停车方便吗？有充电桩吗？' },
+          { k: ['宠物', '狗', '猫'], q: '可以带宠物进村吗？' }
+        ];
+        var out = [];
+        for (var i = 0; i < pool.length; i++) {
+          if (out.length >= 4) { break; }
+          for (var j = 0; j < pool[i].k.length; j++) {
+            if (text.indexOf(pool[i].k[j]) >= 0) { out.push(pool[i].q); break; }
+          }
+        }
+        for (var k = 0; k < pool.length && out.length < 4; k++) {
+          if (out.indexOf(pool[k].q) < 0) { out.push(pool[k].q); }
+        }
+        return out.slice(0, 4);
+      },
       cartCount: function () {
         return this.cart.reduce(function (s, x) { return s + x.qty; }, 0);
       },
@@ -106,6 +145,7 @@
     methods: {
       /* ---------------------------- 基础 ---------------------------- */
       icon: function (name) { return '../../assets/img/icons.svg#' + name; },
+      spotIcon: function (spot) { return window.ZQSpotIcons.iconOf(spot); },
       asset: function (p) {
         if (!p) { return '../../assets/img/photos/spot-center.jpg'; }
         return p.charAt(0) === '/' ? p : '/' + p;
@@ -356,6 +396,45 @@
           self.toast(res.message || '已取消');
           self.loadOrders();
           self.loadProducts();
+        });
+      },
+
+      /* ---------------------------- 个人资料 ---------------------------- */
+
+      onAvatarPick: function (e) {
+        var self = this;
+        var file = (e.target.files || [])[0];
+        e.target.value = '';
+        if (!file) { return; }
+        window.ZQProfile.compress(file, function (dataUrl) {
+          if (!dataUrl) { self.toast('图片读取失败，换一张试试', 'warn'); return; }
+          window.ZQProfile.upload(dataUrl).then(function (res) {
+            if (!res.ok) { return; }
+            self.me = Object.assign({}, self.me, {
+              profile: Object.assign({}, self.me.profile, { avatar: dataUrl })
+            });
+            self.toast('头像已更新');
+          });
+        });
+      },
+
+      openPwd: function () {
+        this.pwdForm = { old: '', new: '', confirm: '' };
+        this.pwdVisible = true;
+      },
+
+      savePwd: function () {
+        var self = this;
+        var f = this.pwdForm;
+        if (!f.old) { return this.toast('请填写原密码', 'warn'); }
+        if (!f.new || f.new.length < 6) { return this.toast('新密码至少 6 位', 'warn'); }
+        if (f.new !== f.confirm) { return this.toast('两次输入的新密码不一致', 'warn'); }
+        this.pwdSaving = true;
+        api.post('/api/auth/password', { oldPassword: f.old, newPassword: f.new }).then(function (res) {
+          self.pwdSaving = false;
+          if (!res.ok) { return; }
+          self.pwdVisible = false;
+          self.toast(res.message || '密码已修改');
         });
       },
 

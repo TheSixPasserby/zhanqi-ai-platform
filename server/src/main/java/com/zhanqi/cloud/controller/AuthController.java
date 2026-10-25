@@ -10,6 +10,7 @@ import com.zhanqi.cloud.common.R;
 import com.zhanqi.cloud.service.SettingService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -108,6 +109,30 @@ public class AuthController {
                 "userId", me.userId(),
                 "merchantId", me.merchantId(),
                 "profile", profile);
+    }
+
+    /**
+     * 修改头像。三端（游客 / 商家 / 管理员）共用同一个接口，
+     * 按当前会话的角色写对应的表。
+     */
+    @PutMapping("/avatar")
+    @RequireRole({"buyer", "merchant", "admin"})
+    public Map<String, Object> updateAvatar(@RequestBody(required = false) Map<String, Object> body) {
+        SessionUser me = AuthContext.require();
+        String avatar = body == null || body.get("avatar") == null ? "" : String.valueOf(body.get("avatar"));
+        Map<String, Object> result = auth.updateAvatar(me, avatar);
+        return R.ok("avatar", result.get("avatar"), "message", result.get("message"));
+    }
+
+    /** 修改密码（需验证原密码） */
+    @PostMapping("/password")
+    @RequireRole({"buyer", "merchant", "admin"})
+    public Map<String, Object> changePassword(@RequestBody(required = false) Map<String, Object> body) {
+        SessionUser me = AuthContext.require();
+        String oldPassword = body == null || body.get("oldPassword") == null ? null : String.valueOf(body.get("oldPassword"));
+        String newPassword = body == null || body.get("newPassword") == null ? null : String.valueOf(body.get("newPassword"));
+        Map<String, Object> result = auth.changePassword(me, oldPassword, newPassword);
+        return R.ok("message", result.get("message"));
     }
 
     @PostMapping("/logout")

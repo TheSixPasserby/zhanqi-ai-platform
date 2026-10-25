@@ -62,6 +62,17 @@
 
 ## 数据与业务
 
+- **给账号表加列时必须同时改三处**：`schema.sql`（只对新库生效，因为用的是
+  `CREATE TABLE IF NOT EXISTS`）、`DatabaseBootstrap.ensureColumn()`（给老库补列）、
+  以及 **`Tables.java` 里硬编码的列清单**。漏了第三处，`db.update()` 会静默丢掉该列，
+  接口报「服务异常」但日志里看不出原因（2026-10-25 加 avatar 时踩过）。
+  （2026-10-25，来源：2026-10-25-profile-avatar-and-visual-polish.md）
+- 头像存 `avatar TEXT`（dataURL，前端压到 160×160 JPEG q0.82，约 6–12KB），
+  不做文件上传 —— 项目要能双击部署，不引入静态目录写权限。
+  （2026-10-25，来源：同上）
+- 印章记录（stamps 表）自带 `id`（st1/st2…），点位字段是 `spotId`。
+  做「点位 → 图标」映射时必须**先取 spotId**，否则会拿 st3 去查，全部退回默认图标。
+  （2026-10-25，来源：同上）
 - 订单不可删除是产品决定（交易凭证），不是功能缺失；
   自检脚本写入的测试订单也保留，演示前跑一次重置即可。
   （2026-09-28，来源：README；更新于 2026-09-28-fix-reset-demo-data.md）

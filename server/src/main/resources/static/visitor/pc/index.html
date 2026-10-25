@@ -47,7 +47,7 @@
 
       <div class="auth-panel">
         <div class="auth-brand">
-          <div class="brand-mark">旗</div>
+          <img class="brand-logo lg" src="../../assets/img/logo.svg" alt="">
           <div>
             <b>{{ site.shortName || '战旗云' }}</b>
             <span>游客端 · 电脑版</span>
@@ -104,7 +104,7 @@
       <header class="topnav">
         <div class="nav-inner">
           <a class="nav-brand" @click="go('home')">
-            <span class="brand-mark sm">旗</span>
+            <img class="brand-logo" src="../../assets/img/logo.svg" alt="">
             <span class="brand-text">
               <b>{{ site.shortName || '战旗云' }}</b>
               <em>游客端</em>
@@ -134,11 +134,16 @@
               <span v-if="cartCount" class="badge">{{ cartCount }}</span>
             </button>
             <div class="nav-user">
-              <span class="avatar">{{ (me.name || '游').slice(0, 1) }}</span>
+              <span class="avatar" title="点击更换头像" @click.stop="$refs.pcAvatar.click()">
+                <img v-if="avatarUrl" :src="avatarUrl" alt="头像">
+                <template v-else>{{ profileInitial }}</template>
+              </span>
+              <input ref="pcAvatar" type="file" accept="image/*" hidden @change="onAvatarPick">
               <div class="user-menu">
                 <b>{{ me.name }}</b>
                 <a @click="go('orders')">我的订单</a>
                 <a @click="go('mine')">个人中心</a>
+                <a @click="openPwd">修改密码</a>
                 <a @click="logout">退出登录</a>
               </div>
             </div>
@@ -390,55 +395,61 @@
 
         <!-- ---------- AI 助手 ---------- -->
         <template v-else-if="view === 'ai'">
-          <div class="page-head"><div><h1>AI 文旅助手</h1><p>只依据村内知识库回答，找不到会明确说「资料里没有」</p></div></div>
-          <div class="ai-layout">
-            <div class="ai-main">
+          <div class="page-head"><div><h1>AI 文旅助手</h1><p>只依据村内资料回答，找不到会明确说「资料里没有」</p></div></div>
+
+          <div class="ai-shell">
+            <div class="ai-top">
               <div class="ai-tabs">
                 <button :class="{ on: ai.mode === 'ask' }" @click="ai.mode = 'ask'">问村内的事</button>
                 <button :class="{ on: ai.mode === 'plan' }" @click="ai.mode = 'plan'">帮我排行程</button>
               </div>
-
               <div v-if="ai.mode === 'plan'" class="ai-params">
                 <label>天数
                   <select v-model="ai.planDays"><option :value="1">1 天</option><option :value="2">2 天</option><option :value="3">3 天</option></select></label>
                 <label>偏好
                   <select v-model="ai.planPref"><option>亲子</option><option>非遗</option><option>摄影</option><option>美食</option></select></label>
               </div>
-
-              <div class="ai-input">
-                <textarea v-model="ai.question" rows="3"
-                          :placeholder="ai.mode === 'plan' ? '例如：两大一小，想轻松一点，想看非遗' : '例如：战旗村怎么去？有什么好吃的？'"></textarea>
-                <button class="btn-primary" :disabled="ai.loading" @click="askAi">
-                  <svg class="i"><use :href="icon('i-ai')"></use></svg>{{ ai.loading ? '思考中…' : '发送' }}</button>
-              </div>
-
-              <div v-if="ai.answer" class="ai-answer">
-                <div class="ai-answer-head">
-                  <svg class="i"><use :href="icon('i-ai')"></use></svg>回答
-                </div>
-                <p>{{ ai.answer }}</p>
-                <div v-if="ai.sources.length" class="ai-sources">
-                  <span class="dim">依据：</span>
-                  <span v-for="(s, i) in ai.sources" :key="i" class="tag">{{ s.title || s }}</span>
-                </div>
-              </div>
-
-              <div v-else class="ai-presets">
-                <span class="dim">可以这样问：</span>
-                <button v-for="q in ['战旗村怎么去？', '有什么好吃的？', '适合带孩子来吗？', '伴手礼买什么好？']"
-                        :key="q" class="chip" @click="presetAsk(q)">{{ q }}</button>
-              </div>
             </div>
 
-            <aside class="ai-side">
-              <h3>小提示</h3>
-              <p>AI 只会回答知识库里有的事，不确定的会直说。想了解实时价格与库存，请到商城查看。</p>
-              <div class="ai-card">
-                <svg class="i"><use :href="icon('i-map')"></use></svg>
-                <b>要路线？</b>
-                <span>切到「帮我排行程」，按天数和偏好生成。</span>
+            <div class="ai-thread">
+              <div v-if="!ai.answer && !ai.loading" class="ai-welcome">
+                <span class="ai-orb"><svg class="i"><use :href="icon('i-ai')"></use></svg></span>
+                <h2>想了解战旗村的什么？</h2>
+                <p class="dim">交通、吃住、非遗体验、亲子路线都可以问；答不上来会直接说「资料里没有」。</p>
+                <div class="ai-presets">
+                  <button v-for="q in ['战旗村怎么去？', '有什么好吃的？', '适合带孩子来吗？', '伴手礼买什么好？']"
+                          :key="q" class="chip" @click="presetAsk(q)">{{ q }}</button>
+                </div>
               </div>
-            </aside>
+
+              <template v-else>
+                <div class="ai-q">
+                  <span class="ai-q-avatar">{{ profileInitial }}</span>
+                  <p>{{ ai.question }}</p>
+                </div>
+                <div class="ai-a">
+                  <span class="ai-orb sm"><svg class="i"><use :href="icon('i-ai')"></use></svg></span>
+                  <div class="ai-a-body">
+                    <p v-if="ai.loading" class="ai-typing"><i></i><i></i><i></i></p>
+                    <p v-else>{{ ai.answer }}</p>
+                  </div>
+                </div>
+                <div v-if="!ai.loading && ai.answer" class="ai-follow">
+                  <span class="ai-follow-title">猜你想问</span>
+                  <div class="ai-follow-list">
+                    <button v-for="q in suggestions" :key="q" class="chip" @click="presetAsk(q)">{{ q }}</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+
+            <div class="ai-composer">
+              <textarea v-model="ai.question" rows="2"
+                        :placeholder="ai.mode === 'plan' ? '例如：两大一小，想轻松一点，想看非遗' : '例如：战旗村怎么去？有什么好吃的？'"
+                        @keydown.enter.exact.prevent="askAi"></textarea>
+              <button class="btn-primary" :disabled="ai.loading" @click="askAi">
+                <svg class="i"><use :href="icon('i-ai')"></use></svg>{{ ai.loading ? '思考中…' : '发送' }}</button>
+            </div>
           </div>
         </template>
 
@@ -461,7 +472,7 @@
             <div class="block-head"><h2><i></i>我的印章墙</h2></div>
             <div class="seal-wall">
               <div v-for="(s, i) in stamps" :key="s.id" class="seal">
-                <span class="seal-icon">{{ s.stampIcon }}</span>
+                <span class="seal-icon"><svg class="i"><use :href="icon(spotIcon(s))"></use></svg></span>
                 <b>{{ s.stamp }}</b>
                 <em>{{ s.spotName }}</em>
               </div>
@@ -585,6 +596,24 @@
     </aside>
   </div>
 
+  <!-- ==================== 修改密码 ==================== -->
+  <div v-if="pwdVisible" class="drawer-mask" @click.self="pwdVisible = false">
+    <div class="modal-card">
+      <h2>修改密码</h2>
+      <p class="dim">改完后其他设备上的免密登录会失效，需要用新密码重新登录。</p>
+      <label class="field"><span>原密码</span>
+        <input v-model="pwdForm.old" type="password" placeholder="请输入当前密码"></label>
+      <label class="field"><span>新密码</span>
+        <input v-model="pwdForm.new" type="password" placeholder="至少 6 位"></label>
+      <label class="field"><span>确认新密码</span>
+        <input v-model="pwdForm.confirm" type="password" placeholder="再输一次"></label>
+      <div class="modal-actions">
+        <button class="btn-ghost dark" @click="pwdVisible = false">取消</button>
+        <button class="btn-primary" :disabled="pwdSaving" @click="savePwd">{{ pwdSaving ? '提交中…' : '确定修改' }}</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toasts">
     <div v-for="t in toastList" :key="t.id" class="toast" :class="t.type">{{ t.text }}</div>
   </div>
@@ -593,6 +622,8 @@
 <script src="../../vendors/vue.min.js"></script>
 <script src="../../assets/js/api.js"></script>
 <script src="../../assets/js/charts.js"></script>
+<script src="../../assets/js/spot-icons.js"></script>
+<script src="../../assets/js/profile.js"></script>
 <script src="./pc.js"></script>
 </body>
 </html>

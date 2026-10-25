@@ -257,6 +257,8 @@ public class AuthService {
         card.put("id", p.get("id"));
         card.put("account", p.get("account"));
         card.put("lastLoginAt", p.get("lastLoginAt"));
+        // 快捷登录卡也带头像：有自定义头像就用，没有就退回文字首字 + 底色
+        card.put("avatar", p.get("avatar"));
 
         if ("merchant".equals(role)) {
             String full = String.valueOf(p.get("name"));
@@ -278,6 +280,77 @@ public class AuthService {
                     ? accounts.pickColor(String.valueOf(p.get("account"))) : p.get("avatarColor"));
         }
         return card;
+    }
+
+    /* ============================ 个人资料 ============================ */
+
+    /**
+     * 更新头像。
+     *
+     * <p>头像以 dataURL 直接存进账号表，不引入文件上传接口 —— 这个项目要能双击部署，
+     * 多一个静态目录写权限就多一处失败点。前端负责压到 160×160，这里再做格式与体积校验，
+     * 防止有人直接 POST 一个几 MB 的字符串把库撑大。
+     */
+    public Map<String, Object> updateAvatar(SessionUser me, String avatar) {
+        String table = ROLE_TABLE.get(me.role());
+        if (table == null) {
+            throw ApiException.badRequest("当前账号类型不支持修改头像");
+        }
+        String data = avatar == null ? "" : avatar.trim();
+        if (data.isEmpty()) {
+            throw ApiException.badRequest("头像内容为空");
+        }
+        if (!data.startsWith("data:image/")) {
+            throw ApiException.badRequest("头像格式不正确，请重新选择图片");
+        }
+        if (data.length() > 400_000) {
+            throw ApiException.badRequest("头像太大，请换一张小一点的图片");
+        }
+        Map<String, Object> patch = new LinkedHashMap<>();
+        patch.put("avatar", data);
+        db.update(table, me.userId(), patch);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("avatar", data);
+        out.put("message", "头像已更新");
+        return out;
+    }
+
+    /**
+     * 修改密码：必须验证原密码。
+     * 改完顺手清掉 rememberToken —— 否则旧设备上那张「免密登录卡片」还能进。
+     */
+    public Map<String, Object> changePassword(SessionUser me, String oldPassword, String newPassword) {
+        String table = ROLE_TABLE.get(me.role());
+        if (table == null) {
+            throw ApiException.badRequest("当前账号类型不支持修改密码");
+        }
+        Map<String, Object> row = db.find(table, me.userId());
+        if (row == null) {
+            throw ApiException.notFound("账号不存在");
+        }
+        String current = String.valueOf(row.get("password"));
+        if (oldPassword == null || !current.equals(oldPassword)) {
+            throw ApiException.badRequest("原密码不正确");
+        }
+        String next = newPassword == null ? "" : newPassword.trim();
+        if (next.length() < 6) {
+            throw ApiException.badRequest("新密码至少 6 位");
+        }
+        if (next.length() > 32) {
+            throw ApiException.badRequest("新密码不要超过 32 位");
+        }
+        if (next.equals(current)) {
+            throw ApiException.badRequest("新密码不能与原密码相同");
+        }
+        Map<String, Object> patch = new LinkedHashMap<>();
+        patch.put("password", next);
+        patch.put("rememberToken", null);
+        db.update(table, me.userId(), patch);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("message", "密码已修改，下次请用新密码登录");
+        return out;
     }
 
     /** 账号资料（去掉密码、令牌这类不该外泄的字段） */

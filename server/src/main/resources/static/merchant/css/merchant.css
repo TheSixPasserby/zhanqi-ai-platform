@@ -266,3 +266,23 @@
   .m-nav { order: 3; width: 100%; overflow-x: auto; }
   .m-main { padding: 14px; }
 }
+
+/* --------------------------- 统一项目图标 --------------------------- */
+.mark-logo { width: 42px; height: 42px; border-radius: 13px; display: block; flex: none; }
+
+/* --------------------------- 个人中心 --------------------------- */
+.profile-head { display: flex; align-items: center; gap: 18px; padding: 22px 24px; }
+.profile-avatar {
+  width: 74px; height: 74px; border-radius: 22px; overflow: hidden; position: relative;
+  flex: none; display: grid; place-items: center; cursor: pointer;
+  background: var(--brand-soft); color: var(--brand); font-size: 28px; font-weight: 700;
+}
+.profile-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-edit {
+  position: absolute; right: 0; bottom: 0; width: 23px; height: 23px; border-radius: 50%;
+  background: var(--brand); color: #fff; border: 2px solid #fff;
+  display: grid; place-items: center; font-size: 11px;
+}
+.profile-info h2 { margin: 0 0 5px; font-size: 20px; }
+.profile-info p { margin: 0; font-size: 12.5px; color: var(--text-2); }
+.profile-info p.dim { color: var(--text-3); margin-top: 3px; }
