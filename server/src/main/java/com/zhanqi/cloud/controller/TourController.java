@@ -8,6 +8,7 @@ import com.zhanqi.cloud.service.TourService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -62,6 +63,40 @@ public class TourController {
 
     @GetMapping("/activities")
     public Map<String, Object> activities() {
-        return R.ok("activities", tour.activities());
+        return R.ok("activities", tour.activities(AuthContext.current()));
+    }
+
+    /** 活动详情（未登录可看，登录后额外带上我的预约） */
+    @GetMapping("/activities/{id}")
+    public Map<String, Object> activity(@PathVariable String id) {
+        return R.ok("activity", tour.activity(id, AuthContext.current()));
+    }
+
+    /** 预约活动（仅买家/游客） */
+    @PostMapping("/activities/{id}/book")
+    @RequireRole("buyer")
+    public Map<String, Object> book(@PathVariable String id,
+                                    @RequestBody(required = false) Map<String, Object> body) {
+        SessionUser me = AuthContext.require();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.putAll(tour.book(me, id, body == null ? Map.of() : body));
+        return out;
+    }
+
+    /** 我的活动预约 */
+    @GetMapping("/bookings")
+    @RequireRole("buyer")
+    public Map<String, Object> bookings() {
+        return R.ok("list", tour.myBookings(AuthContext.require()));
+    }
+
+    @PostMapping("/bookings/{id}/cancel")
+    @RequireRole("buyer")
+    public Map<String, Object> cancel(@PathVariable String id) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.putAll(tour.cancelBooking(AuthContext.require(), id));
+        return out;
     }
 }

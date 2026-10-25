@@ -65,7 +65,7 @@
           <div v-if="knownAdmins.length" class="quick-list">
             <div v-for="(a, i) in knownAdmins" :key="a.account" class="quick-item anim-up"
                  :style="{ '--i': i }" @click="quickLogin(a)">
-              <span class="avatar" :style="{ background: a.color }">{{ a.name.slice(0, 1) }}</span>
+              <img class="avatar" :src="knownAvatar(a)" alt="" style="object-fit:cover">
               <div class="flex-1">
                 <div class="name">{{ a.name }}</div>
                 <div class="dim">{{ a.account }} · 上次 {{ fmt.ago(a.lastLoginAt) }}</div>
@@ -122,9 +122,8 @@
           <el-tag size="mini" type="success" effect="plain">管理员</el-tag>
           <span class="muted">{{ user.name }}</span>
           <el-dropdown @command="onUserCommand">
-            <span class="avatar sm" style="overflow:hidden;background:#35506E">
-              <img v-if="avatarUrl" :src="avatarUrl" alt="" style="width:100%;height:100%;object-fit:cover">
-              <template v-else>{{ initial }}</template>
+            <span class="avatar sm" style="overflow:hidden">
+              <img :src="avatarSrc" alt="" style="width:100%;height:100%;object-fit:cover">
             </span>
             <el-dropdown-menu slot="dropdown">
               <el-dropdown-item command="avatar"><i class="el-icon-camera"></i> 更换头像</el-dropdown-item>
@@ -350,7 +349,7 @@
     <el-drawer title="商家详情" :visible.sync="detailVisible" size="620px">
       <div v-if="current" class="drawer-body">
         <div class="profile">
-          <span class="avatar lg" style="background:#BE5230">{{ (current.short || '商').slice(0, 1) }}</span>
+          <img class="avatar lg" :src="avatarOfAccount(current)" alt="">
           <div>
             <h3>{{ current.short }}</h3>
             <div class="dim">{{ current.name }}</div>
@@ -433,8 +432,7 @@
         <el-table-column label="买家" min-width="180">
           <template slot-scope="s">
             <div class="flex items-center gap-8">
-              <span class="avatar sm" :style="{ background: s.row.avatarColor || '#146B57' }">
-                {{ (s.row.name || '游').slice(0, 1) }}</span>
+              <img class="avatar sm" :src="avatarOfAccount(s.row)" alt="">
               <div>
                 <div class="cell-main">{{ s.row.name }}</div>
                 <div class="cell-sub">{{ s.row.account }}</div>
@@ -491,8 +489,7 @@
     <el-drawer title="买家详情" :visible.sync="detailVisible" size="600px">
       <div v-if="current" class="drawer-body">
         <div class="profile">
-          <span class="avatar lg" :style="{ background: current.avatarColor || '#146B57' }">
-            {{ (current.name || '游').slice(0, 1) }}</span>
+          <img class="avatar lg" :src="avatarOfAccount(current)" alt="">
           <div>
             <h3>{{ current.name }}</h3>
             <div class="dim">{{ current.account }} · {{ current.phoneText }}</div>
@@ -586,16 +583,52 @@
         <el-table-column label="状态" width="100" align="center">
           <template slot-scope="s"><span class="pill" :class="s.row.status">{{ s.row.statusText }}</span></template>
         </el-table-column>
-        <el-table-column label="操作" width="120" align="right">
+        <el-table-column label="操作" width="180" align="right">
           <template slot-scope="s">
+            <el-button type="text" @click="openDetail(s.row)">详情 / 编辑</el-button>
             <el-button v-if="s.row.cancellable" type="text" class="danger" @click="cancel(s.row)">
               强制取消
             </el-button>
-            <span v-else class="dim">—</span>
           </template>
         </el-table-column>
       </el-table>
     </div>
+
+    <el-dialog title="订单详情" :visible.sync="detailVisible" width="640px">
+      <div v-if="detail.id" class="detail-grid">
+        <div class="detail-row"><span>订单号</span><b class="mono">#{{ detail.id }}</b></div>
+        <div class="detail-row"><span>商品</span><b>{{ detail.productName }} × {{ detail.qty }}</b></div>
+        <div class="detail-row"><span>金额</span><b class="mono">{{ fmt.money(detail.amount) }}</b></div>
+        <div class="detail-row"><span>买家</span><b>{{ detail.buyerName }}<em v-if="detail.buyerPhone"> · {{ detail.buyerPhone }}</em></b></div>
+        <div class="detail-row"><span>商家</span><b>{{ detail.merchantName }}<em v-if="detail.merchantPhone"> · {{ detail.merchantPhone }}</em></b></div>
+        <div class="detail-row"><span>下单时间</span><b>{{ fmt.time(detail.createdAt) }}</b></div>
+      </div>
+      <el-form :model="detail" label-width="96px" style="margin-top:18px">
+        <el-form-item label="订单状态">
+          <el-select v-model="detail.status" style="width:100%" :disabled="detail.status === 'cancelled'">
+            <el-option v-for="(text, key) in statusText" :key="key" :label="text" :value="key" :disabled="key === 'cancelled'"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item label="预约日期">
+          <el-date-picker v-model="detail.bookDate" type="date" value-format="yyyy-MM-dd"
+                          placeholder="非预约类订单可留空" style="width:100%"></el-date-picker>
+        </el-form-item>
+        <el-form-item label="人数">
+          <el-input-number v-model="detail.people" :min="1" :max="999"></el-input-number>
+        </el-form-item>
+        <el-form-item label="收货地址">
+          <el-input v-model="detail.address" placeholder="到店自提可留空"></el-input>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input type="textarea" :rows="3" v-model="detail.remark" maxlength="200" show-word-limit></el-input>
+        </el-form-item>
+      </el-form>
+      <div class="dim" style="font-size:12px">商品、数量与金额属于交易凭证，后台不可修改；如需变更请取消后重新下单。</div>
+      <span slot="footer">
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button type="primary" :loading="detailSaving" @click="saveDetail">保存修改</el-button>
+      </span>
+    </el-dialog>
   </div>
 </script>
 
@@ -637,11 +670,58 @@
           <template slot-scope="s"><span class="tag" :class="s.row.status === 'on' ? 'ok' : ''">
             {{ s.row.status === 'on' ? '在售' : '已下架' }}</span></template>
         </el-table-column>
+        <el-table-column label="操作" width="90" align="right">
+          <template slot-scope="s"><el-button type="text" @click="openEdit(s.row)">编辑</el-button></template>
+        </el-table-column>
       </el-table>
     </div>
     <div class="dim mt-12" style="font-size:12.5px">
-      商品上下架由商家在工作台自行操作（本平台不设独立审核流程），管理员在此总览全平台商品。
+      商品上下架由商家在工作台自行操作（本平台不设独立审核流程）；管理员可在此查看并修正全平台商品的资料、价格与库存。
     </div>
+
+    <el-dialog title="编辑商品" :visible.sync="editVisible" width="640px">
+      <el-form :model="form" label-width="96px">
+        <el-form-item label="商品名称"><el-input v-model="form.name"></el-input></el-form-item>
+        <div class="flex gap-12">
+          <el-form-item label="分类" style="flex:1">
+            <el-select v-model="form.category" style="width:100%">
+              <el-option v-for="(text, key) in form.categories" :key="key" :label="text" :value="key"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="状态" style="flex:1">
+            <el-select v-model="form.status" style="width:100%">
+              <el-option label="在售" value="on"></el-option>
+              <el-option label="已下架" value="off"></el-option>
+            </el-select>
+          </el-form-item>
+        </div>
+        <div class="flex gap-12">
+          <el-form-item label="价格" style="flex:1">
+            <el-input-number v-model="form.price" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
+          </el-form-item>
+          <el-form-item label="单位" style="flex:1"><el-input v-model="form.unit" placeholder="袋 / 份 / 人"></el-input></el-form-item>
+          <el-form-item label="库存" style="flex:1">
+            <el-input-number v-model="form.stock" :min="0" style="width:100%"></el-input-number>
+          </el-form-item>
+        </div>
+        <el-form-item label="标签"><el-input v-model="tagsText" placeholder="用逗号分隔，如：产地直发，当季新米"></el-input></el-form-item>
+        <el-form-item label="一句话卖点"><el-input v-model="form.intro"></el-input></el-form-item>
+        <el-form-item label="详细描述"><el-input type="textarea" :rows="4" v-model="form.desc"></el-input></el-form-item>
+        <el-form-item label="商品图">
+          <div class="flex items-center gap-12">
+            <img v-if="form.cover" :src="form.cover" class="thumb lg" alt="">
+            <span class="dim">{{ form.cover }}</span>
+          </div>
+        </el-form-item>
+      </el-form>
+      <div class="dim" style="font-size:12px">
+        所属商家：{{ form.merchantName || '—' }}（归属不可改，避免历史订单与商品对不上）
+      </div>
+      <span slot="footer">
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      </span>
+    </el-dialog>
   </div>
 </script>
 
@@ -683,6 +763,12 @@
           </el-table-column>
           <el-table-column v-if="tab === 'activities'" prop="date" label="开始" width="110"></el-table-column>
           <el-table-column v-if="tab === 'activities'" prop="place" label="地点" width="180"></el-table-column>
+          <el-table-column v-if="tab === 'activities'" label="预约" width="120">
+            <template slot-scope="s">
+              <span class="tag brand">{{ s.row.bookedPeople || 0 }} / {{ s.row.capacity || 30 }} 人</span>
+              <div class="cell-sub">{{ s.row.bookedCount || 0 }} 笔</div>
+            </template>
+          </el-table-column>
           <el-table-column v-if="tab === 'activities'" label="标签" width="90">
             <template slot-scope="s"><span class="tag accent">{{ s.row.tag }}</span></template>
           </el-table-column>
@@ -691,8 +777,9 @@
               <span class="tag" v-for="t in s.row.tags" :key="t" style="margin-right:4px">{{ t }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="130" align="right">
+          <el-table-column label="操作" :width="tab === 'activities' ? 190 : 130" align="right">
             <template slot-scope="s">
+              <el-button v-if="tab === 'activities'" type="text" @click="openBookings(s.row)">人员管理</el-button>
               <el-button type="text" @click="edit(s.row)">编辑</el-button>
               <el-button type="text" class="danger" @click="remove(s.row)">删除</el-button>
             </template>
@@ -726,6 +813,10 @@
                                     placeholder="单日活动留空" style="width:100%"></el-date-picker></el-form-item>
           <el-form-item label="活动地点"><el-input v-model="form.place"></el-input></el-form-item>
           <el-form-item label="活动标签"><el-input v-model="form.tag" placeholder="如：非遗 / 农事 / 节庆"></el-input></el-form-item>
+          <el-form-item label="可约人数">
+            <el-input-number v-model="form.capacity" :min="1" :max="9999"></el-input-number>
+            <span class="dim" style="margin-left:10px">游客端预约满后会自动拒绝</span>
+          </el-form-item>
           <el-form-item label="配图路径">
             <el-select v-model="form.cover" style="width:100%">
               <el-option v-for="c in covers" :key="c" :label="c" :value="c"></el-option>
@@ -747,6 +838,58 @@
       <span slot="footer">
         <el-button @click="formVisible = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      </span>
+    </el-dialog>
+
+    <!-- 活动人员管理：全部预约信息统一在这里查看与修改 -->
+    <el-dialog :title="'人员管理 · ' + (bookingActivity.title || '')" :visible.sync="bookVisible" width="920px">
+      <div class="booking-summary">
+        <span>已约 <b>{{ bookingActivity.bookedPeople || 0 }}</b> 人 / 上限 {{ bookingActivity.capacity || 30 }} 人</span>
+        <span class="dim">共 {{ bookings.length }} 条预约记录（含已取消）</span>
+      </div>
+      <el-table :data="bookings" size="small" stripe max-height="440">
+        <el-table-column label="姓名" width="120">
+          <template slot-scope="s"><el-input v-model="s.row.userName" size="mini"></el-input></template>
+        </el-table-column>
+        <el-table-column label="手机" width="135">
+          <template slot-scope="s"><el-input v-model="s.row.phone" size="mini"></el-input></template>
+        </el-table-column>
+        <el-table-column label="人数" width="100">
+          <template slot-scope="s">
+            <el-input-number v-model="s.row.people" :min="1" :max="20" size="mini"
+                             controls-position="right" style="width:78px"></el-input-number>
+          </template>
+        </el-table-column>
+        <el-table-column label="参加日期" width="150">
+          <template slot-scope="s">
+            <el-date-picker v-model="s.row.date" type="date" value-format="yyyy-MM-dd"
+                            size="mini" style="width:132px"></el-date-picker>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="120">
+          <template slot-scope="s">
+            <el-select v-model="s.row.status" size="mini" style="width:104px">
+              <el-option label="待确认" value="pending"></el-option>
+              <el-option label="已确认" value="confirmed"></el-option>
+              <el-option label="已取消" value="cancelled"></el-option>
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="备注" min-width="140">
+          <template slot-scope="s"><el-input v-model="s.row.remark" size="mini"></el-input></template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" align="right">
+          <template slot-scope="s">
+            <el-button type="text" @click="saveBooking(s.row)">保存</el-button>
+            <el-button type="text" class="danger" @click="removeBooking(s.row)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="dim mt-12" style="font-size:12px">
+        修改后立即生效：游客端的「已约人数」「我的预约」状态会同步更新。
+      </div>
+      <span slot="footer">
+        <el-button type="primary" @click="bookVisible = false">完成</el-button>
       </span>
     </el-dialog>
   </div>

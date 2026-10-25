@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+  <!--
+    商家端默认头像 · 「檐下小铺」
+    条纹雨棚 + 铺面 + 一篮农产，暖陶土色系，和商家端的品牌色一致。
+  -->
+  <defs>
+    <linearGradient id="maBg" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#FFF4EC"/>
+      <stop offset="1" stop-color="#F7DECC"/>
+    </linearGradient>
+    <linearGradient id="maWall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFDFB"/>
+      <stop offset="1" stop-color="#F6E4D6"/>
+    </linearGradient>
+    <clipPath id="maClip"><circle cx="80" cy="80" r="80"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#maClip)">
+    <rect width="160" height="160" fill="url(#maBg)"/>
+    <circle cx="36" cy="34" r="26" fill="#E9A683" opacity="0.22"/>
+
+    <!-- 铺面 -->
+    <rect x="38" y="58" width="84" height="62" rx="6" fill="url(#maWall)" stroke="#E0BFA8" stroke-width="2"/>
+    <!-- 门 -->
+    <rect x="66" y="82" width="28" height="38" rx="4" fill="#C97A52" opacity="0.9"/>
+    <rect x="70" y="86" width="20" height="30" rx="2.5" fill="#E8B193" opacity="0.65"/>
+    <!-- 窗 -->
+    <rect x="46" y="80" width="14" height="14" rx="3" fill="#BFE0D6"/>
+    <rect x="100" y="80" width="14" height="14" rx="3" fill="#BFE0D6"/>
+
+    <!-- 条纹雨棚 -->
+    <path d="M30 62c0-3 2.4-5.4 5.4-5.4h89.2c3 0 5.4 2.4 5.4 5.4v3.6H30z" fill="#B85B36"/>
+    <path d="M30 65.6h100v7.2c0 2.2-1.8 4-4 4H34c-2.2 0-4-1.8-4-4z" fill="#F3C6AC"/>
+    <g fill="#C4653C">
+      <path d="M30 61h11v15.8H34c-2.2 0-4-1.8-4-4z"/>
+      <path d="M52 61h11v15.8H52z"/>
+      <path d="M74 61h11v15.8H74z"/>
+      <path d="M96 61h11v15.8H96z"/>
+      <path d="M118 61h8v11.8c0 2.2-1.8 4-4 4h-4z"/>
+    </g>
+    <!-- 棚顶压条 -->
+    <rect x="28" y="54" width="104" height="5" rx="2.5" fill="#A34F2F"/>
+
+    <!-- 农产篮 -->
+    <path d="M54 120h52l-5 15H59z" fill="#C89A5C"/>
+    <path d="M54 120h52l-1.4 4H55.4z" fill="#A87B41"/>
+    <path d="M60 120c2-9 8-14 20-14s18 5 20 14" fill="none" stroke="#A87B41" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="70" cy="114" r="6" fill="#E4784B"/>
+    <circle cx="84" cy="110" r="6.6" fill="#E9A33F"/>
+    <circle cx="96" cy="115" r="5.4" fill="#7FAE62"/>
+    <path d="M84 104c0-5 2-8 6-10" fill="none" stroke="#5C8F44" stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+</svg>

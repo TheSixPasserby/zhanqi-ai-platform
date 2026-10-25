@@ -44,40 +44,49 @@ body {
 @keyframes bootSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(320%); } }
 
 /* ------------------------------ 登录页 ------------------------------ */
+/* 2026-10-25 重排：原来是「左图 + 右表单」两栏，输入框贴在最右边，
+   宽屏下右侧一大段空白、视线要一直往右甩。现在改成整幅底图 + 居中卡片：
+   卡片水平居中、宽 460，任何桌面分辨率下都落在视觉中心。 */
 .auth-page {
-  min-height: 100vh; display: grid;
-  /* 左侧实景图占大头，右侧表单区收窄到 400–520px。
-     原来 1.15 : 0.85 时，右边一整块只有两个输入框，显得空且散。 */
-  grid-template-columns: minmax(0, 1fr) minmax(400px, 520px);
-  background: var(--bg);
+  position: relative; min-height: 100vh; display: grid; place-items: center;
+  padding: 100px 24px 76px; background: var(--bg);
 }
-.auth-visual { position: relative; overflow: hidden; }
-.auth-visual img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.auth-visual-mask {
+.auth-bg { position: absolute; inset: 0; overflow: hidden; }
+.auth-bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.auth-bg-mask {
   position: absolute; inset: 0;
-  background: linear-gradient(180deg, rgba(14, 76, 62, .28) 0%, rgba(14, 76, 62, .72) 100%);
+  background:
+    radial-gradient(120% 90% at 50% 46%, rgba(9, 46, 38, .16) 0%, rgba(9, 46, 38, .64) 100%),
+    linear-gradient(180deg, rgba(9, 46, 38, .48) 0%, rgba(9, 46, 38, .26) 45%, rgba(9, 46, 38, .64) 100%);
 }
-.auth-visual-text {
-  position: absolute; left: 56px; right: 56px; bottom: 56px; color: #fff;
+.auth-topbar {
+  position: absolute; top: 28px; left: 36px; z-index: 2;
+  display: flex; align-items: center; gap: 11px;
 }
-.auth-badge {
-  display: inline-block; padding: 5px 12px; border-radius: 999px;
-  background: rgba(255, 255, 255, .18); border: 1px solid rgba(255, 255, 255, .3);
-  font-size: 12px; letter-spacing: .5px; backdrop-filter: blur(6px);
-}
-.auth-visual-text h1 {
-  margin: 16px 0 10px; font-size: 30px; line-height: 1.35; font-weight: 700;
-  text-shadow: 0 2px 18px rgba(0, 0, 0, .25);
-}
-.auth-visual-text p { margin: 0; font-size: 14px; opacity: .88; letter-spacing: 1px; }
+.auth-topbar .brand-logo { width: 40px; height: 40px; border-radius: 12px; box-shadow: 0 8px 22px rgba(0, 0, 0, .26); }
+.auth-topbar-text { display: flex; flex-direction: column; line-height: 1.32; color: #fff; }
+.auth-topbar-text b { font-size: 15px; letter-spacing: .6px; }
+.auth-topbar-text em { font-style: normal; font-size: 11.5px; opacity: .72; }
 
-.auth-panel {
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 56px clamp(32px, 6vw, 88px); background: var(--surface);
+.auth-stage { position: relative; z-index: 2; width: 100%; max-width: 460px; }
+.auth-card {
+  background: rgba(255, 255, 255, .97);
+  border: 1px solid rgba(255, 255, 255, .72);
+  border-radius: 22px;
+  padding: 32px 34px 24px;
+  box-shadow: 0 30px 70px rgba(8, 40, 32, .3), 0 1px 0 rgba(255, 255, 255, .7) inset;
+  backdrop-filter: blur(14px);
 }
-.auth-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 34px; }
-.auth-brand b { display: block; font-size: 16px; }
-.auth-brand span { display: block; font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.auth-head { margin-bottom: 22px; }
+.auth-badge {
+  display: inline-block; padding: 4px 11px; border-radius: 999px;
+  background: var(--brand-soft); color: var(--brand);
+  font-size: 11.5px; letter-spacing: .4px;
+}
+.auth-head h1 { margin: 12px 0 6px; font-size: 24px; line-height: 1.3; font-weight: 700; color: var(--text); }
+.auth-head p { margin: 0; font-size: 13px; color: var(--text-3); letter-spacing: .5px; }
+.auth-foot { margin: 16px 0 0; text-align: center; font-size: 12px; color: rgba(255, 255, 255, .82); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .brand-mark {
   width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
   background: linear-gradient(140deg, var(--brand), var(--brand-2));
@@ -128,8 +137,8 @@ body {
 }
 .quick-card:hover { border-color: var(--brand-line); background: var(--brand-soft); }
 .quick-avatar {
-  width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center;
-  background: var(--brand-soft); color: var(--brand); font-weight: 700; font-size: 14px;
+  width: 34px; height: 34px; border-radius: 11px; display: block; object-fit: cover;
+  background: #EEF4F0;
 }
 .quick-name { font-size: 13px; color: var(--text); }
 .quick-acc { display: none; }
@@ -636,8 +645,13 @@ body {
   .spot-grid, .act-grid { grid-template-columns: repeat(2, 1fr); }
   .goods-grid.wide { grid-template-columns: repeat(2, 1fr); }
   .ai-layout { grid-template-columns: 1fr; }
-  .auth-page { grid-template-columns: 1fr; }
-  .auth-visual { display: none; }
+  .auth-page { padding: 84px 18px 56px; }
+  .auth-topbar { top: 20px; left: 20px; }
+}
+@media (max-width: 560px) {
+  .auth-card { padding: 26px 20px 20px; border-radius: 18px; }
+  .auth-head h1 { font-size: 21px; }
+  .field-row { grid-template-columns: 1fr; gap: 0; }
 }
 
 /* ------------------------------ 统一项目图标 ------------------------------ */
@@ -735,3 +749,37 @@ body {
 .modal-actions .btn-primary, .modal-actions .btn-ghost { flex: 1; }
 .btn-ghost.dark { background: var(--surface-2); color: var(--text); border-color: var(--line); }
 .btn-ghost.dark:hover { background: var(--surface-3); }
+
+/* AI 逐字输出：正文保留换行，末尾一根闪动的光标 */
+.ai-a-body { min-width: 0; flex: 1; }
+.ai-a-text { margin: 0; font-size: 14px; line-height: 1.9; color: var(--text); white-space: pre-line; }
+.ai-a-hint { margin: 8px 0 0; font-size: 11.5px; }
+.ai-caret {
+  display: inline-block; width: 2px; height: 15px; margin-left: 2px;
+  vertical-align: -2px; background: var(--brand); border-radius: 1px;
+  animation: aiCaret .86s steps(1) infinite;
+}
+@keyframes aiCaret { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
+/* ------------------------------ 活动预约 ------------------------------ */
+.act-row { cursor: pointer; transition: transform .18s, box-shadow .18s, border-color .18s; }
+.act-row:hover { transform: translateY(-2px); border-color: var(--brand-line); box-shadow: var(--shadow-md); }
+.act-row-go {
+  display: flex; align-items: center; gap: 4px; align-self: center;
+  font-size: 12.5px; color: var(--brand); font-weight: 600; white-space: nowrap;
+}
+.act-row-go .i { width: 15px; height: 15px; }
+.pill.booked { background: var(--brand-soft); color: var(--brand); }
+.act-capacity {
+  display: flex; flex-direction: column; gap: 3px; margin: 14px 0 4px;
+  padding: 10px 12px; border-radius: 11px; background: var(--brand-soft);
+  font-size: 12.5px; color: var(--brand);
+}
+.book-panel { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }
+.book-panel-head { font-size: 13.5px; font-weight: 600; margin-bottom: 12px; }
+.book-facts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.book-facts > div { display: flex; justify-content: space-between; gap: 14px; font-size: 13px; }
+.book-facts span { color: var(--text-3); }
+.book-guest { text-align: center; }
+.book-guest p { margin: 0 0 12px; font-size: 13px; }
+.btn-ghost.dark.block { width: 100%; }

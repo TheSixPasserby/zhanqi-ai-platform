@@ -109,6 +109,7 @@ public class DatabaseBootstrap {
                 ensureColumn(conn, "users", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
                 ensureColumn(conn, "merchants", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
                 ensureColumn(conn, "admins", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
+                ensureColumn(conn, "activities", "capacity", "INT NULL DEFAULT 30 COMMENT '可预约人数上限'");
 
                 // ③ 灌演示数据（幂等）
                 if (db.isSeedOnStart()) {
@@ -211,8 +212,8 @@ public class DatabaseBootstrap {
 
     private void dropAll(Connection conn) throws SQLException {
         // 按依赖倒序删，避免外键类问题（本库没有外键，保留顺序只是为了可读）
-        String[] tables = {"settings", "sessions", "knowledge", "activities", "orders", "products",
-                "stamps", "spots", "admins", "merchants", "users"};
+        String[] tables = {"settings", "sessions", "knowledge", "activityBookings", "activities",
+                "orders", "products", "stamps", "spots", "admins", "merchants", "users"};
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("SET FOREIGN_KEY_CHECKS = 0");
             for (String t : tables) {

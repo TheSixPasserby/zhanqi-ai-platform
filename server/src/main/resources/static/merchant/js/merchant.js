@@ -239,6 +239,9 @@
       avatar: function () {
         return window.ZQProfile.avatarOf(this.me.profile || {});
       },
+      avatarSrc: function () {
+        return window.ZQProfile.src(this.me.profile || {}, 'merchant');
+      },
       initial: function () {
         return window.ZQProfile.initials(this.me.profile.short || this.me.name);
       }
@@ -329,6 +332,9 @@
       avatarUrl: function () {
         return window.ZQProfile.avatarOf(this.me.profile || {});
       },
+      avatarSrc: function () {
+        return window.ZQProfile.src(this.me.profile || {}, 'merchant');
+      },
       initial: function () {
         return window.ZQProfile.initials(this.me.profile.short || this.me.name);
       }
@@ -345,6 +351,9 @@
       this.bootstrap();
     },
     methods: {
+      knownAvatar: function (a) {
+        return window.ZQProfile.src(a, 'merchant');
+      },
       bootstrap: function () {
         var self = this;
         api.get('/api/server/info', null, { silent: true }).then(function (res) {

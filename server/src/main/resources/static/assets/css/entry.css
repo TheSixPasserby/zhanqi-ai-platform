@@ -63,28 +63,17 @@
 
 .main { flex: 1; padding: 0 44px 26px; max-width: 1420px; margin: 0 auto; width: 100%; }
 
-.hero {
-  display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  gap: 34px;
-  align-items: center;
-  padding: 22px 0 30px;
+/* 左上角品牌：统一用项目正式图标（田园印章），不再是文字方块 */
+.brand .mark-logo {
+  width: 48px; height: 48px;
+  border-radius: 14px;
+  display: block; flex: 0 0 auto;
+  box-shadow: 0 10px 24px rgba(20, 107, 87, .22);
 }
-.hero-img {
-  width: 100%;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-}
-.hero-text h2 { font-size: 27px; line-height: 1.35; letter-spacing: -.6px; }
-.hero-text p {
-  margin: 12px 0 0;
-  font-size: 14px;
-  line-height: 1.85;
-  color: var(--text-2);
-  max-width: 560px;
-}
-.notice {
-  margin-top: 16px;
+
+/* 公告横幅：原来压在大插画旁边，插画撤掉后独立成一条 */
+.main > .notice {
+  margin: 10px 0 20px;
   display: inline-flex;
   gap: 10px;
   align-items: center;
@@ -94,7 +83,7 @@
   font-size: 13px;
   color: var(--warn);
 }
-.notice i {
+.main > .notice i {
   font-style: normal;
   font-size: 11px;
   padding: 1px 7px;
@@ -118,6 +107,11 @@
   overflow: hidden;
   transition: transform .28s cubic-bezier(.22, .68, .32, 1), box-shadow .28s ease;
 }
+/* 卡片顶部一条品牌色带，三张卡各按自己的徽标色区分 */
+.end-card::before { content: ""; display: block; height: 4px; flex: 0 0 auto; }
+.end-card:nth-child(1)::before { background: linear-gradient(90deg, var(--brand), var(--brand-2)); }
+.end-card:nth-child(2)::before { background: linear-gradient(90deg, var(--accent), #D9784F); }
+.end-card:nth-child(3)::before { background: linear-gradient(90deg, var(--info), #5E8FBF); }
 .end-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-lg); }
 .end-head {
   display: flex;
@@ -256,6 +250,5 @@
 
 @media (max-width: 1180px) {
   .ends, .info { grid-template-columns: 1fr; }
-  .hero { grid-template-columns: 1fr; }
   .top, .main, .foot { padding-left: 22px; padding-right: 22px; }
 }

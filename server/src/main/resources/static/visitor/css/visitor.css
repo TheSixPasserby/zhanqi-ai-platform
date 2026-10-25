@@ -176,9 +176,13 @@ body {
 
 /* 顶部栏（子页面） */
 .topbar {
-  display: flex; align-items: center; gap: 10px;
+  /* app.css 里还有一套给 PC 后台用的 .topbar（space-between + 58px 高 + 白底），
+     这里必须全部覆盖掉，否则手机端标题会被推到右边，和返回键之间空一大段。 */
+  position: static; height: auto;
+  display: flex; align-items: center; justify-content: flex-start; gap: 10px;
   padding: 14px 14px 12px;
   background: linear-gradient(135deg, #0E4C3E 0%, #146B57 100%);
+  border-bottom: 0;
   color: #fff;
 }
 .topbar-shop { flex-direction: column; align-items: stretch; gap: 12px; padding-bottom: 16px; }
@@ -268,8 +272,8 @@ body {
   background: var(--surface-2); border: 1.5px solid var(--line); border-radius: 13px; cursor: pointer;
 }
 .known-avatar {
-  width: 38px; height: 38px; flex: none; border-radius: 12px; display: flex;
-  align-items: center; justify-content: center; color: #fff; font-size: 16px; font-weight: 600;
+  width: 40px; height: 40px; flex: none; border-radius: 13px; display: block;
+  object-fit: cover; background: #EEF4F0;
 }
 .known-body { flex: 1; min-width: 0; }
 .known-body b { display: block; font-size: 14px; }
@@ -731,3 +735,47 @@ body {
 .pwd-card .field { margin-bottom: 12px; }
 .pwd-card .row { display: flex; gap: 10px; }
 .pwd-card .row .btn { flex: 1; }
+
+/* 聊天里的用户头像改成真图；AI 一侧保持品牌渐变块 */
+.msg-avatar { object-fit: cover; }
+.msg-avatar-ai { background: linear-gradient(135deg, var(--brand), var(--brand-2)); color: #fff; font-size: 11.5px; font-weight: 700; }
+
+/* 「猜你想问」：回答结束后横向铺开，标题独占一行 */
+.suggests-follow { flex-wrap: wrap; align-items: center; padding-top: 2px; }
+.suggests-follow .dim { width: 100%; padding-left: 2px; }
+
+/* ============================ 活动详情与预约 ============================ */
+.act-book-line {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--line);
+}
+.act-go { font-size: 12px; color: var(--brand); font-weight: 600; }
+.tag-ok { background: var(--ok-soft); color: var(--ok); }
+
+.act-meta-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.act-meta-list span { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+.act-meta-list .ico { width: 14px; height: 14px; color: var(--brand); flex: none; }
+
+.book-card { border-color: var(--brand-line); }
+.book-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.book-rows > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.book-rows span { color: var(--text-3); flex: none; }
+.book-rows b { font-weight: 600; text-align: right; }
+
+.empty-inline { text-align: center; padding: 8px 0 4px; }
+.empty-inline b { display: block; font-size: 14px; margin-bottom: 4px; }
+.empty-inline .btn { margin-top: 10px; }
+
+.book-mine { margin-top: 12px; }
+.book-mine-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--line);
+}
+.book-mine-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.book-mine-main { flex: 1; min-width: 0; cursor: pointer; }
+.book-mine-main b { display: block; font-size: 13.5px; font-weight: 600; }
+.book-mine-main span { display: block; margin-top: 2px; }
+.btn.btn-xs { padding: 5px 11px; font-size: 12px; border-radius: 9px; }
+
+.loading-line { height: 3px; background: var(--surface-3); overflow: hidden; }
+.loading-line i { display: block; width: 40%; height: 100%; background: var(--brand); animation: bootSlide 1.1s ease-in-out infinite; }

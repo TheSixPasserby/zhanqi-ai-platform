@@ -1,30 +1,63 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
   <!--
-    战旗云 · 统一项目图标
-    造型：川西屋檐（三角）+ 林盘院落（墙体）+ 田垄（底部双弧线），
-    整体收在一个圆角方印里 —— 和平台“集章打卡”的活动逻辑呼应。
-    三端左上角统一使用这一个 mark，不要再各画一个。
+    战旗云 · 项目图标（田园版）
+    一枚圆角方印里装一幅「川西林盘小景」：朝阳、青瓦房、三级田垄。
+    房子只保留「屋顶 + 屋身 + 门洞」三个形，缩到 32px 依然读得出来。
+    三端左上角统一使用这一个 mark，不要各画一个。
   -->
   <defs>
-    <linearGradient id="zqLogoGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1D9E75"/>
-      <stop offset="1" stop-color="#0E4C3E"/>
+    <linearGradient id="zqSky" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#2FA07D"/>
+      <stop offset="0.55" stop-color="#146B57"/>
+      <stop offset="1" stop-color="#0A4033"/>
+    </linearGradient>
+    <radialGradient id="zqGlow" cx="0.24" cy="0.14" r="0.78">
+      <stop offset="0" stop-color="#C4F5DC" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#C4F5DC" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="zqBand1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A7E3C6" stop-opacity="0.62"/>
+      <stop offset="1" stop-color="#7ACFA8" stop-opacity="0.38"/>
+    </linearGradient>
+    <linearGradient id="zqBand2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9ADFBF" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#63C096" stop-opacity="0.72"/>
+    </linearGradient>
+    <linearGradient id="zqBand3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8ED8B5"/>
+      <stop offset="1" stop-color="#4FAF87"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="18" fill="url(#zqLogoGrad)"/>
-  <!-- 屋檐 -->
-  <path d="M13.5 27.5 32 13.8l18.5 13.7"
-        fill="none" stroke="#FFFFFF" stroke-width="3.4"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- 院落墙体 + 门洞 -->
-  <path d="M18.8 27.2V45.6h26.4V27.2"
-        fill="none" stroke="#FFFFFF" stroke-width="3"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M28.6 45.6v-8.4h6.8v8.4"
-        fill="none" stroke="#FFFFFF" stroke-width="2.6"
-        stroke-linecap="round" stroke-linejoin="round"/>
-  <!-- 田垄 -->
-  <path d="M11.6 51.2c3.4-3.1 6.8-3.1 10.2 0s6.8 3.1 10.2 0 6.8-3.1 10.2 0 6.8 3.1 10.2 0"
-        fill="none" stroke="#9BE0C4" stroke-width="2.6"
-        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect width="64" height="64" rx="17" fill="url(#zqSky)"/>
+  <rect width="64" height="64" rx="17" fill="url(#zqGlow)"/>
+  <rect x="3.8" y="3.8" width="56.4" height="56.4" rx="14" fill="none"
+        stroke="#F0DCA4" stroke-opacity="0.3" stroke-width="0.9"/>
+
+  <!-- 朝阳 -->
+  <circle cx="47.4" cy="16.6" r="8.2" fill="#F4D68F" opacity="0.16"/>
+  <circle cx="47.4" cy="16.6" r="5.2" fill="#F7DB95"/>
+
+  <!-- 田垄（压在房子后面） -->
+  <path d="M-2 47.6c9.6-3.2 18.4-3.2 28 0 9.6 3.2 18.4 3.2 28 0 4.4-1.5 8.8-2.2 12-2.1V66H-2z" fill="url(#zqBand1)"/>
+  <path d="M-2 53c9.6-2.9 18.4-2.9 28 0 9.6 2.9 18.4 2.9 28 0 4.4-1.3 8.8-2 12-1.9V66H-2z" fill="url(#zqBand2)"/>
+  <path d="M-2 58.6c9.6-2.5 18.4-2.5 28 0 9.6 2.5 18.4 2.5 28 0 4.4-1.2 8.8-1.8 12-1.7V66H-2z" fill="url(#zqBand3)"/>
+
+  <!-- 青瓦房：屋身 -->
+  <path d="M19.4 36.4h25.2v13.4H19.4z" fill="#F4FBF7" fill-opacity="0.94"/>
+  <!-- 门洞（挖成底色，缩小时就是一个小缺口） -->
+  <path d="M28.1 49.8v-6.2a3.9 3.9 0 0 1 7.8 0v6.2z" fill="#0E4C3E"/>
+
+  <!-- 屋顶：翘角 + 坡面 -->
+  <path d="M32 17.2 10.2 35.2c-1.7 1.4-.7 4.1 1.5 4.1h40.6c2.2 0 3.2-2.7 1.5-4.1z"
+        fill="#FFFFFF" fill-opacity="0.97"/>
+  <!-- 檐口淡影：让屋顶不至于一块死白 -->
+  <path d="M13.2 37.3h37.6" stroke="#CFE7DC" stroke-opacity="0.5" stroke-width="1.7" stroke-linecap="round"/>
+
+  <!-- 稻穗（三粒，装饰用） -->
+  <g fill="#F7DB95">
+    <ellipse cx="17.4" cy="52.4" rx="1.1" ry="1.8" transform="rotate(-20 17.4 52.4)"/>
+    <ellipse cx="20.9" cy="51.2" rx="1.1" ry="1.8" transform="rotate(-6 20.9 51.2)"/>
+    <ellipse cx="24.4" cy="51.8" rx="1.1" ry="1.8" transform="rotate(12 24.4 51.8)"/>
+  </g>
 </svg>

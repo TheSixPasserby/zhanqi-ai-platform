@@ -45,6 +45,9 @@
         category: '',
         keyword: '',
         currentSpot: null,
+        currentAct: null,
+        actForm: { date: '', people: 2, phone: '', remark: '' },
+        booking: false,
         currentProduct: null,
         detailLoading: false,
         cart: [],
@@ -53,13 +56,17 @@
         remark: '',
         submitting: false,
         toastList: [],
-        ai: { question: '', answer: '', sources: [], loading: false, mode: 'ask', planDays: 2, planPref: '亲子' },
+        ai: { question: '', answer: '', shown: '', streaming: false, sources: [], loading: false, mode: 'ask', planDays: 2, planPref: '亲子' },
         categories: CATEGORY_TEXT
       };
     },
     computed: {
       avatarUrl: function () {
         return window.ZQProfile.avatarOf(this.me.profile || {});
+      },
+      /* 没上传照片时用游客端默认艺术头像，不再用姓名首字 */
+      avatarSrc: function () {
+        return this.avatarUrl || window.ZQProfile.defaultFor('buyer');
       },
       profileInitial: function () {
         return window.ZQProfile.initials(this.me.name);
@@ -145,6 +152,9 @@
     methods: {
       /* ---------------------------- 基础 ---------------------------- */
       icon: function (name) { return '../../assets/img/icons.svg#' + name; },
+      knownAvatar: function (a) {
+        return window.ZQProfile.src(a, 'buyer');
+      },
       spotIcon: function (spot) { return window.ZQSpotIcons.iconOf(spot); },
       asset: function (p) {
         if (!p) { return '../../assets/img/photos/spot-center.jpg'; }
@@ -162,6 +172,7 @@
         }, 2600);
       },
       go: function (view) {
+        if (view !== 'ai') { this.stopTyping(); }
         this.view = view;
         window.scrollTo({ top: 0, behavior: 'smooth' });
         if (view === 'orders' && this.user) { this.loadOrders(); }
@@ -218,6 +229,67 @@
         var self = this;
         api.get('/api/tour/activities', null, { silent: true }).then(function (res) {
           if (res.ok) { self.activities = res.activities || []; }
+        });
+      },
+
+      /* ---------------------------- 活动详情与预约 ---------------------------- */
+      actRange: function (a) {
+        if (!a) { return ''; }
+        var s = String(a.date || '');
+        var e = String(a.endDate || '');
+        return (!e || e === s) ? s : (s + ' 至 ' + e);
+      },
+      isActPast: function (a) {
+        if (!a) { return false; }
+        var end = String(a.endDate || a.date || '');
+        var today = new Date().toISOString().slice(0, 10);
+        return !!end && end < today;
+      },
+      bookingStatusText: function (s) {
+        return { pending: '待村里确认', confirmed: '已确认', cancelled: '已取消' }[s] || s || '待确认';
+      },
+      openActivity: function (a) {
+        var self = this;
+        this.currentAct = a;
+        this.booking = false;
+        api.get('/api/tour/activities/' + a.id, null, { silent: true }).then(function (res) {
+          if (!res.ok) { return; }
+          var act = res.activity || {};
+          self.currentAct = act;
+          self.actForm = {
+            date: act.date || '',
+            people: act.myBooking ? act.myBooking.people : 2,
+            phone: (act.myBooking && act.myBooking.phone) || (self.me.profile && self.me.profile.phone) || '',
+            remark: (act.myBooking && act.myBooking.remark) || ''
+          };
+        });
+      },
+      bookActivity: function () {
+        var self = this;
+        if (!this.currentAct) { return; }
+        if (!this.user) { this.toast('请先登录再预约', 'warn'); return; }
+        if (!this.actForm.date) { this.toast('请选择参加日期', 'warn'); return; }
+        this.booking = true;
+        api.post('/api/tour/activities/' + this.currentAct.id + '/book', {
+          date: this.actForm.date,
+          people: Number(this.actForm.people) || 1,
+          phone: this.actForm.phone,
+          remark: this.actForm.remark
+        }).then(function (res) {
+          self.booking = false;
+          if (!res.ok) { return; }
+          self.toast(res.message || '预约成功');
+          self.loadActivities();
+          self.openActivity(self.currentAct);
+        });
+      },
+      cancelBooking: function (b) {
+        var self = this;
+        api.post('/api/tour/bookings/' + b.id + '/cancel').then(function (res) {
+          if (!res.ok) { return; }
+          self.toast(res.message || '已取消预约');
+          self.loadActivities();
+          if (self.currentAct) { self.openActivity(self.currentAct); }
         });
       },
       loadOrders: function () {
@@ -308,13 +380,17 @@
       },
 
       /* ---------------------------- 点位 ---------------------------- */
-      openSpot: function (spot) {
+      openSpot: function (spot, autoSpeak) {
         var self = this;
         this.detailLoading = true;
         this.currentSpot = spot;
         api.get('/api/tour/spots/' + spot.id, null, { silent: true }).then(function (res) {
           self.detailLoading = false;
           if (res.ok && res.spot) { self.currentSpot = res.spot; }
+          // 打卡后自动进详情并开讲：抽屉已经在眼前，直接起播
+          if (autoSpeak) {
+            setTimeout(function () { self.speak(self.currentSpot); }, 260);
+          }
         });
       },
       checkin: function (spot) {
@@ -325,6 +401,8 @@
           self.toast(res.message || '打卡成功');
           self.loadSpots();
           self.loadStamps();
+          // 无论从列表还是详情打卡，都打开该点位的介绍抽屉并自动播报
+          self.openSpot(spot, true);
         });
       },
       speak: function (spot) {
@@ -443,25 +521,76 @@
         var self = this;
         var q = (this.ai.question || '').trim();
         if (!q) { this.toast('先输入一个问题', 'warn'); return; }
+        this.stopTyping();
         this.ai.loading = true;
         this.ai.answer = '';
+        this.ai.shown = '';
+        this.ai.streaming = false;
         this.ai.sources = [];
-        var url = this.ai.mode === 'plan' ? '/api/ai/plan' : '/api/ai/ask';
-        var body = this.ai.mode === 'plan'
+        var mode = this.ai.mode;
+        var url = mode === 'plan' ? '/api/ai/plan' : '/api/ai/ask';
+        var body = mode === 'plan'
           ? { days: Number(this.ai.planDays), people: 2, preferences: [this.ai.planPref] }
           : { question: q };
         api.post(url, body).then(function (res) {
           self.ai.loading = false;
-          if (!res.ok) { return; }
-          if (self.ai.mode === 'plan') {
-            self.ai.answer = res.summary || (res.plan && res.plan.summary) || '';
-            self.ai.sources = res.days || res.plan || [];
-          } else {
-            self.ai.answer = res.answer || '';
-            self.ai.sources = res.sources || [];
+          if (!res || !res.ok) {
+            var err = (res && res.error) || 'AI 服务暂时不可用，请稍后再试。';
+            self.ai.answer = err;
+            self.typeOut(err);
+            return;
           }
+          var text = self.composeAnswer(res, mode);
+          self.ai.answer = text;
+          self.typeOut(text);
         });
       },
+
+      /** 把后端返回拼成一段可直接逐字念出来的纯文本 */
+      composeAnswer: function (res, mode) {
+        if (mode !== 'plan') {
+          return res.answer || '（没有返回内容）';
+        }
+        var plan = res.plan || res;
+        var lines = [];
+        var summary = res.summary || plan.summary || '';
+        if (summary) { lines.push(summary, ''); }
+        (plan.days || []).forEach(function (d) {
+          lines.push('第 ' + d.day + ' 天 · ' + (d.date || ''));
+          (d.items || []).forEach(function (it) {
+            lines.push('  ' + (it.time ? it.time + '  ' : '') + it.title);
+          });
+          lines.push('');
+        });
+        return lines.join('\n').trim();
+      },
+
+      /* 与手机端同一套打字节奏：约 90 帧放完，26ms 一帧，长回答也不会等太久 */
+      typeOut: function (text) {
+        var self = this;
+        this.stopTyping();
+        this.ai.shown = '';
+        this.ai.streaming = true;
+        var step = Math.max(1, Math.ceil(text.length / 90));
+        var cursor = 0;
+        this._aiTimer = setInterval(function () {
+          cursor = Math.min(text.length, cursor + step);
+          self.ai.shown = text.slice(0, cursor);
+          if (cursor >= text.length) {
+            self.stopTyping();
+            self.ai.streaming = false;
+          }
+        }, 26);
+      },
+
+      stopTyping: function () {
+        if (this._aiTimer) {
+          clearInterval(this._aiTimer);
+          this._aiTimer = null;
+        }
+        this.ai.streaming = false;
+      },
+
       presetAsk: function (text) {
         this.ai.question = text;
         this.askAi();

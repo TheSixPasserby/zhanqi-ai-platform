@@ -119,7 +119,7 @@
             <div v-else class="known-list">
               <div class="known-card" v-for="(a, i) in known" :key="a.account"
                    :style="{ animationDelay: (i * 50) + 'ms' }" @click="doQuick(a)">
-                <div class="known-avatar" :style="{ background: a.avatarColor || '#146B57' }">{{ first(a.name) }}</div>
+                <img class="known-avatar" :src="knownAvatar(a)" alt="">
                 <div class="known-body">
                   <b>{{ a.name }}</b>
                   <span>{{ a.account }} · {{ a.lastLoginText || '最近登录过' }}</span>
@@ -362,8 +362,7 @@
           <div class="blob b1"></div><div class="blob b2"></div>
           <div class="hero-inner">
             <div class="my-avatar" @click="$refs.avatarInput.click()">
-              <img v-if="avatarUrl" :src="avatarUrl" alt="头像">
-              <template v-else>{{ first(user.name) }}</template>
+              <img :src="avatarSrc" alt="头像">
               <span class="avatar-edit">
                 <svg class="ico"><use :href="iconHref('i-camera')"></use></svg>
               </span>
@@ -417,6 +416,19 @@
               </div>
               <div class="menu-body"><b>修改密码</b><span>定期更换，账号更安全</span></div>
               <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
+            </div>
+          </div>
+
+          <!-- 我的活动预约：报名信息由管理后台统一确认 -->
+          <div class="card book-mine" v-if="myBookings.length">
+            <div class="card-title"><i></i>我的活动预约</div>
+            <div v-for="b in myBookings" :key="b.id" class="book-mine-row">
+              <div class="book-mine-main" @click="openActivity(b.activityId)">
+                <b>{{ b.activityTitle }}</b>
+                <span class="dim tiny">{{ b.date }} · {{ b.people }} 人 · {{ bookingStatusText(b.status) }}</span>
+              </div>
+              <button v-if="b.status !== 'cancelled'" class="btn btn-ghost btn-xs" @click="cancelBooking(b)">取消</button>
+              <span v-else class="tag">已取消</span>
             </div>
           </div>
 
@@ -680,7 +692,7 @@
         </div>
         <div class="pad-x">
           <div v-if="!activities.length" class="empty-box"><b>暂时没有活动安排</b></div>
-          <div v-else class="act-cell" v-for="a in activities" :key="a.id">
+          <div v-else class="act-cell" v-for="a in activities" :key="a.id" @click="openActivity(a.id)">
             <div class="act-cell-date">
               <b>{{ day(a.date) }}</b><span>{{ month(a.date) }} 月</span>
               <em v-if="isOngoing(a)" class="live-tag">进行中</em>
@@ -691,13 +703,80 @@
               <div class="dim tiny mt6">时间：{{ rangeText(a) }}</div>
               <div class="dim tiny">地点：{{ a.place }}</div>
               <p class="para small mt10">{{ a.desc }}</p>
+              <div class="act-book-line">
+                <span class="dim tiny">已约 {{ a.bookedPeople || 0 }} 人<template v-if="a.seatsLeft >= 0"> · 余 {{ a.seatsLeft }} 位</template></span>
+                <span v-if="a.myBooked" class="tag tag-ok">已预约</span>
+                <span v-else-if="!isPast(a)" class="act-go">查看详情 ›</span>
+              </div>
             </div>
           </div>
         </div>
         <div class="page-bottom-space"></div>
       </section>
 
-      <!-- AI 助手 -->
+      <!-- 活动详情 + 预约 -->
+      <section v-if="view === 'activityDetail'" class="page-body subpage">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack">‹</button>
+          <div class="topbar-title"><h1>{{ currentAct.title || '活动详情' }}</h1><p>{{ currentAct.tag || '村内活动' }}</p></div>
+        </div>
+
+        <div v-if="actLoading && !currentAct.id" class="loading-line"><i></i></div>
+
+        <div v-if="currentAct.id">
+          <div class="cover-lg"><img :src="asset(currentAct.cover)" :alt="currentAct.title" @error="imgFail"></div>
+
+          <div class="pad-x">
+            <div class="card">
+              <div class="act-top"><b>{{ currentAct.title }}</b><span class="tag tag-accent">{{ currentAct.tag }}</span></div>
+              <div class="act-meta-list">
+                <span><svg class="ico"><use :href="iconHref('i-calendar')"></use></svg>{{ rangeText(currentAct) }}</span>
+                <span><svg class="ico"><use :href="iconHref('i-location')"></use></svg>{{ currentAct.place }}</span>
+                <span><svg class="ico"><use :href="iconHref('i-user')"></use></svg>已约 {{ currentAct.bookedPeople || 0 }} 人<template v-if="currentAct.seatsLeft >= 0">，余 {{ currentAct.seatsLeft }} 位</template></span>
+              </div>
+              <p class="para mt10">{{ currentAct.desc }}</p>
+            </div>
+
+            <!-- 已预约：展示登记信息 -->
+            <div v-if="currentAct.myBooking" class="card book-card">
+              <div class="card-title"><i class="live"></i>我的预约</div>
+              <div class="book-rows">
+                <div><span>参加日期</span><b>{{ currentAct.myBooking.date }}</b></div>
+                <div><span>人数</span><b>{{ currentAct.myBooking.people }} 人</b></div>
+                <div><span>联系人手机</span><b>{{ currentAct.myBooking.phone || '未填写' }}</b></div>
+                <div><span>状态</span><b>{{ bookingStatusText(currentAct.myBooking.status) }}</b></div>
+                <div v-if="currentAct.myBooking.remark"><span>备注</span><b>{{ currentAct.myBooking.remark }}</b></div>
+              </div>
+              <p class="dim tiny mt10">预约信息由村委会在管理后台统一确认，如需修改请先取消后重新预约。</p>
+              <button class="btn btn-ghost btn-block mt10" @click="cancelBooking(currentAct.myBooking)">取消预约</button>
+            </div>
+
+            <!-- 未预约：填表 -->
+            <div v-else class="card">
+              <div class="card-title"><i></i>预约参加</div>
+              <div v-if="!user" class="empty-inline">
+                <b>登录后才能预约</b>
+                <p class="dim small">登录后填写人数与手机号，村委会会统一确认。</p>
+                <button class="btn btn-sm" @click="go('mine', true)">去登录</button>
+              </div>
+              <template v-else>
+                <label class="field"><span>参加日期</span>
+                  <input type="date" v-model="actForm.date"></label>
+                <label class="field"><span>人数</span>
+                  <input type="number" min="1" max="20" v-model.number="actForm.people"></label>
+                <label class="field"><span>联系手机</span>
+                  <input type="tel" v-model.trim="actForm.phone" placeholder="方便村里联系你"></label>
+                <label class="field"><span>备注</span>
+                  <textarea rows="2" v-model.trim="actForm.remark" placeholder="选填，例如需要儿童座椅、忌口"></textarea></label>
+                <button class="btn btn-block" :disabled="actLoading || isPast(currentAct)" @click="bookActivity">
+                  {{ isPast(currentAct) ? '活动已结束' : (actLoading ? '提交中…' : '提交预约') }}</button>
+              </template>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="!actLoading" class="empty-box"><b>没找到这个活动</b></div>
+        <div class="page-bottom-space"></div>
+      </section>
       <section v-if="view === 'ai'" class="page-body subpage chat-page">
         <div class="topbar">
           <button class="topbar-back" @click="goBack">‹</button>
@@ -712,25 +791,28 @@
           </div>
 
           <div class="msg" :class="'msg-' + m.role" v-for="(m, i) in messages" :key="i">
-            <div class="msg-avatar">{{ m.role === 'user' ? '我' : 'AI' }}</div>
+            <img v-if="m.role === 'user'" class="msg-avatar" :src="avatarSrc" alt="">
+            <div v-else class="msg-avatar msg-avatar-ai">AI</div>
             <div class="msg-bubble">
               <span>{{ m.shown }}</span><i v-if="m.streaming" class="caret"></i>
-              <div v-if="m.sources && m.sources.length" class="src">
-                <span class="dim tiny">知识库来源</span>
-                <div class="tags mt6"><span class="src-tag" v-for="(s, si) in m.sources" :key="si">{{ s }}</span></div>
-              </div>
               <div v-if="m.matched === false" class="miss">这个问题不在村内知识库里。可以换个说法，或看看下面的推荐问题。</div>
             </div>
           </div>
 
           <div v-if="thinking" class="msg msg-assistant">
-            <div class="msg-avatar">AI</div>
+            <div class="msg-avatar msg-avatar-ai">AI</div>
             <div class="msg-bubble"><div class="dots"><i v-for="n in 3" :key="n" :style="{ animationDelay: n * 0.16 + 's' }"></i></div></div>
           </div>
         </div>
 
         <div class="suggests" v-if="!messages.length">
           <button v-for="q in suggests" :key="q" @click="ask(q)">{{ q }}</button>
+        </div>
+
+        <!-- 猜你想问：回答说完之后按关键词给 4 条追问，点一下就能继续 -->
+        <div class="suggests suggests-follow" v-if="showFollowUps">
+          <span class="dim tiny">猜你想问</span>
+          <button v-for="q in followUps" :key="q" @click="ask(q)">{{ q }}</button>
         </div>
 
         <div class="chat-input">

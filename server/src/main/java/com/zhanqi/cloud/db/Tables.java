@@ -27,7 +27,8 @@ public final class Tables {
     private static final Map<String, Meta> ALL = new LinkedHashMap<>();
 
     /** 业务可写的表（管理后台的通用数据维护接口只允许操作这些表） */
-    private static final Set<String> MANAGEABLE = Set.of("spots", "activities", "knowledge", "settings");
+    private static final Set<String> MANAGEABLE = Set.of(
+            "spots", "activities", "activityBookings", "knowledge", "settings");
 
     static {
         put("users", "u", List.of(
@@ -59,7 +60,11 @@ public final class Tables {
                 "cancelledBy"), Set.of());
 
         put("activities", "a", List.of(
-                "id", "title", "date", "endDate", "place", "tag", "desc", "cover"), Set.of());
+                "id", "title", "date", "endDate", "place", "tag", "capacity", "desc", "cover"), Set.of());
+
+        put("activityBookings", "ab", List.of(
+                "id", "activityId", "activityTitle", "userId", "userName", "phone",
+                "people", "date", "remark", "status", "createdAt"), Set.of());
 
         put("knowledge", "k", List.of("id", "title", "tags", "content"), Set.of("tags"));
 

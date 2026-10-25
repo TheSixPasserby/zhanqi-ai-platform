@@ -14,6 +14,23 @@ window.ZQProfile = (function () {
     return s ? s.slice(0, 1) : '游';
   }
 
+  /** 三端默认艺术头像：注册后还没上传照片时用它，不再用「姓名首字」占位 */
+  var DEFAULT_AVATAR = {
+    buyer: '/assets/img/avatar-visitor.svg',
+    visitor: '/assets/img/avatar-visitor.svg',
+    merchant: '/assets/img/avatar-merchant.svg',
+    admin: '/assets/img/avatar-admin.svg'
+  };
+
+  function defaultFor(role) {
+    return DEFAULT_AVATAR[role] || DEFAULT_AVATAR.buyer;
+  }
+
+  /** 最终要显示的图：自定义照片优先，否则按角色给默认艺术头像 */
+  function src(profile, role) {
+    return avatarOf(profile) || defaultFor(role);
+  }
+
   /** 从 /api/auth/me 的 profile 里取头像；空串/不存在的都算没有 */
   function avatarOf(profile) {
     if (!profile) { return ''; }
@@ -60,5 +77,8 @@ window.ZQProfile = (function () {
     return window.ZQ.api.put('/api/auth/avatar', { avatar: dataUrl });
   }
 
-  return { initials: initials, avatarOf: avatarOf, compress: compress, upload: upload };
+  return {
+    initials: initials, avatarOf: avatarOf, defaultFor: defaultFor, src: src,
+    compress: compress, upload: upload
+  };
 })();
