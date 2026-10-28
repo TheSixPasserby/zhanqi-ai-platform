@@ -62,6 +62,7 @@
 
 ## 数据与业务
 
+- **现有 17 张表**（2026-10-28 新增 chatMessages / chatTyping / reports / orderLogs / notifications）。
 - **加业务表必须同步四处**：`schema.sql`、`Tables.java` 列清单、
   `DatabaseBootstrap.dropAll()` 的清空清单、`ServerService.tableCounts()`。
   漏了 `dropAll` 时 reset.bat 清不干净——新表里的测试数据会活过重置
@@ -132,7 +133,9 @@
 - **图标统一走 `static/assets/img/icons.svg` 的 `<use>`，禁止再用 emoji 或单字顶替**。
   三端共用同一份，颜色靠 `currentColor` 继承。uni-app（安卓）不支持外部 SVG sprite，
   用 `uniapp-visitor/src/static/icons/*.png`（由同一套 SVG 渲染出来的 2 倍图）。
-  例外：印章上的单字（旗/院/鞋/稻）是业务语义，不是图标，别替换。
+  **印章已改为图标**（2026-10-28 需求：去掉「印章单字设置」）：`spots.stampIcon` 存 `i-rice` 这类
+  icons.svg key，`ZQSpotIcons.iconOf()` 优先认新格式、旧单字走 `BY_CHAR` 映射兜底；
+  管理员在「内容管理 → 林盘点位」用图标下拉选择。
   （2026-10-25，来源：2026-10-25-visitor-pc-and-visual-refresh.md）
 - **新增静态页面目录后，必须在 `WebConfig.addViewControllers` 里补
   「目录 → index.html」的 forward**。Spring 不会把 `/visitor/pc/` 自动当目录首页，
@@ -185,3 +188,70 @@
   是无 BOM 的，而 PowerShell 5.1 会把无 BOM 的 `.ps1` 按 GBK 读，
   中文注释足以把语法读坏 —— 表现是脚本完全跑不动，且报错也看不出原因。
   （2026-09-29，来源：2026-09-29-verify-reset-on-windows.md）
+
+## 订单与商城（2026-10-28 起）
+
+- **订单状态机**：实物 `pending → confirmed → shipped → completed`；民宿多一步 `checked_in`；
+  另有终态 `cancelled` / `refunded`。`used（已核销）` **只保留给历史数据只读展示**，
+  不再可流转、不再有接口（`POST /orders/{id}/verify` 已删除，返回 404）。
+  营收口径 = `confirmed/shipped/checked_in/completed/used`（`Dict.REVENUE_STATUS`）。
+  （2026-10-28，来源：2026-10-28-order-chat-report-booking-overhaul.md）
+- **商家拒绝不能直接关单**：只写 `rejectReason + rejectStatus=waiting_buyer`，状态仍 `pending`；
+  必须等买家调 `buyer-decision`（`agree=true` → cancelled + 回滚库存；`false` → `buyer_disagreed` 协商）。
+  所有流转写 `orderLogs`。改这块时别把「商家拒绝」接回 `cancel`，那会退化成单方面取消。
+  （2026-10-28，来源：同上）
+- **四类商品下单字段不同**：goods 要地址；study/experience 要 `bookDate + bookingSlot + people`；
+  homestay 要 `bookDate + checkOutDate + roomType + people`（金额 = 单价 × 晚数，库存按 1 间扣）。
+  默认场次/房型在 `ShopService.DEFAULT_SLOTS / DEFAULT_ROOM_TYPES`，商品可用 `products.timeSlots/roomTypes` 覆盖。
+  （2026-10-28，来源：同上）
+- **物流是模拟的**：`LogisticsService.track()` 按「发货时间 + 运单号」生成 4 段节点，可复现、刷新不跳变；
+  生产接真实快递查询只需替换该方法。页面按 `progress(0-3)` 定位小卡车。
+  （2026-10-28，来源：同上）
+- **退款只落业务状态**（无支付通道）：`refunded + refundAmount/refundedAt/refundNote` + `notifications`；
+  **退款不回滚库存**（有意为之）。若业务要求回滚，改 `ReportService.applyRefund`，但要防与 `cancel` 重复回滚。
+  （2026-10-28，来源：同上）
+
+## 聊天与举报（2026-10-28 起）
+
+- **聊天不建会话表**：会话身份就是 `(merchantId, buyerId)`；`fromRole` 一律由服务端按登录角色决定。
+  在线状态查 `sessions`（未过期 + 账号 active），输入中用 `chatTyping`（4 秒 TTL）。
+  （2026-10-28，来源：同上）
+- **聊天图片与举报凭证都是 dataURL 存 TEXT**：单张 ≤400KB、最多 6 张；项目不新增文件上传目录
+  （双击部署不能多一处写权限失败点）。生产应换对象存储。
+  （2026-10-28，来源：同上）
+- **举报处置会改账号状态**：临时停用写 `merchants.status='suspended' + suspendUntil(ISO) + suspendReason` 并清
+  `sessions`；`AuthService` 在登录与会话解析两处都拦 `suspended`，到期自动恢复 `active`。
+  永久停用是 `disabled` + 清 `rememberToken`。改鉴权时别漏 `suspended` 分支，否则「封了但没封住」。
+  （2026-10-28，来源：同上）
+- **管理端举报列表默认只筛「待处理」**：处理成功后该行会从当前列表消失，容易被当成「点完没反应」。
+  联调/自动化断言要先切「全部」再读状态；后续可把默认值改成全部。
+  （2026-10-28，来源：同上）
+
+## 管理后台（2026-10-28 起）
+
+- **商品价格/库存编辑必须用受控原生 `type=number`**，不要用 `el-input-number`：
+  它在弹窗里依赖失焦/回车才把值同步回 `v-model`，用户直接点「保存」提交的是旧值 ——
+  「改了价格保存不生效」的真因就在这里，后端接口一直是好的。
+  （2026-10-28，来源：同上）
+- 语音讲解新增 **`spots.voice`（auto/male/female）**：仍是设备 `speechSynthesis`，只是按性别正则优先挑音色
+  并微调 rate/pitch（`ZQSpeech.speak(text, {pack, onFail})`）。`onFail` 用于「浏览器静默吞掉 speak」时
+  展开文稿，避免按钮停在「朗读中」。
+  （2026-10-28，来源：同上）
+
+## 部署脚本补充（2026-10-28）
+
+- `deploy.ps1` 启动前的环境变量清理**必须按小写分组通用去重**，不能只处理 `Path`：
+  本机实证还出现 `NO_PROXY/no_proxy`、`http_proxy/HTTP_PROXY`、`https_proxy/HTTPS_PROXY` 三组，
+  `Start-Process` 同样抛「已添加项。字典中的关键字」，而报错文案仍把人引向 MySQL。
+  （2026-10-28，来源：同上）
+- `deploy.ps1 reset` 走交互式 `Read-Host` 输 YES，**管道/重定向/node 写 stdin 都喂不进去**（会挂住）。
+  自动化环境恢复干净数据的可行路径：SQL 层 `DROP` 全部业务表 → **先杀掉旧 java 进程** → 重启，
+  `DatabaseBootstrap` 会自动建表并重灌 `seed.sql`。
+  （2026-10-28，来源：同上）
+- **删业务表后必须先停旧进程**：旧 java 持有已删除表的连接，表现是页面全 500、
+  日志只有 `Table 'zhanqi_cloud.xxx' doesn't exist`，很容易误判成「建表脚本坏了」。
+  （2026-10-28，来源：同上）
+- **git 提交前先停服务**：`dist/zhanqi-cloud-server.jar` 被运行中的 java 占用时，
+  `git stash` / `git checkout` 会报 `unable to unlink old 'dist/...jar': Invalid argument`，
+  并把 stash 弄成半完成状态。先 `stop.bat` 再动 git。
+  （2026-10-28，来源：2026-10-28-order-chat-report-booking-overhaul.md）

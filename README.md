@@ -10,7 +10,7 @@
 - [一键部署、地址与默认账号](#quick-start)
 - [后端架构、启动顺序与请求链路](#backend-architecture)
 - [目录结构](#project-layout) · [功能清单](#features)
-- [数据库完整参考：12 张表、140 个字段、全部索引与逻辑关系](#database-reference)
+- [数据库完整参考：17 张表、224 个字段、全部索引与逻辑关系](#database-reference)
 - [游客端说明](#visitor-guide) · [AI 能力](#ai-guide)
 - [全部 HTTP 接口：权限、参数、响应与示例](#api-reference)
 - [常见问题](#faq) · [环境要求](#requirements) · [演示顺序](#demo) · [已知边界](#limitations)
@@ -99,8 +99,8 @@
 
 | 命令 | 作用 |
 | --- | --- |
-| `node tools/smoke-test.js` | **接口冒烟测试**：97 项断言，覆盖认证、打卡、商城下单、AI 问答与防幻觉、权限矩阵、服务器管理，外加一条「图片引用是否都存在」的静态检查 |
-| `node tools/browser-check.js` | **前端实机自检**：用本机 Chrome 无头模式把四端页面真的跑一遍，抓未捕获异常、控制台错误、所有 4xx/5xx 请求，并对关键 DOM 做断言；顺带产出 `docs/screenshots/` 截图 |
+| `node tools/smoke-test.js` | **接口冒烟测试**：141 项断言，覆盖认证、打卡、四类商品下单、拒绝协商、发货物流、聊天、举报与上诉、退款、AI 问答与防幻觉、权限矩阵、服务器管理，外加一条「图片引用是否都存在」的静态检查 |
+| `node tools/browser-check.js` | **前端实机自检**：52 项断言，用本机 Chrome 无头模式把四端页面真的跑一遍，抓未捕获异常、控制台错误、所有 4xx/5xx 请求，并对关键 DOM 做断言（含集章扇形图三条硬断言、语音启停回归）；顺带产出 `docs/screenshots/` 截图 |
 | `node tools/deploy-config-test.js` | **部署配置解析回归测试**：36 项断言。从交付版 `deploy.ps1` / `deploy.sh` 里把读配置的函数**抽出来原样执行**（不是复制一份实现），守住「`app.port` 与 `app.database.port` 同名 `port` 导致配置被写坏」那个老坑 —— 它首次部署不发作、第二次起才发作，Windows 与 macOS 两侧都被独立踩到过 |
 | `node tools/normalize-scripts.js --check` | 脚本编码自检（可挂到提交前钩子） |
 
@@ -135,7 +135,7 @@ flowchart TD
     C --> S[业务 Service / AuthService]
     S --> DB[Db + Tables 白名单]
     DB --> JDBC[JdbcTemplate + HikariCP]
-    JDBC --> MYSQL[(MySQL / zhanqi_cloud / 12 张表)]
+    JDBC --> MYSQL[(MySQL / zhanqi_cloud / 17 张表)]
     S --> AI[AiService / 本地知识库检索]
     AI --> LLM[可选：OpenAI 兼容大模型接口]
 ```
@@ -167,7 +167,11 @@ flowchart TD
 | `auth/AuthService`、`Accounts` | 注册、普通/快捷登录、会话、公开资料、头像和改密；账号规则与脱敏 | `AuthController`、管理服务 |
 | `controller/` | 解析 path/query/JSON body，声明角色，调用服务并组装响应 | 各端通过 HTTP 调用 |
 | `service/TourService` | 点位、集章、活动详情、活动预约/取消和人数统计 | `TourController` |
-| `service/ShopService` | 商品维护、按商品拆单、库存/销量变更、确认/核销/取消、订单归属检查 | `ShopController`、`AdminController` |
+| `service/ShopService` | 商品维护、按商品拆单、库存/销量变更、确认/拒绝协商/发货/完成/取消、商家公开主页、订单归属检查 | `ShopController`、`AdminController` |
+| `service/ChatService` | 用户↔商家会话与消息、输入中状态、在线判定、归属强制 | `ChatController` |
+| `service/ReportService` | 举报提交与查询、管理员处理（停用/下架/退款）、商家上诉与复核、订单退款、商家停用 | `ReportController`、`AdminReportController` |
+| `service/NotificationService` | 处理结果通知落库与已读 | `NotificationController` |
+| `service/LogisticsService` | 按快递公司/运单号生成可复现的物流节点（生产替换点） | `ShopService` |
 | `service/AdminService` | 商家/买家生命周期、平台运营看板、订单与商品的管理端查询和编辑 | `AdminController` |
 | `service/StatService` | 平台公开统计、商家看板、趋势和排行 | `StatController`、管理业务 |
 | `service/SettingService` | 从 `settings` 读配置、按现有键更新配置、过滤公开配置 | 页面初始化、后台设置和其他服务 |
@@ -235,7 +239,7 @@ sequenceDiagram
 | --- | --- | --- |
 | 点位打卡 | `spots` → 校验游客 → 写 `stamps` → 返回集章进度 | `(userId,spotId)` 唯一；普通重复点击返回 `repeated=true`，并发冲突另由唯一键处理 |
 | 商品下单 / 研学民宿商品预约 | `products` → 按购物车每个商品创建一笔 `orders` → 扣 `stock`、增 `sold` | `study/homestay/experience` 仍是订单，需要 `bookDate`；`amount=price×qty`，`people` 是预约资料，不额外乘入金额 |
-| 订单处理 | `pending` → `confirmed` → `used`；也允许 `pending` 直接核销；`pending/confirmed` 可取消 | 取消回补库存并回退销量，订单记录保留；只有 `confirmed/used` 计营收。一次下单允许部分成功，必须处理 `warnings` |
+| 订单处理 | 实物：`pending` → `confirmed` → `shipped` → `completed`；民宿：`confirmed` → `checked_in` → `completed`；研学/农事：`confirmed` → `completed`。商家拒绝只写原因并停在 `pending`，买家点「同意关闭」才 `cancelled`。`used` 仅为历史数据只读兼容 | 取消回补库存并回退销量，订单记录保留；`confirmed/shipped/checked_in/completed/used` 计营收，`cancelled/refunded` 不计。一次下单允许部分成功，必须处理 `warnings` |
 | 文旅活动预约 | `activities` → 检查结束时间、人数和容量 → 写 `activityBookings` | 独立于 `orders`；不创建商品订单、不扣商品库存、不产生交易金额。取消后可重新激活同一条预约 |
 | AI 问答 | 检索 `knowledge` → 未命中明确拒答；命中后可调用大模型润色 → 失败返回本地原文 | 本地检索与行程模板可离线运行；只有外部大模型调用需要联网，不训练模型，也没有向量数据库 |
 
@@ -287,7 +291,7 @@ zhanqi-ai-platform/
 │     │  └─ service/       Auth 之外的业务：Tour · Shop · Stat · Ai · Admin · Server · Discovery · Setting
 │     └─ resources/
 │        ├─ application.yml
-│        ├─ db/schema.sql          12 张表建表脚本（幂等）
+│        ├─ db/schema.sql          17 张表建表脚本（幂等）
 │        ├─ db/seed.sql            演示数据（幂等）
 │        └─ static/
 │           ├─ index.html          统一入口页（二维码 + 连接信息）
@@ -310,7 +314,7 @@ zhanqi-ai-platform/
 │  ├─ deploy.ps1 / deploy.sh       双平台部署 / 停止 / 状态 / 重编译 / 重置核心逻辑
 │  ├─ build.ps1                    编译后端并同步到 dist/
 │  ├─ normalize-scripts.js         脚本编码自检（.bat 纯 ASCII、.ps1 带 BOM）
-│  ├─ smoke-test.js                接口冒烟测试（97 项断言）
+│  ├─ smoke-test.js                接口冒烟测试（141 项断言）
 │  ├─ deploy-config-test.js        部署配置解析回归测试（36 项断言）
 │  └─ browser-check.js             前端实机自检（无头 Chrome + CDP，含截图）
 ├─ docs/
@@ -366,7 +370,7 @@ zhanqi-ai-platform/
 | 连接配置 | 三端入口路径、局域网发现开关与端口、**服务器对外地址**（留空 = 自动探测并避开虚拟网卡） |
 | 手机端连接 | 生成手机端访问二维码，供安卓 App 扫码连接 |
 | AI 设置 | 大模型开关、接口地址、API Key、模型名、系统提示词；**一键测试连接** |
-| 数据总览 | 12 张表的记录数一览，哪张表空了立刻看得出来 |
+| 数据总览 | 17 张表的记录数一览，哪张表空了立刻看得出来 |
 | 数据表浏览 | 查看元数据和记录数；通用增删改查只开放 `spots/activities/activityBookings/knowledge/settings`，返回整表而非分页 |
 
 ### 商户工作台（H5）
@@ -375,7 +379,9 @@ zhanqi-ai-platform/
 | --- | --- |
 | 工作台 | 营收统计、待处理订单、近 7 日营收曲线、商品概览 |
 | 商品管理 | 上架 / 下架 / 编辑 / 删除；文案工具返回三种风格，当前实现为本地模板，不调用大模型 |
-| 订单管理 | 接单（确认）、核销、拒绝，状态流转清晰 |
+| 订单管理 | 接单（确认）、**拒绝（原因必填，等买家决定是否关闭）**、**发货（快递公司 + 运单号）**、办理入住 / 完成；已移除「核销」 |
+| 消息客服 | 买家会话列表、在线/离线/对方输入中、文字/图片/商品卡/订单卡 |
+| 用户举报 | 针对自家店铺的举报与处理结果，可提交上诉（内容 + 凭证）等待平台复核 |
 | 店铺信息 | 店铺资料维护 |
 
 ---
@@ -384,7 +390,7 @@ zhanqi-ai-platform/
 
 ## 五、数据库完整参考
 
-本平台使用 MySQL，默认数据库名为 `zhanqi_cloud`，共 **12 张表、140 个物理字段**（含每表的 `seq` 与 `id`）。所有表使用 InnoDB 和 `utf8mb4`；自动建库时指定 `utf8mb4_general_ci`。业务数据、登录会话与平台配置均存入数据库。
+本平台使用 MySQL，默认数据库名为 `zhanqi_cloud`，共 **17 张表、224 个物理字段**（含每表的 `seq` 与 `id`）。所有表使用 InnoDB 和 `utf8mb4`；自动建库时指定 `utf8mb4_general_ci`。业务数据、登录会话与平台配置均存入数据库。
 
 本节以 `server/src/main/resources/db/schema.sql` 的新建表结构为基准，以 `db/Tables.java` 核对业务可读写列，以 `DatabaseBootstrap.java` 核对旧库补列及重置行为，以 `common/Dict.java` 核对商品分类、订单状态和营收口径。下述 Java 文件均位于 `server/src/main/java/com/zhanqi/cloud/`。旧库保留已有列定义，具体差异见 5.7。
 
@@ -397,7 +403,7 @@ zhanqi-ai-platform/
 | `id` | 字符串逻辑主键，`NOT NULL`、无 SQL 默认值，使用 `PRIMARY KEY (id)`；接口与表间引用都使用它。各表的具体类型和取号方式见下表。 |
 | `seq` | `BIGINT NOT NULL AUTO_INCREMENT`，由 MySQL 生成，各表均有独立的唯一索引 `uk_<表名>_seq`；用于稳定的写入顺序，不是业务关联键，也不等于 `id` 的数字部分。 |
 
-`Db.all()`、`Db.query()` 等列表查询显式使用 `ORDER BY seq`，业务层可以再按时间等条件排序。数据库没有默认返回顺序，不能省略排序后依赖“碰巧按插入顺序返回”。`Tables.java` 不登记 `seq`，`Db` 的读出整理也不向业务对象暴露它；该元数据共登记 **128 个业务字段**，加上 12 个 `seq` 才是 140 个物理字段。
+`Db.all()`、`Db.query()` 等列表查询显式使用 `ORDER BY seq`，业务层可以再按时间等条件排序。数据库没有默认返回顺序，不能省略排序后依赖“碰巧按插入顺序返回”。`Tables.java` 不登记 `seq`，`Db` 的读出整理也不向业务对象暴露它；该元数据共登记 **207 个业务字段**，加上 17 个 `seq` 才是 224 个物理字段。
 
 `Db.nextId()` 按“当前表记录数 + 1”拼接前缀，并继续向后寻找当前表内的空闲 ID。它不是数据库自增主键，也不保证删除后永不复用。业务可显式提供 `id`；例如运行时下单使用 `o` + 毫秒时间戳 + 三位随机数。`sessions` 和 `settings` 没有自动取号前缀，必须显式提供主键。
 
@@ -410,18 +416,23 @@ zhanqi-ai-platform/
 | 表名 | 字段数 | `id` 的 SQL 类型及来源 | 业务作用 |
 | --- | ---: | --- | --- |
 | [`users`](#db-users) | 14 | `VARCHAR(32)`，前缀 `u`，如 `u1` | 游客／买家账号、头像、快捷登录资料。 |
-| [`merchants`](#db-merchants) | 16 | `VARCHAR(32)`，前缀 `m`，如 `m1` | 商家账号、店铺资料与经营类型。 |
+| [`merchants`](#db-merchants) | 18 | `VARCHAR(32)`，前缀 `m`，如 `m1` | 商家账号、店铺资料、经营类型与临时停用期限。 |
 | [`admins`](#db-admins) | 13 | `VARCHAR(32)`，前缀 `ad`，如 `ad1` | 平台管理员，系统预置，不开放自助注册。 |
-| [`spots`](#db-spots) | 10 | `VARCHAR(32)`，前缀 `sp`，如 `sp1` | 林盘游览点位、讲解文稿与印章定义。 |
+| [`spots`](#db-spots) | 11 | `VARCHAR(32)`，前缀 `sp`，如 `sp1` | 林盘游览点位、讲解文稿、语音包与印章定义。 |
 | [`stamps`](#db-stamps) | 8 | `VARCHAR(32)`，前缀 `st`，如 `st1` | 游客对点位的打卡集章记录。 |
-| [`products`](#db-products) | 15 | `VARCHAR(32)`，前缀 `p`，如 `p1` | 农产文创商品，以及研学、民宿、农事体验等可购买项目。 |
-| [`orders`](#db-orders) | 22 | `VARCHAR(32)`，前缀 `o`；下单时另行显式生成 | 商品订单与商品预约订单、金额、状态及快照。 |
+| [`products`](#db-products) | 17 | `VARCHAR(32)`，前缀 `p`，如 `p1` | 农产文创商品，以及研学、民宿、农事体验等可购买项目；含场次与房型配置。 |
+| [`orders`](#db-orders) | 39 | `VARCHAR(32)`，前缀 `o`；下单时另行显式生成 | 商品订单与商品预约订单、金额、状态、快照、拒绝协商、物流与退款。 |
 | [`activities`](#db-activities) | 10 | `VARCHAR(32)`，前缀 `a`，如 `a1` | 村内文旅活动及活动名额上限。 |
 | [`activityBookings`](#db-activitybookings) | 12 | `VARCHAR(32)`，前缀 `ab`，如 `ab1` | 活动报名、参加人数和联系资料，独立于商城订单。 |
 | [`knowledge`](#db-knowledge) | 5 | `VARCHAR(32)`，前缀 `k`，如 `k1` | AI 本地检索和降级回答使用的知识条目。 |
 | [`sessions`](#db-sessions) | 9 | `VARCHAR(64)`，登录服务生成随机令牌 | 三类账号的登录会话与过期时间。 |
 | [`settings`](#db-settings) | 6 | `VARCHAR(64)`，参数键名，如 `site.name` | 字符串键值配置，含分组、标签和更新时间。 |
-| **合计** | **140** | **12 张表** | 含账号、文旅、交易、会话和配置。 |
+| [`chatMessages`](#db-chatmessages) | 12 | `VARCHAR(32)`，前缀 `cm` | 用户↔商家聊天消息，按 `(merchantId,buyerId)` 组成会话。 |
+| [`chatTyping`](#db-chattyping) | 6 | `VARCHAR(64)`，`merchantId_buyerId` | 「对方输入中」状态，4 秒内有效。 |
+| [`reports`](#db-reports) | 27 | `VARCHAR(32)`，前缀 `rp` | 用户举报、管理员处理结果、商家上诉与复核。 |
+| [`orderLogs`](#db-orderlogs) | 7 | `VARCHAR(32)`，前缀 `ol` | 订单操作与协商留痕。 |
+| [`notifications`](#db-notifications) | 10 | `VARCHAR(32)`，前缀 `n` | 处理结果通知（买家/商家各自可见）。 |
+| **合计** | **224** | **17 张表** | 含账号、文旅、交易、会话、聊天、举报与配置。 |
 
 ### 5.3 每张表的完整字段与索引
 
@@ -452,7 +463,7 @@ zhanqi-ai-platform/
 
 <a id="db-merchants"></a>
 
-#### 5.3.2 `merchants`：商家账号（16 字段）
+#### 5.3.2 `merchants`：商家账号（18 字段）
 
 | 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
 | --- | --- | --- | --- |
@@ -470,10 +481,14 @@ zhanqi-ai-platform/
 | `loginCount` | `INT` | 否；`0` | 成功登录次数。 |
 | `lastLoginAt` | `VARCHAR(32)` | 是；NULL | 最近成功登录时间。 |
 | `rememberToken` | `VARCHAR(64)` | 是；NULL | 快捷免密登录令牌。 |
-| `status` | `VARCHAR(16)` | 否；`'active'` | `active` 正常、`disabled` 已停用。 |
+| `status` | `VARCHAR(16)` | 否；`'active'` | `active` 正常、`suspended` 临时停用、`disabled` 永久停用。 |
+| `suspendUntil` | `VARCHAR(32)` | 是；NULL | 临时停用截止时间（ISO 字符串），到期由 `AuthService` 自动恢复为 `active`。 |
+| `suspendReason` | `VARCHAR(255)` | 是；NULL | 停用原因，管理员处理举报时填写。 |
 | `createdAt` | `VARCHAR(32)` | 是；NULL | 注册日期／时间。 |
 
 索引：主键 `PRIMARY (id)`；唯一 `uk_merchants_seq (seq)`、`uk_merchants_account (account)`；普通 `idx_merchants_status (status)`、`idx_merchants_type (type)`。
+
+`suspended` 与 `disabled` 的区别是「会到期」：`AuthService` 在登录与会话解析处都检查 `suspended`，`suspendUntil` 已过则就地写回 `active` 并清空停用字段；两处都会清空该商家的 `sessions`，避免「封了但没封住」。
 
 <a id="db-admins"></a>
 
@@ -499,7 +514,7 @@ zhanqi-ai-platform/
 
 <a id="db-spots"></a>
 
-#### 5.3.4 `spots`：林盘游览点位（10 字段）
+#### 5.3.4 `spots`：林盘游览点位（11 字段）
 
 | 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
 | --- | --- | --- | --- |
@@ -512,7 +527,8 @@ zhanqi-ai-platform/
 | `intro` | `TEXT` | 是；隐式 NULL | 点位介绍。 |
 | `tts` | `TEXT` | 是；隐式 NULL | 语音讲解文稿；前端可交给系统 TTS 朗读。 |
 | `stamp` | `VARCHAR(32)` | 是；NULL | 对应印章名称。 |
-| `stampIcon` | `VARCHAR(8)` | 是；NULL | 印章业务图标，通常为单字。 |
+| `stampIcon` | `VARCHAR(32)` | 是；NULL | 印章图标：`icons.svg` 的图标 key（如 `i-rice`）；兼容旧版单字。 |
+| `voice` | `VARCHAR(16)` | 是；`'auto'` | 讲解语音包：`auto` 自动 / `male` 男声 / `female` 女声。 |
 
 索引：主键 `PRIMARY (id)`；唯一 `uk_spots_seq (seq)`；普通 `idx_spots_type (type)`。
 
@@ -535,7 +551,7 @@ zhanqi-ai-platform/
 
 <a id="db-products"></a>
 
-#### 5.3.6 `products`：商品与可购买的预约项目（15 字段）
+#### 5.3.6 `products`：商品与可购买的预约项目（17 字段）
 
 | 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
 | --- | --- | --- | --- |
@@ -551,6 +567,8 @@ zhanqi-ai-platform/
 | `cover` | `VARCHAR(128)` | 是；NULL | 商品配图的相对路径。 |
 | `status` | `VARCHAR(8)` | 否；`'on'` | `on` 在售、`off` 已下架。 |
 | `tags` | `JSON` | 是；NULL | 卖点标签的字符串数组，如 `["伴手礼","非遗"]`。 |
+| `timeSlots` | `JSON` | 是；NULL | 可预约场次／时段数组，研学与农事体验使用；为空时用分类默认场次。 |
+| `roomTypes` | `JSON` | 是；NULL | 民宿房型数组；为空时用默认房型（标准间／大床房／家庭房）。 |
 | `desc` | `TEXT` | 是；隐式 NULL | 商品介绍正文。 |
 | `intro` | `TEXT` | 是；隐式 NULL | 补充说明。 |
 | `createdAt` | `VARCHAR(32)` | 是；NULL | 商品创建日期／时间。 |
@@ -559,7 +577,7 @@ zhanqi-ai-platform/
 
 <a id="db-orders"></a>
 
-#### 5.3.7 `orders`：商品订单与商品预约订单（22 字段）
+#### 5.3.7 `orders`：商品订单与商品预约订单（39 字段）
 
 一条记录对应一个商品／项目的订购记录。一次提交多个商品会逐项生成多条订单；当前没有独立的订单明细表、支付表或购物车表。
 
@@ -577,18 +595,37 @@ zhanqi-ai-platform/
 | `cover` | `VARCHAR(128)` | 是；NULL | 下单时商品封面相对路径快照。 |
 | `qty` | `INT` | 否；`1` | 订购数量，金额与库存按此列计算；可用于预约项目的数量。 |
 | `amount` | `DECIMAL(10,2)` | 否；`0` | 订单金额，单位为元，创建时由单价 × `qty` 得到。 |
-| `status` | `VARCHAR(16)` | 否；`'pending'` | `pending` 待确认、`confirmed` 已确认、`used` 已核销、`cancelled` 已取消。 |
+| `status` | `VARCHAR(16)` | 否；`'pending'` | `pending` 待确认、`confirmed` 已确认、`shipped` 已发货、`checked_in` 已入住、`completed` 已完成、`used` 已核销（仅历史数据只读兼容）、`cancelled` 已取消、`refunded` 已退款。 |
 | `bookDate` | `VARCHAR(16)` | 是；NULL | 商品预约日期，通常为 `YYYY-MM-DD`。 |
 | `people` | `INT` | 是；NULL | 商品预约填写的人数；与 `qty` 分列保存，不能假定两者相等。 |
 | `address` | `VARCHAR(255)` | 是；NULL | 实物商品收货地址；当前预约下单写空字符串。 |
 | `remark` | `TEXT` | 是；隐式 NULL | 买家备注。 |
 | `createdAt` | `VARCHAR(32)` | 是；NULL | 下单时间。 |
 | `confirmedAt` | `VARCHAR(32)` | 是；NULL | 商家确认时间。 |
-| `verifiedAt` | `VARCHAR(32)` | 是；NULL | 核销时间。 |
+| `verifiedAt` | `VARCHAR(32)` | 是；NULL | 历史核销时间；新流程不再写入，仅兼容旧数据。 |
 | `cancelledAt` | `VARCHAR(32)` | 是；NULL | 取消时间。 |
 | `cancelledBy` | `VARCHAR(16)` | 是；NULL | 取消角色：`buyer`、`merchant` 或 `admin`，不是账号 ID。 |
+| `rejectReason` | `TEXT` | 是；隐式 NULL | 商家拒绝原因（必填后才写入）。 |
+| `rejectStatus` | `VARCHAR(24)` | 是；NULL | `waiting_buyer` 待买家决定、`buyer_agreed` 买家同意关闭、`buyer_disagreed` 买家不同意、协商中。 |
+| `rejectedAt` | `VARCHAR(32)` | 是；NULL | 商家拒绝时间。 |
+| `buyerFeedback` | `TEXT` | 是；隐式 NULL | 买家对拒绝的协商意见。 |
+| `feedbackAt` | `VARCHAR(32)` | 是；NULL | 买家反馈时间。 |
+| `logisticsCompany` | `VARCHAR(64)` | 是；NULL | 快递公司。 |
+| `trackingNo` | `VARCHAR(64)` | 是；NULL | 运单号。 |
+| `logisticsStatus` | `VARCHAR(32)` | 是；NULL | 物流状态，由 `LogisticsService` 按公司与运单号计算。 |
+| `logisticsUpdatedAt` | `VARCHAR(32)` | 是；NULL | 物流状态更新时间。 |
+| `shippedAt` | `VARCHAR(32)` | 是；NULL | 发货时间。 |
+| `bookingSlot` | `VARCHAR(64)` | 是；NULL | 预约场次／时段（研学、农事体验）。 |
+| `checkOutDate` | `VARCHAR(16)` | 是；NULL | 民宿离店日期。 |
+| `roomType` | `VARCHAR(64)` | 是；NULL | 民宿房型。 |
+| `completedAt` | `VARCHAR(32)` | 是；NULL | 完成时间。 |
+| `refundAmount` | `DECIMAL(10,2)` | 是；NULL | 退款金额；未退款为 NULL。 |
+| `refundedAt` | `VARCHAR(32)` | 是；NULL | 退款时间。 |
+| `refundNote` | `VARCHAR(255)` | 是；NULL | 退款说明。 |
 
 索引：主键 `PRIMARY (id)`；唯一 `uk_orders_seq (seq)`；普通 `idx_orders_buyer (buyerId)`、`idx_orders_merchant (merchantId)`、`idx_orders_status (status)`、`idx_orders_created (createdAt)`。
+
+订单状态流转与拒绝协商语义见 5.5；物流节点由 `LogisticsService` 按「发货时间 + 运单号」生成（同一单号结果可复现），退款不回滚库存。
 
 <a id="db-activities"></a>
 
@@ -695,6 +732,118 @@ zhanqi-ai-platform/
 
 本表是一键一行的字符串键值表，不是“把所有设置保存进一个 JSON 对象”。`SettingService` 读取时按用途转换布尔或整数，保存时转为字符串并写入 `updatedAt`；专用批量保存方法仅修改已有键，未知键忽略。公开配置会过滤 `ai.apiKey`、`ai.systemPrompt`、`server.` 前缀；配置分组本身不等于访问权限。真实 AI 密钥只通过后台设置或环境变量注入，不写进源码、README 或种子演示值。
 
+
+<a id="db-chatmessages"></a>
+
+#### 5.3.13 `chatMessages`：用户与商家聊天消息（12 字段）
+
+会话没有独立的会话表：一对 `(merchantId, buyerId)` 就是一段会话。消息发送方由服务端按登录角色写入，前端传入的 `fromRole` 不被采信。
+
+| 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
+| --- | --- | --- | --- |
+| `seq` | `BIGINT` | 否；无，`AUTO_INCREMENT` | 写入顺序号。 |
+| `id` | `VARCHAR(32)` | 否；无 | 消息逻辑主键，前缀 `cm`。 |
+| `merchantId` | `VARCHAR(32)` | 否；无 | 会话所属商家 `merchants.id`。 |
+| `buyerId` | `VARCHAR(32)` | 否；无 | 会话所属买家 `users.id`。 |
+| `fromRole` | `VARCHAR(16)` | 否；无 | 发送方：`buyer` / `merchant`。 |
+| `type` | `VARCHAR(16)` | 否；`'text'` | `text` 文本 / `product` 商品卡 / `order` 订单卡 / `image` 图片。 |
+| `text` | `TEXT` | 是；隐式 NULL | 文本内容，接口限制 2000 字。 |
+| `productId` | `VARCHAR(32)` | 是；NULL | 商品卡指向的商品；必须属于本会话商家。 |
+| `orderId` | `VARCHAR(32)` | 是；NULL | 订单卡指向的订单；必须属于本会话商家与买家。 |
+| `media` | `MEDIUMTEXT` | 是；隐式 NULL | 图片 dataURL（前端已压缩，单张 ≤400KB）。 |
+| `createdAt` | `VARCHAR(32)` | 是；NULL | 发送时间。 |
+| `readAt` | `VARCHAR(32)` | 是；NULL | 对方阅读时间；拉取会话时顺手写入，用于算未读数。 |
+
+索引：主键 `PRIMARY (id)`；唯一 `uk_chatMessages_seq (seq)`；普通 `idx_chat_merchant_buyer (merchantId, buyerId)`、`idx_chat_buyer (buyerId)`、`idx_chat_created (createdAt)`。
+
+<a id="db-chattyping"></a>
+
+#### 5.3.14 `chatTyping`：「对方输入中」状态（6 字段）
+
+| 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
+| --- | --- | --- | --- |
+| `seq` | `BIGINT` | 否；无，`AUTO_INCREMENT` | 写入顺序号。 |
+| `id` | `VARCHAR(64)` | 否；无 | 主键，固定为 `merchantId + "_" + buyerId`。 |
+| `merchantId` | `VARCHAR(32)` | 否；无 | 商家 id。 |
+| `buyerId` | `VARCHAR(32)` | 否；无 | 买家 id。 |
+| `role` | `VARCHAR(16)` | 是；NULL | 正在输入的一方：`buyer` / `merchant`。 |
+| `at` | `BIGINT` | 是；NULL | 最后输入时间（毫秒时间戳）；4 秒内视为输入中。 |
+
+索引：主键 `PRIMARY (id)`；唯一 `uk_chatTyping_seq (seq)`。
+
+<a id="db-reports"></a>
+
+#### 5.3.15 `reports`：用户举报与商家上诉（27 字段）
+
+一条记录承载「用户提交 → 管理员处理 → 商家上诉 → 管理员复核」的完整闭环；处理结果与上诉结论都留在同一行，便于追溯。
+
+| 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
+| --- | --- | --- | --- |
+| `seq` | `BIGINT` | 否；无，`AUTO_INCREMENT` | 写入顺序号。 |
+| `id` | `VARCHAR(32)` | 否；无 | 举报逻辑主键，前缀 `rp`。 |
+| `buyerId` | `VARCHAR(32)` | 否；无 | 举报人 `users.id`。 |
+| `buyerName` | `VARCHAR(64)` | 是；NULL | 举报人昵称快照。 |
+| `merchantId` | `VARCHAR(32)` | 否；无 | 被举报商家 `merchants.id`。 |
+| `merchantName` | `VARCHAR(64)` | 是；NULL | 商家名称快照。 |
+| `category` | `VARCHAR(24)` | 否；无 | `service` / `product` / `logistics` / `money` / `fraud`。 |
+| `reason` | `VARCHAR(64)` | 是；NULL | 分类下的细因由。 |
+| `content` | `TEXT` | 是；隐式 NULL | 举报内容，接口限制 1000 字。 |
+| `evidence` | `JSON` | 是；NULL | 凭证图片 dataURL 数组，最多 6 张、单张 ≤400KB。 |
+| `orderId` | `VARCHAR(32)` | 是；NULL | 关联订单；必须属于该商家与该举报人。 |
+| `productId` | `VARCHAR(32)` | 是；NULL | 关联商品；必须属于该商家。 |
+| `status` | `VARCHAR(24)` | 否；`'pending'` | `pending` 待处理 / `resolved` 已处理 / `appealed` 上诉审核中 / `appeal_resolved` 上诉已处理。 |
+| `result` | `TEXT` | 是；隐式 NULL | 管理员处理结果（会展示给举报用户）。 |
+| `resultAction` | `VARCHAR(32)` | 是；NULL | `suspend_temp` / `suspend_permanent` / `product_off` / `refund` / `warning` / `none`。 |
+| `adminId` | `VARCHAR(32)` | 是；NULL | 处理管理员 `admins.id`。 |
+| `adminName` | `VARCHAR(64)` | 是；NULL | 处理管理员姓名快照。 |
+| `handledAt` | `VARCHAR(32)` | 是；NULL | 处理时间。 |
+| `appealContent` | `TEXT` | 是；隐式 NULL | 商家上诉内容。 |
+| `appealEvidence` | `JSON` | 是；NULL | 上诉凭证 dataURL 数组。 |
+| `appealAt` | `VARCHAR(32)` | 是；NULL | 上诉时间；非空表示已上诉过（只允许一次）。 |
+| `appealStatus` | `VARCHAR(24)` | 是；NULL | `pending` / `upheld` 维持 / `rejected` 改判。 |
+| `appealResult` | `TEXT` | 是；隐式 NULL | 上诉复核结果。 |
+| `appealHandledAt` | `VARCHAR(32)` | 是；NULL | 复核时间。 |
+| `notice` | `TEXT` | 是；隐式 NULL | 给用户的处理结果通知文案。 |
+| `createdAt` | `VARCHAR(32)` | 是；NULL | 提交时间。 |
+| `updatedAt` | `VARCHAR(32)` | 是；NULL | 最近更新时间。 |
+
+索引：主键 `PRIMARY (id)`；唯一 `uk_reports_seq (seq)`；普通 `idx_reports_buyer (buyerId)`、`idx_reports_merchant (merchantId)`、`idx_reports_status (status)`。
+
+<a id="db-orderlogs"></a>
+
+#### 5.3.16 `orderLogs`：订单操作与协商留痕（7 字段）
+
+| 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
+| --- | --- | --- | --- |
+| `seq` | `BIGINT` | 否；无，`AUTO_INCREMENT` | 写入顺序号。 |
+| `id` | `VARCHAR(32)` | 否；无 | 记录主键，前缀 `ol`。 |
+| `orderId` | `VARCHAR(32)` | 否；无 | 所属订单 `orders.id`。 |
+| `role` | `VARCHAR(16)` | 是；NULL | 操作方：`buyer` / `merchant` / `admin` / `system`。 |
+| `action` | `VARCHAR(32)` | 是；NULL | 动作标识：`reject` / `buyer_agree` / `buyer_disagree` / `ship` / `complete` / `refund` 等。 |
+| `content` | `TEXT` | 是；隐式 NULL | 可读的操作内容（含拒绝原因、买家意见）。 |
+| `createdAt` | `VARCHAR(32)` | 是；NULL | 操作时间。 |
+
+索引：主键 `PRIMARY (id)`；唯一 `uk_orderLogs_seq (seq)`；普通 `idx_orderLogs_order (orderId)`。
+
+<a id="db-notifications"></a>
+
+#### 5.3.17 `notifications`：处理结果通知（10 字段）
+
+| 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
+| --- | --- | --- | --- |
+| `seq` | `BIGINT` | 否；无，`AUTO_INCREMENT` | 写入顺序号。 |
+| `id` | `VARCHAR(32)` | 否；无 | 通知主键，前缀 `n`。 |
+| `userId` | `VARCHAR(32)` | 是；NULL | 接收账号 id（买家用 `users.id`，商家用 `merchants.id`）。 |
+| `role` | `VARCHAR(16)` | 是；NULL | `buyer` / `merchant`；必须与 `userId` 一起解释。 |
+| `title` | `VARCHAR(128)` | 是；NULL | 通知标题。 |
+| `content` | `TEXT` | 是；隐式 NULL | 通知正文。 |
+| `type` | `VARCHAR(24)` | 是；NULL | `report` / `order` / `system`。 |
+| `refId` | `VARCHAR(32)` | 是；NULL | 关联业务 id（举报 id、订单 id 等）。 |
+| `readAt` | `VARCHAR(32)` | 是；NULL | 阅读时间；空表示未读。 |
+| `createdAt` | `VARCHAR(32)` | 是；NULL | 创建时间。 |
+
+索引：主键 `PRIMARY (id)`；唯一 `uk_notifications_seq (seq)`；普通 `idx_notifications_user (userId, role)`。
+
 ### 5.4 表关系、唯一约束与删除语义
 
 **当前数据库没有声明任何 `FOREIGN KEY`，也没有数据库级联删除。** 下表是业务代码使用的逻辑关联；除主键、唯一键及列的 NULL 约束外，MySQL 不会自动验证引用对象是否存在。
@@ -728,13 +877,23 @@ zhanqi-ai-platform/
 | 分类／类型 | `goods` 生成 `type=shop`；`study`、`homestay`、`experience` 生成 `type=booking` | 不使用商品分类或订单 `type`。 |
 | 商家、金额 | 保存 `merchantId`、`amount`，影响订单和经营统计。 | 不含商家、商品或金额列，不计为商城收入。 |
 | 数量与名额 | 库存和金额按 `qty` 计算；预约另存 `bookDate`、`people`。 | 每条记录保存 `people`，累计所有非 `cancelled` 记录的人数校验活动容量。 |
-| 状态 | `pending`、`confirmed`、`used`、`cancelled` | `pending`、`confirmed`、`cancelled` |
+| 状态 | 商品单 `pending/confirmed/shipped/completed`；民宿多 `checked_in`；另有 `cancelled/refunded`，`used` 仅历史兼容 | `pending`、`confirmed`、`cancelled` |
 | 取消／重报 | 取消保留订单，回补库存并回减销量，记录取消时间和角色。 | 取消保留报名并释放名额；同一游客重报时更新原记录。 |
-| 管理位置 | 商家工作台与平台订单管理。 | PC 后台文旅活动的人员管理及活动预约列表。 |
+| 管理位置 | 商家工作台（接单/拒绝/发货/入住/完成）、平台订单管理（退款）、举报处理可退款。 | PC 后台文旅活动的人员管理及活动预约列表。 |
 
 `Dict.CATEGORY_TEXT` 的正式中文名称为：`goods` 农产文创、`study` 研学课程、`homestay` 民宿住宿、`experience` 农事体验。`Dict.BOOKING_CATEGORIES` 只包含后三类，不能因为活动报名也叫“预约”就写入 `orders.type=booking`。
 
-`Dict.STATUS_TEXT` 的订单中文名称为：`pending` 待确认、`confirmed` 已确认、`used` 已核销、`cancelled` 已取消。常规流程为待确认 → 已确认 → 已核销；当前商家核销也允许从待确认直接进入已核销。待确认和已确认可取消，已核销和已取消不能走普通取消流程。**营收只累计 `confirmed` 和 `used` 状态订单的 `amount`**，不代表已接入支付网关或实际到账。
+`Dict.STATUS_TEXT` 的订单中文名称为：`pending` 待确认、`confirmed` 已确认、`shipped` 已发货、`checked_in` 已入住、`completed` 已完成、`used` 已核销（**仅历史数据只读兼容**）、`cancelled` 已取消、`refunded` 已退款。
+
+三条流程：
+
+- **实物（goods）**：`pending` →（商家接单）`confirmed` →（商家发货，填快递公司 + 运单号）`shipped` →（商家完成）`completed`；
+- **民宿（homestay）**：`confirmed` →（办理入住）`checked_in` →（完成）`completed`；
+- **研学 / 农事（study / experience）**：`confirmed` →（完成）`completed`。
+
+**拒绝不是取消**：商家拒绝只写 `rejectReason` 并把 `rejectStatus` 置为 `waiting_buyer`，订单仍停在 `pending`；买家点「同意关闭」才转为 `cancelled` 并回滚库存，点「不同意」则 `buyer_disagreed` 进入协商、订单保留。全过程写 `orderLogs`。
+
+`pending/confirmed` 可取消（买家或管理员），已完成与已退款不可取消。**营收累计 `confirmed/shipped/checked_in/completed/used` 状态订单的 `amount`，`cancelled/refunded` 不计**，不代表已接入支付网关或实际到账。原「商家核销」接口已删除（`POST /api/shop/orders/{id}/verify` 返回 404）。
 
 商家经营类型字典为农产品农户、非遗手艺人、民宿经营者、餐饮农家乐、文创商户、其他，存于 `merchants.type`。三张账号表的 `status` 使用 `active`／`disabled`，不要与商品 `on`／`off`、订单状态混用。
 
@@ -742,7 +901,7 @@ zhanqi-ai-platform/
 
 ### 5.6 JSON、金额、时间和图片的存储约定
 
-**JSON 列只有两列**：`products.tags` 和 `knowledge.tags`，均为可空 `JSON`，业务含义是字符串数组。`Tables.Meta.jsonColumns` 也只登记这两处；`Db` 写入时序列化集合，读出时整理为字符串列表。SQL NULL 读出后会表现为空列表，`Json` 对文本格式另有容错处理。`settings.value` 是 `TEXT` 字符串，账号 `avatar` 是 `TEXT` dataURL，都不是 JSON 列。
+**JSON 列共有六列**：`products.tags`、`products.timeSlots`、`products.roomTypes`、`knowledge.tags`、`reports.evidence`、`reports.appealEvidence`（后两者是 dataURL 字符串数组）。`Tables.Meta.jsonColumns` 与之一一对应；`Db` 写入时序列化集合，读出时整理为字符串列表。SQL NULL 读出后会表现为空列表，`Json` 对文本格式另有容错处理。`settings.value` 是 `TEXT` 字符串，账号 `avatar` 是 `TEXT` dataURL，都不是 JSON 列。
 
 **金额列只有两列**：`products.price` 与 `orders.amount`，均为 `DECIMAL(10,2) NOT NULL DEFAULT 0`，单位为元。数据库保留两位小数，`Db` 会将 JDBC 读到的 `BigDecimal` 整理为接口数值，因此 JSON 可显示 `68` 或 `68.5`，不会强制输出 `68.00`。当前下单金额使用数值乘法计算后写库；生产应统一十进制计算与舍入规则，不能仅因 SQL 是 DECIMAL 就认为整个计算链路都使用了 `BigDecimal`。
 
@@ -751,8 +910,8 @@ zhanqi-ai-platform/
 | SQL 类型 | 涉及字段 | 常见内容 |
 | --- | --- | --- |
 | `VARCHAR(16)` | `merchants.since` | `YYYY-MM` 入驻年月。 |
-| `VARCHAR(16)` | `activities.date`／`endDate`、`orders.bookDate`、`activityBookings.date` | `YYYY-MM-DD` 日期。 |
-| `VARCHAR(32)` | 各账号表 `lastLoginAt`／`createdAt`，`products.createdAt`，`orders.createdAt`／`confirmedAt`／`verifiedAt`／`cancelledAt`，`stamps.at`，`activityBookings.createdAt`，`sessions.createdAt`，`settings.updatedAt` | 种子数据的日期或数据库生成的时间字符串，以及运行时 `Instant.now().toString()` 生成的 ISO 时间串。 |
+| `VARCHAR(16)` | `activities.date`／`endDate`、`orders.bookDate`、`orders.checkOutDate`、`activityBookings.date` | `YYYY-MM-DD` 日期。 |
+| `VARCHAR(32)` | 各账号表 `lastLoginAt`／`createdAt`，`merchants.suspendUntil`，`products.createdAt`，`orders.createdAt`／`confirmedAt`／`verifiedAt`／`cancelledAt`／`rejectedAt`／`feedbackAt`／`shippedAt`／`logisticsUpdatedAt`／`completedAt`／`refundedAt`，`orderLogs.createdAt`，`reports.createdAt`／`updatedAt`／`handledAt`／`appealAt`／`appealHandledAt`，`notifications.createdAt`／`readAt`，`chatMessages.createdAt`／`readAt`，`stamps.at`，`activityBookings.createdAt`，`sessions.createdAt`，`settings.updatedAt` | 种子数据的日期或数据库生成的时间字符串，以及运行时 `Instant.now().toString()` 生成的 ISO 时间串。 |
 | `BIGINT` | `sessions.expiresAt` | Unix 毫秒时间戳，用于会话过期比较；它是“时间用 VARCHAR”的明确例外。 |
 
 这样能直接兼容演示数据的纯日期与 ISO 字符串，减少部署时的转换步骤。代价是数据库不验证这些字符串是否真为日期，混用格式与时区也会影响比较、排序和统计。生产应统一时间精度、时区及数据库时间类型后迁移，而不是只改某一列的类型。
@@ -765,10 +924,10 @@ zhanqi-ai-platform/
 
 1. 先连接 MySQL 服务，执行 `CREATE DATABASE IF NOT EXISTS`；部署机不需要手工建库或安装额外的 SQL 客户端。
 2. `reset-on-start` 为 false 时直接保留原表；若显式开启重置，则先按下述清单删除表。
-3. 执行 `db/schema.sql`，其中全部使用 `CREATE TABLE IF NOT EXISTS`，只补齐缺失的表，包括后来增加的 `activityBookings`。
-4. 查询 `information_schema.COLUMNS`，为旧表补缺失列；**当前只显式补下面四列**。
+3. 执行 `db/schema.sql`，其中全部使用 `CREATE TABLE IF NOT EXISTS`，只补齐缺失的表，包括后来增加的 `activityBookings`、`chatMessages`、`chatTyping`、`reports`、`orderLogs`、`notifications`。
+4. 查询 `information_schema.COLUMNS`，为旧表补缺失列；**当前显式补下面这批列**（含本轮新增的订单、商品、点位与商家字段）。
 5. `seed-on-start` 开启时执行 `db/seed.sql`，通过 `INSERT IGNORE` 补种子记录；主键或唯一键冲突的现有记录不被覆盖。
-6. 生成启动摘要；摘要只列 `users`、`merchants`、`spots`、`products`、`orders`、`knowledge` 六张表的记录数，不能据此推断库里只有六张表。后台全量表计数清单包含全部 12 张表。
+6. 生成启动摘要；摘要只列 `users`、`merchants`、`spots`、`products`、`orders`、`knowledge` 六张表的记录数，不能据此推断库里只有六张表。后台全量表计数清单包含全部 17 张表。
 
 | 旧库补列目标 | `ensureColumn()` 使用的列定义 | 与新表 DDL 的对应关系 |
 | --- | --- | --- |
@@ -776,6 +935,12 @@ zhanqi-ai-platform/
 | `merchants.avatar` | `TEXT NULL COMMENT '自定义头像 dataURL'` | 新表写为 `TEXT DEFAULT NULL`，均允许 NULL。 |
 | `admins.avatar` | `TEXT NULL COMMENT '自定义头像 dataURL'` | 新表写为 `TEXT DEFAULT NULL`，均允许 NULL。 |
 | `activities.capacity` | `INT NULL DEFAULT 30 COMMENT '可预约人数上限'` | 新表写为 `INT DEFAULT 30`，本版两者的 NULL 与默认值语义相同。 |
+| `spots.voice` | `VARCHAR(16) NULL DEFAULT 'auto'` | 语音包；旧点位按自动音色处理。 |
+| `products.timeSlots` | `JSON NULL COMMENT '可预约场次/时段数组'` | 为空时使用分类默认场次。 |
+| `products.roomTypes` | `JSON NULL COMMENT '民宿房型数组'` | 为空时使用默认房型。 |
+| `merchants.suspendUntil` | `VARCHAR(32) NULL COMMENT '临时停用截止时间'` | 只有 `suspended` 时有值；到期自动恢复。 |
+| `merchants.suspendReason` | `VARCHAR(255) NULL COMMENT '停用原因'` | 管理员处理举报时写入。 |
+| `orders.*`（17 列） | 拒绝协商 / 物流 / 预约扩展 / 退款各列 | 见 5.3.7；旧订单这些列为 NULL，前端按空值兜底。 |
 
 **新库 `activities.capacity` 的默认值确定为 30，且不是 `NOT NULL`。** 字段表记载的是新建表定义；补列函数的 `definition` 是独立维护的升级 DDL，后续维护不能假定两处文本永远一致。列已存在时 `ensureColumn()` 直接返回，不修改其类型、默认值、NULL 属性或数据，因此历史版本已建的不同定义会继续保留。
 
@@ -783,11 +948,12 @@ zhanqi-ai-platform/
 
 **reset 是明确的破坏性重置，和普通幂等启动不同。** 正式演示前需恢复种子数据时，在 Windows 使用 `reset.bat`，macOS／Linux 使用 `./reset.sh`，按提示输入 `YES`。部署脚本以一次性重置配置启动，随后将重置开关恢复为 false；不要照旧说明手工修改真实本机配置文件来重置。
 
-`DatabaseBootstrap.dropAll()` 当前按以下顺序执行 `DROP TABLE IF EXISTS`，**12 张表全部在清单中**：
+`DatabaseBootstrap.dropAll()` 当前按以下顺序执行 `DROP TABLE IF EXISTS`，**17 张表全部在清单中**：
 
 ```text
-settings → sessions → knowledge → activityBookings → activities → orders
-→ products → stamps → spots → admins → merchants → users
+notifications → orderLogs → reports → chatTyping → chatMessages
+→ settings → sessions → knowledge → activityBookings → activities
+→ orders → products → stamps → spots → admins → merchants → users
 ```
 
 实现会在删除前后切换 `FOREIGN_KEY_CHECKS`；本库本身没有外键，保留此顺序是为了可读性。然后重新运行 schema、补列和启用的 seed 脚本。reset 会删除订单、活动报名、会话、配置及账号等原数据，并重新建立自增序列；种子脚本没有给 `sessions` 和 `activityBookings` 插入演示记录，仅完成建表和种子灌入时这两表为空。**订单日常不可删除与管理员确认后的整库演示重置是两个不同场景。**
@@ -955,7 +1121,7 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 - `qrMobile/qrMerchant/qrAdmin`：PNG data URL，生成失败返回空串。
 - `discovery`：`state,port,probeWord,broadcastCount,probeCount,lastBroadcastAt`，默认 UDP 端口 47820，探测词 `ZHANQI_DISCOVER`；这是发现服务状态，不是新增 HTTP 路由。
 - `settings` 的值为字符串；公开设置并非只含平台名称，例如 `link.*`、`ai.enabled`、`ai.baseUrl`、`ai.model` 也未被上述前缀过滤。
-- 分类：`goods` 农产文创、`study` 研学课程、`homestay` 民宿住宿、`experience` 农事体验。后三种属于商城预约类。订单状态：`pending/confirmed/used/cancelled` 对应待确认/已确认/已核销/已取消。
+- 分类：`goods` 农产文创、`study` 研学课程、`homestay` 民宿住宿、`experience` 农事体验。后三种属于商城预约类。订单状态：`pending/confirmed/shipped/checked_in/completed/cancelled/refunded` 对应待确认/已确认/已发货/已入住/已完成/已取消/已退款；`used`（已核销）仅为历史数据只读兼容。
 - 商家类型：农产品农户、非遗手艺人、民宿经营者、餐饮农家乐、文创商户、其他。行程偏好集合：非遗、手工、农事、亲子、美食、摄影、历史、休闲；公开接口排序后返回。
 
 <a id="api-auth"></a>
@@ -1016,7 +1182,7 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 
 <a id="api-shop"></a>
 
-### 8.5 商城、预约商品与订单（ShopController：11 个方法）
+### 8.5 商城、预约商品与订单（ShopController：17 个方法）
 
 | Method | 完整 path | 权限 | 输入/默认值 | 返回字段、作用与范围 |
 | --- | --- | --- | --- | --- |
@@ -1029,8 +1195,15 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 | POST | `/api/shop/orders` | buyer，方法注解 | B **S2 下单体** | `orders[],message,warnings[]`；每个成功条目单独建一笔 pending 订单、扣 qty 库存并加 qty 销量；全失败 400，部分成功 200；身份和价格从服务端取 |
 | GET | `/api/shop/orders` | buyer/merchant，方法注解 | Q `status=""`，非空精确筛选 | `orders[],statusText,viewerRole`；仅当前买家订单或当前商家名下订单，按 createdAt 倒序；管理员应使用后台订单接口 |
 | POST | `/api/shop/orders/{id}/confirm` | merchant，方法注解；手动归属检查 | P `id`；无 body | `message`；本人订单且 pending 才能变 confirmed，并写 confirmedAt；越权/不存在 404、状态不符 400 |
-| POST | `/api/shop/orders/{id}/verify` | merchant，方法注解；手动归属检查 | P `id`；无 body | `message`；本人订单 pending **或** confirmed 均可直接变 used，写 verifiedAt；无核销码输入、无日期到期检查；越权/不存在 404 |
-| POST | `/api/shop/orders/{id}/cancel` | buyer/merchant，方法注解；手动归属检查 | P `id`；无 body，传 reason 也不处理 | `message`；买家仅本人、商家仅名下订单，越权 403、不存在 404；只允许 pending/confirmed，回滚库存/销量并写 cancelledAt/cancelledBy；商品已删除则跳过回滚；管理员须走后台路径 |
+| GET | `/api/shop/merchants/{id}` | 公开，无注解 | P `id` 商家 id | `merchant,products[]`；只返回店铺公开资料与在售商品（被停用商家返回空商品）；不存在 404 |
+| GET | `/api/shop/orders/{id}` | buyer/merchant/admin，方法注解；方法内归属检查 | P `id` | `order`；含 `merchant,buyerPhone,logs[],logistics` 与 `canConfirm/canReject/canShip/canCheckIn/canComplete/canCancel/canDecide` 标志；买家仅本人、商家仅名下、管理员全部，越权 403 |
+| POST | `/api/shop/orders/{id}/reject` | merchant，方法注解；手动归属检查 | B `reason` **必填**（≤500 字） | `message`；只允许 pending；写 **rejectReason + rejectStatus=waiting_buyer**，**订单仍为 pending 不关闭**；写 orderLogs |
+| POST | `/api/shop/orders/{id}/buyer-decision` | buyer，方法注解；手动归属检查 | B `agree`（布尔）+`reason`（≤500 字） | `message`；仅当 `rejectStatus=waiting_buyer` 可调用；`agree=true` → cancelled + 回滚库存；`false` → buyer_disagreed 进入协商、订单保留 |
+| POST | `/api/shop/orders/{id}/ship` | merchant，方法注解；手动归属检查 | B `company`,`trackingNo` **均必填** | `message`；仅 confirmed 且 category=goods；写 logisticsCompany/trackingNo/shippedAt/logisticsStatus，状态变 shipped；预约类 400 |
+| GET | `/api/shop/orders/{id}/logistics` | buyer/merchant/admin，方法注解；方法内归属检查 | P `id` | `hasLogistics,company,trackingNo,status,statusText,progress(0-3),nodes[{status,text,time,done,current}],demo`；无运单号时 hasLogistics=false |
+| POST | `/api/shop/orders/{id}/checkin` | merchant，方法注解；手动归属检查 | P `id` | `message`；仅 homestay 且 confirmed → checked_in |
+| POST | `/api/shop/orders/{id}/complete` | merchant，方法注解；手动归属检查 | P `id` | `message`；shipped（实物）/checked_in（民宿）/confirmed（研学·农事）→ completed，写 completedAt |
+| POST | `/api/shop/orders/{id}/cancel` | **buyer**，方法注解；手动归属检查 | P `id` | `message`；买家仅本人，越权 403、不存在 404；只允许 pending/confirmed；回滚库存/销量并写 cancelledAt/cancelledBy；**商家不再走此接口（必须用 reject 填原因）**，管理员走后台路径 |
 
 **S1 商家商品体：**
 
@@ -1056,13 +1229,61 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 | `items[].productId` | 商品 id，缺失转空串并按不存在/下架加入 warnings；必须当前在售 |
 | `items[].qty` | 数字或数字字符串；默认/解析失败→1，转 int 后至少取 1；按 qty 校验库存 |
 | `bookDate` | 默认空串；study/homestay/experience 条目必须非空；当前不校验日期格式、过去日期或分日库存 |
-| `people` | 默认/解析失败→1，转 int；预约单保存此值，当前没有人数范围校验；**金额和扣库存依据 qty，不依据 people** |
+| `people` | 默认/解析失败→1，转 int；预约单保存此值；**预约类（study/homestay/experience）金额与扣库存按人数（qty）计算**，民宿按 1 间扣 |
 | `address` | 默认空串；goods 条目必须非空；预约单固定保存空地址，实物单 bookDate/people 保存 null |
 | `remark` | 默认空串；创建时无 200 字校验（后台编辑接口才有限长校验） |
+| `bookingSlot` | 默认空串；研学/农事必填之一，须在商品 `timeSlots` 内（未配置时用分类默认场次） |
+| `checkOutDate` | 默认空串；民宿必填，须晚于 `bookDate`；金额按「单价 × 晚数」计算，库存按 1 间扣 |
+| `roomType` | 默认空串；民宿必填，须在商品 `roomTypes` 内（未配置时用默认房型） |
 
 同一次请求的 `bookDate,people,address,remark` 由所有条目共用。可以混合实物与预约商品；每个成功条目各生成订单，金额为商品当前单价×qty，不产生父订单，不接真实支付。缺货、下架、缺日期、缺地址逐项写进 `warnings`；至少一项成功时保留已成功订单并返回其余失败原因。业务校验不是整批原子成功，也没有请求幂等键；不要盲目重试整批，否则可能重复下单。数据库异常中途发生时也不承诺回滚此前写入。
 
-商品装饰字段为 `categoryText,isBooking,merchantName`；商家已删除时 merchantName 为“未知商户”。商城订单返回原始订单列再加 `statusText,categoryText,merchantName,merchantPhone`。确认/核销仅改状态与时间，取消才回滚库存；used/cancelled 不可通过商城再次取消。预约商品订单与 8.4 的活动预约分别存 `orders` 和 `activityBookings`，状态、人数、库存互不联动。
+商品装饰字段为 `categoryText,isBooking,merchantName,merchant,timeSlots,roomTypes`；商家已删除时 merchantName 为“未知商户”。商城订单返回原始订单列再加 `statusText,categoryText,typeText,merchantName,merchantPhone,merchant,rejectStatusText,logisticsStatusText` 与 `can*` 动作标志。确认/发货/入住/完成只改状态与时间；取消与「买家同意关闭」才回滚库存；cancelled/refunded/completed 不能再次取消。**商品下架或商家被停用后，公开列表与下单都会拒绝**。预约商品订单与 8.4 的活动预约分别存 `orders` 和 `activityBookings`，状态、人数、库存互不联动。
+
+### 8.5a 聊天与消息（ChatController：任一端登录可用）
+
+| Method | 完整 path | 权限 | 输入/默认值 | 返回字段、作用与范围 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/chat/threads` | buyer/merchant，方法注解 | — | `threads[]`；买家得到「聊过的商家」，商家得到「聊过的买家」，含 `lastAt,lastText,lastType,unread,online`；无消息时为空数组 |
+| GET | `/api/chat/messages` | buyer/merchant，方法注解 | Q `merchantId,buyerId` | `messages[],peerOnline,peerTyping,merchant,buyer`；**buyer 的 buyerId、merchant 的 merchantId 一律由服务端用登录身份覆盖**；商家必须传 buyerId；拉取时把对方未读消息写 readAt |
+| POST | `/api/chat/messages` | buyer/merchant，方法注解 | B `type,text,productId,orderId,media` | `message`；`type` 仅 `text/product/order/image`；`fromRole` 由服务端决定；商品须属该商家、订单须属该商家与该买家；文本 ≤2000 字、图片 data:image 且 ≤400000 字符 |
+| POST | `/api/chat/typing` | buyer/merchant，方法注解 | B `merchantId,buyerId` | `message`；按 `merchantId_buyerId` 写一行，4 秒内算「对方输入中」 |
+| GET | `/api/chat/peer` | buyer，方法注解 | Q `merchantId` | `merchant,online`；商家展示页/客服按钮用它决定「在线中/离线中」 |
+
+会话身份就是 `(merchantId, buyerId)`，没有独立会话表；管理员不参与聊天（仅能通过举报详情看凭证）。
+
+<a id="api-reports"></a>
+
+### 8.5b 举报中心与商家上诉（ReportController）
+
+| Method | 完整 path | 权限 | 输入/默认值 | 返回字段、作用与范围 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/reports/categories` | 公开，无注解 | — | `categories[{key,text,reasons[]}]`；5 类违规与各自细因由，由 `Dict.REPORT_REASONS` 统一下发 |
+| POST | `/api/reports` | buyer，方法注解 | B `merchantId,category,reason,content,evidence[]` | `report,message`；商家须存在且未永久停用；`category` 白名单、`reason` 须在该分类选项内；`content` ≤1000 字；`evidence` ≤6 张 data:image 且单张 ≤400000；`orderId/productId` 传了则校验归属 |
+| GET | `/api/reports/mine` | buyer，方法注解 | — | `reports,list,total,statusText,categories`；本人举报倒序，含处理结果与通知 |
+| GET | `/api/reports/merchant` | merchant，方法注解 | — | `reports,list,total,statusText,appealStatusText`；针对本店的举报 |
+| GET | `/api/reports/{id}` | buyer/merchant/admin，方法注解；方法内归属检查 | P `id` | `report`；买家仅本人、商家仅被举报方、管理员全部；越权 403 |
+| POST | `/api/reports/{id}/appeal` | merchant，方法注解 | B `content,evidence[]` | `message`；仅被举报商家、仅 `status=resolved` 且未上诉过；写 appeal* 并把状态置 `appealed` |
+
+<a id="api-notifications"></a>
+
+### 8.5c 处理结果通知（NotificationController）
+
+| Method | 完整 path | 权限 | 输入/默认值 | 返回字段、作用与范围 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/notifications` | buyer/merchant，方法注解 | — | `notifications,list,unread`；只返回本人通知，倒序 |
+| POST | `/api/notifications/{id}/read` | buyer/merchant，方法注解 | P `id` | 标记已读；归属不符 403 |
+
+### 8.5d 管理员举报处理（AdminReportController，class 级 admin）
+
+| Method | 完整 path | 权限 | 输入/默认值 | 返回字段、作用与范围 |
+| --- | --- | --- | --- | --- |
+| GET | `/api/admin/reports` | admin | Q `status="",keyword=""` | `reports,list,total,statusText,appealStatusText,categories,actions`；含双方快照与关联订单/商品摘要 |
+| GET | `/api/admin/reports/{id}` | admin | P `id` | `report,buyer,merchant,actions`；含完整凭证与联系方式 |
+| POST | `/api/admin/reports/{id}/handle` | admin | B `action,days?,productId?,orderId?,result` | `report,message`；`action` ∈ `suspend_temp/suspend_permanent/product_off/refund/warning/none`；`result` 必填；停用会清 sessions，退款写 refund* + orderLogs；同时给买家与商家写通知 |
+| POST | `/api/admin/reports/{id}/appeal/handle` | admin | B `decision,result` | `report,message`；仅 `appealed` 可审；`decision` ∈ `upheld/rejected`，结果通知双方 |
+| POST | `/api/admin/orders/{id}/refund` | admin | B `amount?,note?` | `order,message`；默认全额、不得超订单金额；已退款/已取消拒绝；写 refund* + orderLogs 并通知买家 |
+| POST | `/api/admin/merchants/{id}/suspend` | admin | B `days,permanent?,reason` | `merchant,message`；临时写 `suspended+suspendUntil`、永久写 `disabled`；均清 sessions 并通知商家 |
 
 <a id="api-ai"></a>
 
@@ -1093,7 +1314,7 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 | GET | `/api/stat/merchant` | merchant，方法注解；service 再检查角色 | —，不接收 merchantId 或日期范围 | `merchant,kpi,trend[],productRank[],categoryRevenue[],pendingOrders[]`；仅当前 merchantId，近 7 天补零，待办最多 5 笔；只读 |
 | GET | `/api/stat/overview` | 公开，无注解 | —，不接收日期范围 | `kpi,statusDist[],trend[],spotRank[],merchantRank[],recentOrders[]`；全平台聚合，近 7 天补零，最近订单最多 6 笔，**公开返回订单 id、商品名、买家展示名、金额等摘要**；只读 |
 
-统计口径均以 `confirmed/used` 的订单金额计营收，pending/cancelled 不计；订单总数和每日下单数包含取消订单，按 createdAt 前 10 位归日，非按确认/核销时间。
+统计口径以 `confirmed/shipped/checked_in/completed/used` 的订单金额计营收，`pending/cancelled/refunded` 不计；订单总数和每日下单数包含取消订单，按 createdAt 前 10 位归日，非按确认/发货时间。
 
 - 商家 `merchant={id,name,short,type}`；`kpi={revenue,orderCount,paidCount,pendingCount,useCount,todayOrders,productCount,onSaleCount,avgPrice}`，avgPrice 为计营收订单平均金额四舍五入；`trend[]={date,orders,amount}`。
 - `productRank[]={id,name,cover,status,sold,amount}`，sold/amount 只算计营收订单，与商品表中下单即增加的 sold 不是同一口径，按 amount 倒序；`categoryRevenue[]={name,amount}`；`pendingOrders[]` 返回订单摘要 `id,productName,cover,buyerName,qty,amount,status,statusText,type,category,bookDate,people,remark,address,createdAt`，取写入顺序靠前的 5 笔，非最近 5 笔。
@@ -1102,6 +1323,8 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 <a id="api-admin"></a>
 
 ### 8.8 平台账号、订单与商品管理（AdminController：22 个方法）
+
+> 订单退款、商家停用、举报处理与上诉复核不在本控制器，见 8.5d `AdminReportController`。
 
 本节每个接口均继承控制器类上的 `@RequireRole("admin")`。资源 id 可以是平台内任意目标账号/订单/商品，不受当前管理员个人归属限制；不代表有管理员账号 CRUD 或订单删除接口。
 
@@ -1418,7 +1641,8 @@ curl -X POST 'http://localhost:8080/api/ai/ask' \
    再问「今天股市怎么样」→ AI 明确说不在知识库里，**体现防幻觉设计**。
 7. **AI 行程规划**：勾选「非遗、农事」→ 生成 2 天行程，展示时间轴与花费预估。
 8. **下单**：商城 → 加购 → 结算 → 我的订单看到「待确认」。
-9. **商户工作台**：电脑另开标签 `http://localhost:8080/merchant/` → `zhangmm / 123456` → 工作台看到待处理订单 → **接单 → 核销** → 营收曲线实时变化。
+9. **商户工作台**：电脑另开标签 `http://localhost:8080/merchant/` → `zhangmm / 123456` → 工作台看到待处理订单 → **接单 → 发货（填快递公司 + 运单号）→ 完成** → 营收曲线实时变化；
+   用户端「我的订单」里能看到物流小车沿节点前进。
 10. **商户 AI 文案**：商品管理 → 编辑任一商品 → 点「AI 生成文案」，展示三种可切换风格。
 11. **回到 PC 后台**：商家管理 → 点详情，展示店铺资料、经营数据、名下商品 → **当场停用某个账号**，
     再让该账号登录，会被明确拒绝。
