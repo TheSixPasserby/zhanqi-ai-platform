@@ -54,6 +54,9 @@ public class StatService {
         kpi.put("paidCount", paid.size());
         kpi.put("pendingCount", pending.size());
         kpi.put("useCount", orders.stream().filter(o -> "used".equals(o.get("status"))).count());
+        kpi.put("completedCount", orders.stream().filter(o ->
+                "completed".equals(o.get("status")) || "used".equals(o.get("status"))).count());
+        kpi.put("shippedCount", orders.stream().filter(o -> "shipped".equals(o.get("status"))).count());
         kpi.put("todayOrders", orders.stream().filter(o -> today.equals(dayKey(o.get("createdAt")))).count());
         kpi.put("productCount", products.size());
         kpi.put("onSaleCount", products.stream().filter(p -> "on".equals(p.get("status"))).count());
@@ -232,6 +235,11 @@ public class StatService {
         item.put("type", o.get("type"));
         item.put("category", o.get("category"));
         item.put("bookDate", o.get("bookDate"));
+        item.put("bookingSlot", o.get("bookingSlot"));
+        item.put("checkOutDate", o.get("checkOutDate"));
+        item.put("roomType", o.get("roomType"));
+        item.put("rejectReason", o.get("rejectReason"));
+        item.put("rejectStatus", o.get("rejectStatus"));
         item.put("people", o.get("people"));
         item.put("remark", o.get("remark"));
         item.put("address", o.get("address"));

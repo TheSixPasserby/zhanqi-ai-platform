@@ -110,6 +110,36 @@ public class DatabaseBootstrap {
                 ensureColumn(conn, "merchants", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
                 ensureColumn(conn, "admins", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
                 ensureColumn(conn, "activities", "capacity", "INT NULL DEFAULT 30 COMMENT '可预约人数上限'");
+                ensureColumn(conn, "spots", "voice",
+                        "VARCHAR(16) NULL DEFAULT 'auto' COMMENT '讲解语音包：auto/male/female'");
+                ensureColumn(conn, "products", "timeSlots",
+                        "JSON NULL COMMENT '可预约场次/时段数组'");
+                ensureColumn(conn, "products", "roomTypes",
+                        "JSON NULL COMMENT '民宿房型数组'");
+                ensureColumn(conn, "merchants", "suspendUntil",
+                        "VARCHAR(32) NULL COMMENT '临时停用截止时间'");
+                ensureColumn(conn, "merchants", "suspendReason",
+                        "VARCHAR(255) NULL COMMENT '停用原因'");
+
+                // 订单：拒绝协商 + 物流 + 预约扩展 + 退款（全部幂等补列，老库自动升级）
+                ensureColumn(conn, "orders", "rejectReason", "TEXT NULL COMMENT '商家拒绝原因'");
+                ensureColumn(conn, "orders", "rejectStatus",
+                        "VARCHAR(24) NULL COMMENT 'waiting_buyer/buyer_agreed/buyer_disagreed'");
+                ensureColumn(conn, "orders", "rejectedAt", "VARCHAR(32) NULL COMMENT '拒绝时间'");
+                ensureColumn(conn, "orders", "buyerFeedback", "TEXT NULL COMMENT '买家协商意见'");
+                ensureColumn(conn, "orders", "feedbackAt", "VARCHAR(32) NULL COMMENT '买家反馈时间'");
+                ensureColumn(conn, "orders", "logisticsCompany", "VARCHAR(64) NULL COMMENT '快递公司'");
+                ensureColumn(conn, "orders", "trackingNo", "VARCHAR(64) NULL COMMENT '运单号'");
+                ensureColumn(conn, "orders", "logisticsStatus", "VARCHAR(32) NULL COMMENT '物流状态'");
+                ensureColumn(conn, "orders", "logisticsUpdatedAt", "VARCHAR(32) NULL COMMENT '物流更新时间'");
+                ensureColumn(conn, "orders", "shippedAt", "VARCHAR(32) NULL COMMENT '发货时间'");
+                ensureColumn(conn, "orders", "bookingSlot", "VARCHAR(64) NULL COMMENT '预约场次/时段'");
+                ensureColumn(conn, "orders", "checkOutDate", "VARCHAR(16) NULL COMMENT '民宿离店日期'");
+                ensureColumn(conn, "orders", "roomType", "VARCHAR(64) NULL COMMENT '民宿房型'");
+                ensureColumn(conn, "orders", "completedAt", "VARCHAR(32) NULL COMMENT '完成时间'");
+                ensureColumn(conn, "orders", "refundAmount", "DECIMAL(10,2) NULL COMMENT '退款金额'");
+                ensureColumn(conn, "orders", "refundedAt", "VARCHAR(32) NULL COMMENT '退款时间'");
+                ensureColumn(conn, "orders", "refundNote", "VARCHAR(255) NULL COMMENT '退款说明'");
 
                 // ③ 灌演示数据（幂等）
                 if (db.isSeedOnStart()) {
@@ -212,7 +242,8 @@ public class DatabaseBootstrap {
 
     private void dropAll(Connection conn) throws SQLException {
         // 按依赖倒序删，避免外键类问题（本库没有外键，保留顺序只是为了可读）
-        String[] tables = {"settings", "sessions", "knowledge", "activityBookings", "activities",
+        String[] tables = {"notifications", "orderLogs", "reports", "chatTyping", "chatMessages",
+                "settings", "sessions", "knowledge", "activityBookings", "activities",
                 "orders", "products", "stamps", "spots", "admins", "merchants", "users"};
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("SET FOREIGN_KEY_CHECKS = 0");
