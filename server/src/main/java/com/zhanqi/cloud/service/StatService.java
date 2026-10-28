@@ -26,9 +26,11 @@ import java.util.Map;
 public class StatService {
 
     private final Db db;
+    private final SettlementService settlement;
 
-    public StatService(Db db) {
+    public StatService(Db db, SettlementService settlement) {
         this.db = db;
+        this.settlement = settlement;
     }
 
     /* ============================ 商家工作台 ============================ */
@@ -61,6 +63,17 @@ public class StatService {
         kpi.put("productCount", products.size());
         kpi.put("onSaleCount", products.stream().filter(p -> "on".equals(p.get("status"))).count());
         kpi.put("avgPrice", paid.isEmpty() ? 0 : Math.round(revenue / paid.size()));
+
+        // ---- 结算口径（与「营收」区分开，别混着读） ----
+        // revenue      = 已确认及之后的订单金额（含还没收货的）→ 商家「应得」
+        // settledAmount= 买家已确认收货、真正打进商家账户的金额 → 商家「已到账」
+        // pendingSettle= 前者减后者（已确认但买家还没确认收货）
+        Map<String, Object> settleSummary = settlement.merchantSummary(merchantId);
+        double settledAmount = num(settleSummary.get("settledAmount"));
+        kpi.put("settledAmount", settledAmount);
+        kpi.put("settledOrders", settleSummary.get("settledOrders"));
+        kpi.put("lastSettledAt", settleSummary.get("lastSettledAt"));
+        kpi.put("pendingSettleAmount", Math.max(0, Math.round((revenue - settledAmount) * 100) / 100.0));
 
         // 商品排行：按计入营收的订单金额
         List<Map<String, Object>> rank = new ArrayList<>();

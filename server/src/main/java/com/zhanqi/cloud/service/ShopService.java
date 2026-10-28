@@ -45,9 +45,11 @@ public class ShopService {
     private static final List<String> DEFAULT_ROOM_TYPES = List.of("标准间", "大床房", "家庭房");
 
     private final Db db;
+    private final SettlementService settlement;
 
-    public ShopService(Db db) {
+    public ShopService(Db db, SettlementService settlement) {
         this.db = db;
+        this.settlement = settlement;
     }
 
     /* ============================ 商品 ============================ */
@@ -435,6 +437,9 @@ public class ShopService {
         }
         item.put("logs", logsOf(id));
         item.put("logistics", logisticsOf(o));
+        Map<String, Object> settle = settlement.summaryOf(id);
+        item.put("settlement", settle);
+        item.put("settledAt", settle == null ? null : settle.get("settledAt"));
         return item;
     }
 
@@ -558,23 +563,46 @@ public class ShopService {
         return "已办理入住";
     }
 
-    /** 商家完成订单：体验类 / 民宿 / 已发货的实物 */
-    public String complete(SessionUser me, String id) {
-        Map<String, Object> o = ownOrder(me, id);
+    /**
+     * 买家确认收货 / 确认完成 —— **全项目唯一能把订单推进到 completed 的入口**。
+     *
+     * <p>为什么必须由买家触发：订单完成意味着「服务已交付」，商家自己点完成等于既当运动员又当裁判；
+     * 而且钱款结算就发生在这一步，不能让收款方单方面确认收款。
+     *
+     * <p>状态白名单见 {@link Dict#canBuyerReceive}：
+     * <ul>
+     *   <li>实物：shipped（已发货）→ 确认收货；</li>
+     *   <li>民宿：checked_in（已入住）→ 确认完成；</li>
+     *   <li>研学 / 农事：confirmed（商家已确认）→ 确认完成（项目没有到店核销码，不硬造到店状态）。</li>
+     * </ul>
+     *
+     * <p>完成的同时写结算流水并累加商家已结算金额；重复调用不会重复结算（幂等）。
+     */
+    public Map<String, Object> receive(SessionUser me, String id) {
+        Map<String, Object> o = db.find("orders", id);
+        if (o == null || !me.isBuyer() || !me.userId().equals(String.valueOf(o.get("buyerId")))) {
+            throw ApiException.notFound("订单不存在或不属于你");
+        }
         String status = String.valueOf(o.get("status"));
         String category = String.valueOf(o.get("category"));
-        boolean ok = "shipped".equals(status)
-                || ("homestay".equals(category) && "checked_in".equals(status))
-                || (("study".equals(category) || "experience".equals(category)) && "confirmed".equals(status));
-        if (!ok) {
-            throw ApiException.badRequest("当前状态为「" + Dict.statusText(status) + "」，不能完成");
+        if (!Dict.canBuyerReceive(status, category)) {
+            throw ApiException.badRequest("当前状态为「" + Dict.statusText(status) + "」，不能确认收货");
         }
+
         Map<String, Object> patch = new LinkedHashMap<>();
         patch.put("status", "completed");
         patch.put("completedAt", Instant.now().toString());
         db.update("orders", id, patch);
-        logOrder(o, me.role(), "complete", "商家完成订单");
-        return "订单已完成";
+        logOrder(o, "buyer", "receive", "买家确认收货，订单完成");
+        logOrder(o, "buyer", "complete", "订单已进入已完成状态，触发货款结算");
+
+        Map<String, Object> settled = settlement.settle(db.find("orders", id), "买家确认收货，货款结算给商家");
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("message", "已确认收货，订单完成，货款已结算给商家");
+        out.put("settlement", settlement.summaryOf(id));
+        out.put("settledAmount", settled == null ? null : settled.get("amount"));
+        return out;
     }
 
     /** 物流信息（买家/商家/管理员均可查，按订单归属校验） */
@@ -724,16 +752,19 @@ public class ShopService {
             default -> "";
         });
         out.put("logisticsStatusText", com.zhanqi.cloud.service.LogisticsService.statusText(o.get("logisticsStatus")));
+        // ---- 商家可执行动作：全部只到「发货 / 办理入住」为止，没有完成、没有核销 ----
         out.put("canConfirm", "pending".equals(o.get("status")));
         out.put("canReject", "pending".equals(o.get("status")));
         out.put("canShip", "confirmed".equals(o.get("status")) && "goods".equals(o.get("category")));
         out.put("canCheckIn", "confirmed".equals(o.get("status")) && "homestay".equals(o.get("category")));
-        out.put("canComplete", ("shipped".equals(o.get("status")))
-                || ("checked_in".equals(o.get("status")) && "homestay".equals(o.get("category")))
-                || ("confirmed".equals(o.get("status"))
-                    && ("study".equals(o.get("category")) || "experience".equals(o.get("category")))));
+        // 商家没有「完成」权限：canComplete 恒为 false，保留字段只为兼容旧前端静默降级
+        out.put("canComplete", false);
+        // ---- 买家可执行动作：确认收货 / 确认完成（唯一能把订单推进到 completed 的入口） ----
+        out.put("canReceive", Dict.canBuyerReceive(o.get("status"), o.get("category")));
         out.put("canCancel", "pending".equals(o.get("status")) || "confirmed".equals(o.get("status")));
         out.put("canDecide", "waiting_buyer".equals(o.get("rejectStatus")));
+        // 结算摘要：未结算为 null；已结算含金额/时间/是否已冲减
+        out.put("settlement", settlement.summaryOf(String.valueOf(o.get("id"))));
         return out;
     }
 

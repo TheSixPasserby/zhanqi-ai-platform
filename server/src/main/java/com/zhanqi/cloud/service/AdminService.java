@@ -484,8 +484,11 @@ public class AdminService {
             if ("used".equals(st) && o.get("verifiedAt") == null) {
                 patch.put("verifiedAt", Instant.now().toString());
             }
-            if ("completed".equals(st) && o.get("completedAt") == null) {
-                patch.put("completedAt", Instant.now().toString());
+            // 管理员不能把订单改成「已完成」：完成意味着买家已确认收货，
+            // 并且会触发货款结算。管理员越权完成会绕过买家确认，让结算金额凭空增加。
+            // 后台要处理异常订单请用「强制取消」或「退款」。
+            if ("completed".equals(st)) {
+                throw ApiException.badRequest("「已完成」只能由买家确认收货产生，后台请使用退款或强制取消");
             }
             if ("shipped".equals(st) && o.get("shippedAt") == null) {
                 patch.put("shippedAt", Instant.now().toString());
@@ -718,6 +721,7 @@ public class AdminService {
         out.put("status", m.get("status"));
         out.put("suspendUntil", m.get("suspendUntil"));
         out.put("suspendReason", m.get("suspendReason"));
+        out.put("settledAmount", m.get("settledAmount"));
         out.put("loginCount", m.get("loginCount"));
         out.put("lastLoginAt", m.get("lastLoginAt"));
         out.put("createdAt", m.get("createdAt"));
