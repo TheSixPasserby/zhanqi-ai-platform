@@ -140,7 +140,7 @@
               <input v-model.trim="keyword" placeholder="搜商品" @keyup.enter="go('shop')">
             </div>
             <button class="icon-btn" title="我的消息" @click="go('chatList')">
-              <svg class="i"><use :href="icon('i-phone')"></use></svg>
+              <svg class="i"><use :href="icon('i-mail')"></use></svg>
             </button>
             <button class="icon-btn" title="购物车" @click="cartOpen = true">
               <svg class="i"><use :href="icon('i-cart')"></use></svg>
@@ -154,7 +154,7 @@
               <div class="user-menu">
                 <b>{{ me.name }}</b>
                 <a @click="go('orders')">我的订单</a>
-                <a @click="go('chatList')">我的消息</a>
+                <a @click="go('chatList')"><svg class="i"><use :href="icon('i-mail')"></use></svg>我的消息</a>
                 <a @click="openReports(null)">举报中心</a>
                 <a @click="go('mine')">个人中心</a>
                 <a @click="openPwd">修改密码</a>
@@ -517,7 +517,7 @@
               <span v-if="t.unread" class="thread-unread">{{ t.unread }}</span>
             </div>
             <div v-if="!chatThreads.length && !chatThreadsLoading" class="empty">
-              <svg class="i big"><use :href="icon('i-phone')"></use></svg>
+              <svg class="i big"><use :href="icon('i-mail')"></use></svg>
               <p>还没有聊天记录，去商家主页找客服聊聊吧</p>
               <button class="btn-mini" @click="go('shop')">去商城</button>
             </div>
@@ -575,7 +575,7 @@
                     </div>
                   </template>
                   <p v-else class="msg-text">{{ m.text }}</p>
-                  <span class="msg-time">{{ time(m.createdAt) }}</span>
+                  <span v-if="m.createdAt" class="msg-time">{{ time(m.createdAt) }}</span>
                 </div>
               </div>
 
@@ -853,7 +853,7 @@
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
               <a @click="go('ai')"><svg class="i"><use :href="icon('i-ai')"></use></svg>AI 文旅助手
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
-              <a @click="go('chatList')"><svg class="i"><use :href="icon('i-phone')"></use></svg>消息中心
+              <a @click="go('chatList')"><svg class="i"><use :href="icon('i-mail')"></use></svg>消息中心
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
               <a @click="openReports(null)"><svg class="i"><use :href="icon('i-shield')"></use></svg>举报中心
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
@@ -1201,6 +1201,24 @@
             </div>
             <button class="btn-mini"
                     @click="openChat(orderDetail.merchant || { id: orderDetail.merchantId, name: orderDetail.merchantName })">联系客服</button>
+          </div>
+
+          <!-- 结算信息：只有买家确认收货后才有（未结算为 null） -->
+          <section v-if="orderDetail.settlement" class="order-settle">
+            <div class="settle-row"><span>货款结算</span>
+              <b class="ok">已完成 · {{ money(orderDetail.settlement.amount) }}</b></div>
+            <div class="settle-row"><span>结算时间</span>
+              <b>{{ time(orderDetail.settlement.settledAt) }}</b></div>
+            <div class="settle-row" v-if="orderDetail.settlement.refunded"><span>退款冲减</span>
+              <b class="warn">{{ money(orderDetail.settlement.reverseAmount) }} · {{ time(orderDetail.settlement.reverseAt) }}</b></div>
+            <p class="dim tiny">确认收货后货款结算给商家；如发生退款，结算金额会同步冲减。</p>
+          </section>
+
+          <!-- 买家确认收货 / 确认完成：订单完成与货款结算的唯一入口 -->
+          <div class="order-actions" v-if="orderDetail.canReceive">
+            <button class="btn-primary block" :disabled="receiving" @click="receiveOrder">
+              {{ receiving ? '确认中…' : (orderDetail.status === 'shipped' ? '确认收货' : '确认完成') }}</button>
+            <p class="dim tiny" style="margin-top:6px;text-align:center">确认后订单完成，货款将结算给商家</p>
           </div>
 
           <div class="order-actions" v-if="orderDetail.canCancel">

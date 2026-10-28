@@ -173,14 +173,21 @@
               <button class="hero-btn" @click="go('spots', true)">继续打卡</button>
             </div>
             <div class="hero-ring">
-              <!-- 每段对应一个点位，已打卡的点亮；中间是印章图标 + 百分比，不再用「印」字 -->
-              <svg viewBox="0 0 128 128" class="ring-svg" aria-hidden="true">
-                <path v-for="(seg, i) in ringSegments" :key="i" :d="seg.d"
-                      class="ring-seg" :class="{ on: seg.checked }"></path>
-              </svg>
-              <div class="ring-core">
-                <svg class="ico ring-ico"><use :href="iconHref('i-stamp')"></use></svg>
-                <em>{{ percent }}%</em>
+              <!-- 每段对应一个点位，已打卡的点亮；中间是印章图标 + 百分比 -->
+              <template v-if="!ringEmpty">
+                <svg viewBox="0 0 128 128" class="ring-svg" aria-hidden="true">
+                  <path v-for="(seg, i) in ringSegments" :key="i" :d="seg.d"
+                        class="ring-seg" :class="{ on: seg.checked }"></path>
+                </svg>
+                <div class="ring-core">
+                  <svg class="ico ring-ico"><use :href="iconHref('i-stamp')"></use></svg>
+                  <em>{{ percent }}%</em>
+                </div>
+              </template>
+              <!-- 点位数异常 / 没加载到时不画空圈，明确告诉用户「暂无可打卡点位」 -->
+              <div v-else class="ring-empty">
+                <svg class="ico"><use :href="iconHref('i-info')"></use></svg>
+                <span>暂无可打卡点位</span>
               </div>
             </div>
           </div>
@@ -1027,6 +1034,25 @@
               </div>
             </div>
           </div>
+
+          <!-- 结算信息：买家确认收货后才有 -->
+          <div v-if="orderDetail.settlement" class="card">
+            <div class="card-title"><i class="ok"></i>货款结算</div>
+            <div class="book-rows">
+              <div><span>结算金额</span><b class="ok">{{ money(orderDetail.settlement.amount) }}</b></div>
+              <div><span>结算时间</span><b>{{ time(orderDetail.settlement.settledAt) }}</b></div>
+              <div v-if="orderDetail.settlement.refunded"><span>退款冲减</span>
+                <b class="warn">{{ money(orderDetail.settlement.reverseAmount) }} · {{ time(orderDetail.settlement.reverseAt) }}</b></div>
+            </div>
+            <p class="dim tiny mt10">确认收货后货款结算给商家；如发生退款，结算金额会同步冲减。</p>
+          </div>
+
+          <!-- 买家确认收货 / 确认完成：订单完成与货款结算的唯一入口 -->
+          <template v-if="canReceive(orderDetail)">
+            <button class="btn btn-block" :disabled="receiving" @click="receiveOrder">
+              {{ receiving ? '确认中…' : (orderDetail.status === 'shipped' ? '确认收货' : '确认完成') }}</button>
+            <p class="dim tiny" style="text-align:center;padding:8px 0">确认后订单完成，货款将结算给商家。</p>
+          </template>
 
           <button v-if="canCancel(orderDetail) && orderDetail.rejectStatus !== 'waiting_buyer'" class="btn btn-ghost btn-block" @click="cancelOrder(orderDetail)">取消订单</button>
           <p class="dim tiny" style="text-align:center;padding:12px 0">订单是交易凭证，取消后仍会保留记录。</p>

@@ -419,12 +419,16 @@
       canCheckin: function (order) {
         return !!order && order.status === 'confirmed' && orderKind(order) === 'homestay';
       },
-      canComplete: function (order) {
+      // 商家没有「完成订单」权限：订单完成 = 买家确认收货，且会触发货款结算。
+      // 这里显式保留一个恒为 false 的判定，让模板里的引用不会因为字段缺失而报错。
+      canComplete: function () { return false; },
+      // 商家只读等待买家确认收货的状态（用于在列表里给出「等待买家确认收货」的提示）
+      waitingBuyerReceive: function (order) {
         if (!order) { return false; }
         var kind = orderKind(order);
         if (order.status === 'shipped') { return kind === 'goods'; }
         if (order.status === 'checked_in') { return kind === 'homestay'; }
-        if (order.status === 'confirmed') { return kind !== 'goods' && kind !== 'homestay'; }
+        if (order.status === 'confirmed') { return kind === 'study' || kind === 'experience'; }
         return false;
       },
 
@@ -460,12 +464,8 @@
           .then(function () { self.postAction(row, 'checkin', null, '已办理入住'); })
           .catch(function () { });
       },
-      doComplete: function (row) {
-        var self = this;
-        this.$confirm('确认该订单服务已完成？完成后订单变为「已完成」且不可再操作。', '完成订单', { type: 'warning' })
-          .then(function () { self.postAction(row, 'complete', null, '订单已完成'); })
-          .catch(function () { });
-      },
+      // 商家端不再提供「完成订单」：该动作只能由买家在用户端确认收货触发，
+      // 并同时完成货款结算。保留注释说明，避免后来者又把它加回来。
 
       /* ------------------ 拒绝 ------------------ */
 
@@ -618,6 +618,20 @@
 
   /* ---------------------------- 消息客服 ---------------------------- */
 
+  /**
+   * 一条消息是否值得渲染。
+   * 后端已挡纯空白文本，但历史脏数据 / 未知 type 会走到模板 v-else 渲染 m.text，
+   * text 为 null 时就是一个只有 padding 的空气泡 —— 这里在进列表前统一过滤。
+   */
+  function isRenderableMessage(m) {
+    if (!m || typeof m !== 'object') { return false; }
+    var type = m.type || 'text';
+    if (type === 'image') { return !!(m.media || m.text); }
+    if (type === 'product') { return !!(m.productId || (m.product && m.product.id) || String(m.text || '').trim()); }
+    if (type === 'order') { return !!(m.orderId || (m.order && m.order.id) || String(m.text || '').trim()); }
+    return !!String(m.text == null ? '' : m.text).trim();
+  }
+
   /** 后端一条聊天消息 → 前端渲染结构；fromRole 是判断消息方向的唯一依据 */
   function normalizeMessage(m) {
     var role = m.fromRole || m.role || (m.fromMerchant ? 'merchant' : '');
@@ -754,7 +768,7 @@
           .then(function (res) {
             self.loadingMessages = false;
             if (!res || !res.ok) { return; }
-            var list = (res.messages || []).map(normalizeMessage);
+            var list = (res.messages || []).map(normalizeMessage).filter(isRenderableMessage);
             self.online = res.peerOnline !== undefined ? !!res.peerOnline
               : (res.buyer ? !!res.buyer.online : self.online);
             self.typing = !!res.peerTyping;
@@ -814,7 +828,7 @@
           self.sending = false;
           if (!res || !res.ok) { return; }
           if (onSuccess) { onSuccess(); }
-          if (res.message && typeof res.message === 'object') {
+          if (res.message && typeof res.message === 'object' && isRenderableMessage(res.message)) {
             // 后端返回了完整消息对象：直接追加，省一次轮询等待
             self.messages.push(normalizeMessage(res.message));
             self.lastCount = self.messages.length;
@@ -989,8 +1003,10 @@
     name: 'tab-stat',
     template: '#tpl-tab-stat',
     props: { kpi: { type: Object, default: function () { return {}; } } },
-    data: function () { return { trend: [], productRank: [], categoryRevenue: [], fmt: fmt }; },
-    created: function () { this.load(); },
+    data: function () {
+      return { trend: [], productRank: [], categoryRevenue: [], settlements: [], loadingSettle: false, fmt: fmt };
+    },
+    created: function () { this.load(); this.loadSettlements(); },
     computed: {
       categoryItems: function () {
         var palette = [COLORS.BRAND, COLORS.WARN, COLORS.INFO, COLORS.ACCENT];
@@ -1016,6 +1032,16 @@
           self.trend = res.trend || [];
           self.productRank = res.productRank || [];
           self.categoryRevenue = res.categoryRevenue || [];
+        });
+      },
+      /** 结算流水：正数入账、负数冲减，只含当前商家自己的记录 */
+      loadSettlements: function () {
+        var self = this;
+        this.loadingSettle = true;
+        api.get('/api/stat/settlements', null, { silent: true }).then(function (res) {
+          self.loadingSettle = false;
+          if (!res || !res.ok) { return; }
+          self.settlements = res.list || [];
         });
       }
     }

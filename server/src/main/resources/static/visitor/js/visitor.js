@@ -329,6 +329,7 @@
         logistics: null,
         rejectFeedback: '',
         buyerDeciding: false,
+        receiving: false,
 
         /* 商品详情：发布商家 + 四类购买表单 */
         productMerchant: {},
@@ -462,8 +463,17 @@
         return this.avatarUrl || window.ZQProfile.defaultFor('buyer');
       },
 
+      /** 集章百分比：clamp 到 [0,100]，total 无效时按实际点位数兜底 */
       percent: function () {
-        return this.total > 0 ? Math.round((this.collected / this.total) * 100) : 0;
+        var total = Number(this.total);
+        var got = Number(this.collected);
+        if (!isFinite(total) || total <= 0) {
+          total = (this.spots || []).length;
+        }
+        if (!isFinite(got) || got < 0) { got = 0; }
+        if (!isFinite(total) || total <= 0) { return 0; }
+        var p = Math.round(got / total * 100);
+        return Math.max(0, Math.min(100, p));
       },
 
       /* 集章扇形图：每个点位一段，已打卡的那段点亮。
@@ -476,28 +486,56 @@
               印章接口还没返回或失败时，不会出现「数字变了、扇形图没变」。
            3. 纯 SVG 路径绘制，不依赖任何图表库，也不依赖 conic-gradient
               （OpenGL 缺失、旧安卓 WebView 上 conic-gradient 会整块不显示）。 */
+      /**
+       * 集章扇形图：每个点位一段。
+       *
+       * 【2026-10-28 修复】旧实现有三个真实缺陷：
+       *   1. 点亮判定用 spots[i] 按下标取点位 —— 接口顺序一变或数组里缺项，
+       *      就会出现「数字是 5 枚、亮的位置却错乱」；现在改成按 id 建索引，与下标无关。
+       *   2. total 与 spots.length 脱钩：spots 还没回来时 total 已有值，于是全都判成未打卡（0%），
+       *      但文案仍显示「x / 14」。现在段数取 Math.min(total, spots.length)，两者不一致时以实际点位为准。
+       *   3. collected > total（历史脏数据 / 并发打卡）会让百分比 >100%；现在 clamp 到 [0, 100]。
+       *
+       * 边界：total<=0 或没有任何点位时返回空数组，页面据 ringEmpty 显示「暂无点位」占位，
+       * 而不是画一个空圈让人以为是 0 进度。
+       */
       ringSegments: function () {
         var spots = this.spots || [];
-        var total = Number(this.total) || spots.length || 14;
-        if (!(total >= 1)) { return []; }
-        var step = 360 / total;
+        var declared = Number(this.total);
+        if (!isFinite(declared) || declared < 0) { declared = 0; }
+        // 段数以「真实拿到的点位」为准，避免 total 有值而 spots 为空时全灰
+        var total = spots.length > 0 ? Math.min(declared || spots.length, spots.length) : 0;
+        if (total <= 0) { return []; }
+        // 段数过多时视觉不可辨（每段 < 2°），此时按比例只画 60 段粗粒度环
+        var segments = Math.min(total, 60);
+        var step = 360 / segments;
         var gap = Math.min(3.2, step * 0.2);
+        // 已打卡点位集合：优先用点位自带的 checked，其次用印章记录（两者同一数据源，互为兜底）
         var done = {};
         (this.stamps || []).forEach(function (s) {
           if (s && s.spotId) { done[s.spotId] = true; }
         });
+        var litCount = 0;
+        for (var k = 0; k < spots.length; k++) {
+          if (spots[k] && (spots[k].checked || done[spots[k].id])) { litCount++; }
+        }
+        // 点亮段数按真实打卡比例映射到 segments 段上（total<=60 时一一对应）
+        var litSegments = total <= 60 ? litCount : Math.round(litCount / total * segments);
         var out = [];
-        for (var i = 0; i < total; i++) {
-          var spot = spots[i] || null;
-          var lit = !!(spot && (spot.checked || done[spot.id]));
+        for (var i = 0; i < segments; i++) {
           var a0 = i * step - 90 + gap / 2;
           var a1 = (i + 1) * step - 90 - gap / 2;
           out.push({
             d: window.ZQSpotIcons.ringSegment(64, 64, 60, 45, a0, a1),
-            checked: lit
+            checked: i < litSegments
           });
         }
         return out;
+      },
+
+      /** 扇形图是否应显示「暂无点位」占位（点位没加载到 / 总数为 0） */
+      ringEmpty: function () {
+        return !this.ringSegments.length;
       },
 
       /* 首页功能宫格：按需求把「我的订单」放在「活动日历」与「AI 助手」之间 */
@@ -725,6 +763,37 @@
       statusText: function (s) { return STATUS_TEXT[s] || s || '未知'; },
       statusClass: function (s) { return STATUS_CLASS[s] || 'tag-muted'; },
       canCancel: function (o) { return o.status === 'pending' || o.status === 'confirmed'; },
+
+      /**
+       * 买家可否「确认收货/确认完成」—— 与后端 Dict.canBuyerReceive 完全同一套白名单。
+       * 这是订单完成与货款结算的唯一入口，商家没有该权限。
+       */
+      canReceive: function (o) {
+        if (!o) { return false; }
+        if (o.canReceive !== undefined) { return !!o.canReceive; }
+        if (o.status === 'shipped') { return o.category === 'goods'; }
+        if (o.status === 'checked_in') { return o.category === 'homestay'; }
+        if (o.status === 'confirmed') { return o.category === 'study' || o.category === 'experience'; }
+        return false;
+      },
+
+      /** 买家确认收货：订单完成 + 货款结算给商家（后端幂等，重复点不会重复结算） */
+      receiveOrder: function () {
+        var self = this;
+        var o = this.orderDetail;
+        if (!o || !o.id || this.receiving) { return; }
+        var tip = o.status === 'shipped' ? '确认已经收到货物？' : '确认这次体验/入住已完成？';
+        if (!window.confirm(tip + ' 确认后订单完成，货款将结算给商家。')) { return; }
+        this.receiving = true;
+        api.post('/api/shop/orders/' + o.id + '/receive', {}).then(function (res) {
+          self.receiving = false;
+          if (!res || !res.ok) { return; }
+          self.toast(res.message || '已确认，订单完成');
+          self.loadOrderDetail(o.id);
+          self.loadOrders();
+          self.loadProducts();
+        });
+      },
 
       bookingStatusText: function (s) {
         return { pending: '待村里确认', confirmed: '已确认', cancelled: '已取消' }[s] || s || '待确认';
