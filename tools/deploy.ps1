@@ -363,6 +363,21 @@ app:
     base-url: ""
     api-key: ""
     model: deepseek-chat
+
+  speech:
+    # 点位语音讲解的音色策略，下发给三端（改完重启生效）。
+    # 念白使用设备/浏览器自带的语音合成，不联网、不需要密钥。
+    enabled: true
+    # 优先音色关键字（大小写不敏感）；留空 = 按内置偏好自动挑（晓晓 / 云希 / Google 普通话…）
+    voice: ""
+    # 语速 0.5~2：默认略慢于原速，比 1.0 更从容，也更不像机器
+    rate: 0.95
+    # 音高 0~2
+    pitch: 1.0
+    # 句间停顿（毫秒）：模拟自然换气，太小会变回「念经」
+    gap-ms: 200
+    # 打卡成功后是否自动开讲
+    auto-play: true
 "@
 
   # 统一用 UTF-8 无 BOM 写盘，避免中文注释变成乱码
@@ -456,22 +471,27 @@ function Start-ServiceServer($javaExe, $port) {
   #   换成管道重定向就会破坏这一点。
   #   试过 -UseNewEnvironment，没用：Start-Process 在应用这个开关之前就要先把
   #   那个字典建好，异常一样会抛。两种失败方式的实测记录见 docs/worklog。
-  $pathKeys = @()
+  #   【2026-10-28 补充】只清 Path 还不够：任何「只差大小写」的键都会撞。
+  #   实测在本机遇到过 NO_PROXY / no_proxy 同时存在（被某些启动器注入），
+  #   报错文案同样是「已添加项。字典中的关键字:'NO_PROXY' 所添加的关键字:'no_proxy'」，
+  #   与 Path 那个坑一模一样。所以这里改成通用去重：按小写分组，每组只留第一个。
+  #   保留同名键中的任意一个即可 —— 它们的值通常一致，不一致时保留先出现的那个，
+  #   对部署场景没有任何影响（服务只读数据库与网络代理，不依赖键名大小写）。
+  $dupGroups = @()
   try {
-    $pathKeys = @([System.Environment]::GetEnvironmentVariables('Process').Keys |
-                  Where-Object { $_ -match '^path$' })
+    $dupGroups = @([System.Environment]::GetEnvironmentVariables('Process').Keys |
+                   Group-Object { $_.ToString().ToLowerInvariant() } |
+                   Where-Object { $_.Count -gt 1 })
   } catch { }
 
-  if ($pathKeys.Count -gt 1) {
-    Warn "检测到环境变量里有 $($pathKeys.Count) 个同名 Path 键（$($pathKeys -join ' / ')），先清理再启动"
-    $guard = 0
-    while ($pathKeys.Count -gt 1 -and $guard -lt 5) {
-      $guard++
-      for ($i = 1; $i -lt $pathKeys.Count; $i++) {
-        try { [System.Environment]::SetEnvironmentVariable($pathKeys[$i], $null, 'Process') } catch { }
+  if ($dupGroups.Count -gt 0) {
+    $names = ($dupGroups | ForEach-Object { $_.Group -join '/' }) -join '，'
+    Warn "检测到 $($dupGroups.Count) 组大小写重复的环境变量（$names），先清理再启动"
+    foreach ($group in $dupGroups) {
+      $keys = @($group.Group)
+      for ($i = 1; $i -lt $keys.Count; $i++) {
+        try { [System.Environment]::SetEnvironmentVariable($keys[$i], $null, 'Process') } catch { }
       }
-      $pathKeys = @([System.Environment]::GetEnvironmentVariables('Process').Keys |
-                    Where-Object { $_ -match '^path$' })
     }
   }
 

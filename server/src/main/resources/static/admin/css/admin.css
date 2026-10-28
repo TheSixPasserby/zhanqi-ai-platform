@@ -350,3 +350,135 @@
 }
 .booking-summary b { font-size: 15px; }
 .thumb.lg { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; }
+
+/* 「内容管理 → AI 知识库」：表格在左、大模型配置在右。
+   只有切到知识库标签时才分栏（.split-side-on），其余标签保持原来的整宽表格，
+   免得每次切标签都要重排一次布局。 */
+.split { display: block; }
+.split-side-on { display: flex; gap: 16px; align-items: flex-start; }
+.split-main { flex: 1; min-width: 0; }
+.split-side { width: 360px; flex: none; }
+@media (max-width: 1400px) {
+  .split-side-on { flex-direction: column; }
+  .split-side { width: 100%; }
+}
+
+/* ---------------------------- 举报中心 ---------------------------- */
+
+.report-block {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--line);
+}
+.report-block h4 { font-size: 13.5px; margin: 0 0 8px; }
+.report-text {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.report-result {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--brand-soft);
+}
+.report-result .report-text { background: transparent; border: none; padding: 4px 0 0; }
+.evi-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.evi {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  cursor: zoom-in;
+  background: var(--surface-3);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.evi:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); }
+.rel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rel-item {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+/* 列表里的举报内容只显示两行，详情里才完整展开 */
+.report-content {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+}
+
+/* 举报 / 订单 / 商家新状态标签：app.css 只定义了老订单状态，这里补齐 */
+.pill.resolved { background: var(--ok-soft); color: var(--ok); }
+.pill.appealed { background: var(--info-soft); color: var(--info); }
+.pill.appeal_resolved { background: var(--brand-soft); color: var(--brand); }
+.pill.suspended { background: var(--warn-soft); color: var(--warn); white-space: nowrap; }
+.pill.shipped { background: var(--info-soft); color: var(--info); }
+.pill.checked_in { background: var(--brand-soft); color: var(--brand); }
+.pill.completed { background: var(--ok-soft); color: var(--ok); }
+.pill.refunded { background: var(--danger-soft); color: var(--danger); }
+
+/* ---------------------------- 商品总览修复 ---------------------------- */
+
+/* 已下架商品整行浅色，和「已下架」标签一起构成双重标识 */
+.el-table .row-off td.el-table__cell { background: #FBFAF7; }
+.el-table .row-off .cell-main { color: var(--text-3); }
+
+/* 原生 type=number 输入：外观对齐 Element 输入框，但保留浏览器原生数字校验 */
+.num-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.num-field:focus-within { border-color: var(--brand); }
+.num-field .unit { font-size: 12.5px; color: var(--text-3); flex: none; }
+.num-field input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+}
+/* 去掉 Chrome 的数字上下箭头：运营习惯直接敲数字，箭头容易误触 */
+.num-field input::-webkit-outer-spin-button,
+.num-field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ---------------------------- 点位印章图标 / 语音包 ---------------------------- */
+
+.spr { width: 16px; height: 16px; vertical-align: -3px; color: var(--brand); flex: none; }
+.stamp-opt { display: flex; align-items: center; gap: 8px; }
+.stamp-opt .dim { margin-left: auto; font-size: 11.5px; }
+.stamp-tag { display: inline-flex; align-items: center; gap: 5px; }
+.stamp-preview { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; }
+.stamp-preview .spr { width: 22px; height: 22px; }
+.stamp-preview .seal-char {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  flex: none;
+}

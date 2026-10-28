@@ -90,8 +90,8 @@
 
 ```bash
 node tools/normalize-scripts.js --check   # 脚本编码：.bat 纯 ASCII+CRLF，.ps1 UTF-8 BOM+CRLF
-node tools/smoke-test.js                  # 接口冒烟 97 项
-node tools/browser-check.js               # 前端实机自检 46 项（无头 Chrome，顺带出截图）
+node tools/smoke-test.js                  # 接口冒烟 141 项
+node tools/browser-check.js               # 前端实机自检 52 项（无头 Chrome，顺带出截图）
 node tools/deploy-config-test.js          # 部署配置解析回归 36 项（动了 deploy 的取配置逻辑必跑）
 rebuild.bat                               # 改过 Java 才需要；会把产物同步到 dist/
 ```
@@ -204,6 +204,28 @@ P0 统一成「按缩进计算块边界」的通用实现（远程那版写死�
    （默认 24h，真值 61 读出来 51），`SET_VAR` 提示也无效，已回退。
    正解是独立计数器表（原子取号）或改软删除，**属独立改造，别在这打补丁**。
    过程见 `docs/worklog/2026-10-21-admin-merchant-render-and-demo-data.md`。
+
+## 6.5 2026-10-28 交付：订单履约 / 聊天 / 举报 / 购买流程
+
+本轮按需求做了一次成建制改造，新增 5 张表（`chatMessages` `chatTyping` `reports` `orderLogs`
+`notifications`）与 8 个后端类，`orders` 补 17 列、`products` 补 2 列、`spots` 补 1 列、
+`merchants` 补 2 列，四端页面全改。数据库共 **17 张表 / 224 字段**。
+
+**接手必知的三件事**（细节见 `docs/worklog/2026-10-28-order-chat-report-booking-overhaul.md`）：
+
+1. **「核销」已从商家订单管理移除**：`POST /api/shop/orders/{id}/verify` 返回 404，
+   `used` 只作历史数据只读展示。状态机改为 实物 `pending→confirmed→shipped→completed`、
+   民宿多 `checked_in`，另有 `cancelled/refunded`。**商家拒绝不再直接关单**，
+   要买家点「同意关闭」才取消，否则进入协商（写 `orderLogs`）。
+2. **物流是模拟的**：`LogisticsService.track()` 按「发货时间 + 运单号」生成 4 段可复现节点。
+   接真实快递查询只需替换该方法，前端与表字段不用改。
+3. **管理后台改商品价格/库存必须用原生 `type=number`**，`el-input-number` 在弹窗里会延迟提交，
+   这是「改了保存不生效」的真因（后端接口一直是好的）。
+
+自检基线：`smoke-test` 141 项、`browser-check` 52 项、`deploy-config-test` 22 项 + 1 组跳过。
+演示前如需干净数据，双击 `reset.bat`（注意它需要交互输入 YES，自动化环境喂不进去）。
+
+---
 
 ## 7. 记忆体系（别重复写、别写错地方）
 

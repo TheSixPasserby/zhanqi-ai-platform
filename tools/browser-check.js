@@ -386,18 +386,37 @@ function check(name, ok, detail) {
       vm.go('home', true);
       await new Promise(r => setTimeout(r, 1500));
       const txt = document.body.innerText;
+      const segs = Array.prototype.slice.call(document.querySelectorAll('.ring-seg'));
+      const ringEl = document.querySelector('.hero-ring');
+      const box = ringEl ? ringEl.getBoundingClientRect() : null;
       return {
         spots: (vm.spots || []).length,
         products: (vm.products || []).length,
         hasStamp: txt.indexOf('集章进度') >= 0,
         hasGrid: txt.indexOf('点位打卡') >= 0 && txt.indexOf('AI 助手') >= 0,
         hasGoods: txt.indexOf('农产文创好物') >= 0,
+        ring: {
+          count: segs.length,
+          lit: segs.filter(function (p) { return p.classList.contains('on'); }).length,
+          empty: segs.filter(function (p) { return !p.getAttribute('d'); }).length,
+          w: box ? Math.round(box.width) : 0,
+          h: box ? Math.round(box.height) : 0,
+          total: vm.total,
+          collected: vm.collected,
+        },
       };
     })()`);
     // 与 db/seed.sql 的点位数保持一致（扩充种子数据时同步改这里）
     check('首页加载了点位数据', homeOk && homeOk.spots === 14, JSON.stringify(homeOk));
     check('首页加载了商品数据', homeOk && homeOk.products > 0, JSON.stringify(homeOk));
     check('首页渲染集章进度与功能宫格', homeOk && homeOk.hasStamp && homeOk.hasGrid, JSON.stringify(homeOk));
+    // 集章扇形图三条硬断言：段数 = 点位数、点亮段数 = 已打卡数、没有退化路径。
+    // 守的是「数字变了、扇形图没变」那类数据源不一致的问题（本项目真实出现过）。
+    const ring = (homeOk && homeOk.ring) || {};
+    check('扇形图段数与点位数一致', ring.count === ring.total, ring.count + ' 段 / ' + ring.total + ' 个点位');
+    check('扇形图点亮段数与已打卡数一致', ring.lit === ring.collected, ring.lit + ' 段 / ' + ring.collected + ' 枚');
+    check('扇形图有实际尺寸且无退化路径', ring.empty === 0 && ring.w > 60 && ring.h > 60,
+      '空路径=' + ring.empty + ' 尺寸=' + ring.w + 'x' + ring.h);
     await screenshot('visitor-02-home.png');
 
     // 点位打卡
@@ -430,17 +449,65 @@ function check(name, ok, detail) {
     check('点位详情页渲染完整', detailOk && detailOk.view === 'spotDetail' && detailOk.hasVoiceUi && detailOk.hasIntro, JSON.stringify(detailOk));
     check('点位含语音讲解文稿', detailOk && detailOk.hasTts === true, JSON.stringify(detailOk));
 
-    // TTS 调用不抛错
+    // 语音讲解：模块存在 + 分句入队（不抛异常只是最低要求）
     const ttsOk = await v.evalJs(`(async () => {
       const vm = document.querySelector('#app').__vue__;
+      if (!window.ZQSpeech) { return 'NO_MODULE'; }
       try { vm.toggleSpeak(); } catch (e) { return 'THREW: ' + e.message; }
-      await new Promise(r => setTimeout(r, 400));
-      const on = vm.speaking || vm.showScript;
-      vm.stopSpeak();
-      return on === true ? 'ok' : 'fallback';
+      // 必须同步读：无头浏览器没有音频设备，引擎会立刻回调 onerror 把队列清空，
+      // 等一下再读就永远读到 0 —— 那不是缺陷，是测试环境本身的限制。
+      const d = window.ZQSpeech._debug();
+      return { on: !!(vm.speaking || vm.showScript), queue: d.queue, gen: d.generation, voice: d.voiceName };
     })()`);
-    check('语音讲解调用不抛异常', ttsOk === 'ok' || ttsOk === 'fallback', String(ttsOk));
+    check('语音讲解可启动且按句入队', ttsOk && ttsOk.on === true && ttsOk.queue >= 2, JSON.stringify(ttsOk));
+    check('已挑选出具体音色（不是「默认」）', ttsOk && !!ttsOk.voice, String(ttsOk && ttsOk.voice));
     await screenshot('visitor-04-spot-detail.png');
+
+    // 关键回归：离开点位详情（含退出登录 / 令牌过期跳回登录页）必须立刻停止朗读。
+    // 这条守的是「退出后语音还在念」那个真实缺陷。
+    const stopOk = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app').__vue__;
+      const before = window.ZQSpeech._debug();
+      vm.go('home', true);
+      await new Promise(r => setTimeout(r, 150));
+      const after = window.ZQSpeech._debug();
+      return {
+        genBefore: before.generation, genAfter: after.generation,
+        queue: after.queue, busy: after.busy, view: vm.view,
+      };
+    })()`);
+    check('离开点位详情后朗读立即停止', stopOk && stopOk.queue === 0 && stopOk.busy === false
+      && stopOk.genAfter > stopOk.genBefore, JSON.stringify(stopOk));
+
+    // 关键回归：开始朗读之后，绝不能再有 cancel() 打过来。
+    // 曾经真实发生过：stop() 里那次「60ms 后补一刀 cancel」没有被下一次 speak 撤销，
+    // 结果刚起播的那句话被自己掐掉 —— 表现就是整段讲解「点了没反应」。
+    // 无头浏览器没有音频设备（speaking 永远 false），补偿 cancel 不会开火，
+    // 所以这里先把 speaking 顶成 true，模拟真机「引擎真的在念」的状态。
+    const noSelfKill = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app').__vue__;
+      const s = window.speechSynthesis;
+      const log = [];
+      const oc = s.cancel.bind(s), os = s.speak.bind(s);
+      Object.defineProperty(s, 'speaking', { configurable: true, get: () => true });
+      s.cancel = function () { log.push('cancel'); return oc(); };
+      s.speak = function (u) { log.push('speak'); return os(u); };
+      try {
+        vm.openSpot(vm.spots[0].id);
+        await new Promise(r => setTimeout(r, 1200));
+        log.length = 0;
+        vm.toggleSpeak();
+        await new Promise(r => setTimeout(r, 400));
+      } finally {
+        delete s.speaking;              // 还原成浏览器原生行为，别影响后面的用例
+        s.cancel = oc; s.speak = os;
+        vm.stopSpeak();
+      }
+      const first = log.indexOf('speak');
+      return { log: log, cancelsAfterSpeak: first < 0 ? ['no-speak'] : log.slice(first).filter(x => x === 'cancel') };
+    })()`);
+    check('起播后不会被补偿 cancel 掐断', noSelfKill && noSelfKill.cancelsAfterSpeak.length === 0,
+      JSON.stringify(noSelfKill));
 
     // 商城 + 加购
     const shopOk = await v.evalJs(`(async () => {

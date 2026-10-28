@@ -119,8 +119,11 @@ public class AuthService {
                 ? String.valueOf(session.get("merchantId"))
                 : String.valueOf(session.get("userId"));
         Map<String, Object> profile = db.find(table, accountId);
-        // 账号被删除或被管理员停用 → 会话立即失效
+        // 账号被删除、永久停用、或临时停用未到期 → 会话立即失效
         if (profile == null || "disabled".equals(profile.get("status"))) {
+            return null;
+        }
+        if (!suspensionExpired(role, profile)) {
             return null;
         }
         return new SessionUser(token, role, "merchant".equals(role) ? null : accountId,
@@ -156,8 +159,9 @@ public class AuthService {
         if (profile == null || !password.equals(String.valueOf(profile.get("password")))) {
             throw ApiException.unauthorized("账号或密码不正确");
         }
-        if ("disabled".equals(profile.get("status"))) {
-            throw ApiException.forbidden("该账号已被停用，请联系平台管理员");
+        String blocked = blockedMessage(role, profile);
+        if (blocked != null) {
+            throw ApiException.forbidden(blocked);
         }
         if (expect != null && !expect.isBlank() && !expect.equals(role)) {
             throw ApiException.forbidden("该账号是「" + roleText(role) + "」账号，请到对应的端登录");
@@ -196,8 +200,9 @@ public class AuthService {
                     || !token.equals(String.valueOf(profile.get("rememberToken")))) {
                 throw ApiException.unauthorized("快捷登录已失效，请用账号密码登录一次");
             }
-            if ("disabled".equals(profile.get("status"))) {
-                throw ApiException.forbidden("该账号已被停用，请联系平台管理员");
+            String blocked = blockedMessage(role, profile);
+            if (blocked != null) {
+                throw ApiException.forbidden(blocked);
             }
             String displayName = displayName(role, profile);
             Map<String, Object> session = createSession(String.valueOf(profile.get("id")), role, displayName, client);
@@ -239,6 +244,7 @@ public class AuthService {
         for (String role : roles) {
             for (Map<String, Object> p : db.all(ROLE_TABLE.get(role))) {
                 if (intOf(p.get("loginCount")) > 0 && !"disabled".equals(p.get("status"))
+                        && !"suspended".equals(p.get("status"))
                         && p.get("rememberToken") != null) {
                     Map<String, Object> card = toCard(role, p);
                     card.put("token", p.get("rememberToken"));
@@ -359,6 +365,61 @@ public class AuthService {
         clean.remove("password");
         clean.remove("rememberToken");
         return clean;
+    }
+
+    /**
+     * 登录/会话拦截文案。
+     * 管理员处理举报时可以「临时停用商家 N 天」，这里要给出明确截止时间，
+     * 而不是笼统的「账号被停用」——否则商家只会反复找客服。
+     */
+    private String blockedMessage(String role, Map<String, Object> profile) {
+        if ("disabled".equals(profile.get("status"))) {
+            return "merchant".equals(role)
+                    ? "该账号已被永久停用，请联系平台管理员"
+                    : "该账号已被停用，请联系平台管理员";
+        }
+        if ("suspended".equals(profile.get("status"))) {
+            String until = text(profile.get("suspendUntil"));
+            if (until.isEmpty() || suspensionExpired(role, profile)) {
+                return null;
+            }
+            String reason = text(profile.get("suspendReason"));
+            return "该账号已被停用至 " + until.substring(0, Math.min(10, until.length()))
+                    + (reason.isEmpty() ? "" : "，原因：" + reason);
+        }
+        return null;
+    }
+
+    /**
+     * 临时停用是否已到期。到期后就地恢复为 active，避免管理员还要手动点一次启用；
+     * 恢复动作是幂等的，多个请求并发也只会写同样的值。
+     */
+    private boolean suspensionExpired(String role, Map<String, Object> profile) {
+        if (!"merchant".equals(role) || !"suspended".equals(profile.get("status"))) {
+            return true;
+        }
+        String until = text(profile.get("suspendUntil"));
+        if (until.isEmpty()) {
+            return true;
+        }
+        try {
+            boolean expired = java.time.Instant.parse(until).isBefore(java.time.Instant.now());
+            if (expired) {
+                Map<String, Object> patch = new LinkedHashMap<>();
+                patch.put("status", "active");
+                patch.put("suspendUntil", null);
+                patch.put("suspendReason", null);
+                db.update("merchants", String.valueOf(profile.get("id")), patch);
+            }
+            return expired;
+        } catch (Exception e) {
+            // 时间格式异常时不把商家永久锁死：按正常账号处理
+            return true;
+        }
+    }
+
+    private String text(Object v) {
+        return v == null ? "" : String.valueOf(v).trim();
     }
 
     private String displayName(String role, Map<String, Object> profile) {

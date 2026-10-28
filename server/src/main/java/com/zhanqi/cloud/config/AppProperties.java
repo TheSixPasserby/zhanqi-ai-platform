@@ -29,6 +29,7 @@ public class AppProperties {
     private Database database = new Database();
     private Session session = new Session();
     private Ai ai = new Ai();
+    private Speech speech = new Speech();
 
     public int getPort() {
         return port;
@@ -84,6 +85,14 @@ public class AppProperties {
 
     public void setAi(Ai ai) {
         this.ai = ai;
+    }
+
+    public Speech getSpeech() {
+        return speech;
+    }
+
+    public void setSpeech(Speech speech) {
+        this.speech = speech;
     }
 
     /** 数据库连接参数。服务端启动时会用这几个值先把库建出来 */
@@ -255,6 +264,79 @@ public class AppProperties {
 
         public void setTimeoutSeconds(int timeoutSeconds) {
             this.timeoutSeconds = timeoutSeconds;
+        }
+    }
+
+    /**
+     * 点位语音讲解的音色策略（对应 app.speech.*，通过 /api/server/info 下发给三端）。
+     *
+     * <p>为什么放在服务端：音色偏好、语速、句间停顿这些参数散落在三个前端里，
+     * 改一次要改三处、还容易不一致。放在这里统一配置，客户端只负责挑「本机真的装了的」
+     * 那个音色。
+     *
+     * <p>这里只描述「怎么念」，不提供音频合成 —— 项目要求断网可用，
+     * 所以默认走设备/浏览器自带的语音合成，不接云端 TTS，也不需要任何密钥。
+     */
+    public static class Speech {
+        /** 关掉后讲解按钮只展示文稿，不朗读 */
+        private boolean enabled = true;
+        /** 优先音色关键字（大小写不敏感，如 Xiaoxiao / 晓晓）；留空 = 按内置偏好自动挑最自然的那个 */
+        private String voice = "";
+        /** 语速：0.5~2，默认略慢于原速，听起来更从容 */
+        private double rate = 0.95;
+        /** 音高：0~2 */
+        private double pitch = 1.0;
+        /** 句间停顿（毫秒），用来模拟自然换气，别设太小，否则又变回念经 */
+        private int gapMs = 200;
+        /** 打卡后是否自动开讲 */
+        private boolean autoPlay = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getVoice() {
+            return voice;
+        }
+
+        public void setVoice(String voice) {
+            this.voice = voice;
+        }
+
+        public double getRate() {
+            return rate;
+        }
+
+        public void setRate(double rate) {
+            this.rate = rate;
+        }
+
+        public double getPitch() {
+            return pitch;
+        }
+
+        public void setPitch(double pitch) {
+            this.pitch = pitch;
+        }
+
+        public int getGapMs() {
+            return gapMs;
+        }
+
+        public void setGapMs(int gapMs) {
+            this.gapMs = gapMs;
+        }
+
+        public boolean isAutoPlay() {
+            return autoPlay;
+        }
+
+        public void setAutoPlay(boolean autoPlay) {
+            this.autoPlay = autoPlay;
         }
     }
 }

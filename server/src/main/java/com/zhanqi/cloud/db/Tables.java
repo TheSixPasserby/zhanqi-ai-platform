@@ -37,27 +37,32 @@ public final class Tables {
 
         put("merchants", "m", List.of(
                 "id", "account", "password", "name", "short", "type", "phone", "intro", "since", "avatar",
-                "loginCount", "lastLoginAt", "rememberToken", "status", "createdAt"), Set.of());
+                "loginCount", "lastLoginAt", "rememberToken", "status", "suspendUntil", "suspendReason",
+                "createdAt"), Set.of());
 
         put("admins", "ad", List.of(
                 "id", "account", "password", "name", "phone", "role", "avatar",
                 "loginCount", "lastLoginAt", "rememberToken", "status", "createdAt"), Set.of());
 
         put("spots", "sp", List.of(
-                "id", "name", "type", "cover", "location", "intro", "tts", "stamp", "stampIcon"), Set.of());
+                "id", "name", "type", "cover", "location", "intro", "tts", "stamp", "stampIcon", "voice"), Set.of());
 
         put("stamps", "st", List.of(
                 "id", "userId", "spotId", "spotName", "stamp", "stampIcon", "at"), Set.of());
 
         put("products", "p", List.of(
                 "id", "merchantId", "name", "category", "price", "unit", "stock", "sold",
-                "cover", "status", "tags", "desc", "intro", "createdAt"), Set.of("tags"));
+                "cover", "status", "tags", "timeSlots", "roomTypes", "desc", "intro", "createdAt"),
+                Set.of("tags", "timeSlots", "roomTypes"));
 
         put("orders", "o", List.of(
                 "id", "buyerId", "buyerName", "merchantId", "type", "category", "productId",
                 "productName", "cover", "qty", "amount", "status", "bookDate", "people",
                 "address", "remark", "createdAt", "confirmedAt", "verifiedAt", "cancelledAt",
-                "cancelledBy"), Set.of());
+                "cancelledBy", "rejectReason", "rejectStatus", "rejectedAt", "buyerFeedback",
+                "feedbackAt", "logisticsCompany", "trackingNo", "logisticsStatus",
+                "logisticsUpdatedAt", "shippedAt", "bookingSlot", "checkOutDate", "roomType",
+                "completedAt", "refundAmount", "refundedAt", "refundNote"), Set.of());
 
         put("activities", "a", List.of(
                 "id", "title", "date", "endDate", "place", "tag", "capacity", "desc", "cover"), Set.of());
@@ -73,6 +78,27 @@ public final class Tables {
 
         put("settings", "", List.of(
                 "id", "value", "groupName", "label", "updatedAt"), Set.of());
+
+        put("chatMessages", "cm", List.of(
+                "id", "merchantId", "buyerId", "fromRole", "type", "text", "productId",
+                "orderId", "media", "createdAt", "readAt"), Set.of());
+
+        put("chatTyping", "", List.of(
+                "id", "merchantId", "buyerId", "role", "at"), Set.of());
+
+        put("reports", "rp", List.of(
+                "id", "buyerId", "buyerName", "merchantId", "merchantName", "category", "reason",
+                "content", "evidence", "orderId", "productId", "status", "result", "resultAction",
+                "adminId", "adminName", "handledAt", "appealContent", "appealEvidence", "appealAt",
+                "appealStatus", "appealResult", "appealHandledAt", "notice", "createdAt", "updatedAt"),
+                Set.of("evidence", "appealEvidence"));
+
+        put("orderLogs", "ol", List.of(
+                "id", "orderId", "role", "action", "content", "createdAt"), Set.of());
+
+        put("notifications", "n", List.of(
+                "id", "userId", "role", "title", "content", "type", "refId", "readAt", "createdAt"),
+                Set.of());
     }
 
     private Tables() {

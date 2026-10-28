@@ -58,7 +58,22 @@ public class ServerController {
                 "qrMobile", server.mobileQrDataUrl(),
                 "interfaces", server.interfaces(),
                 "discovery", discovery.status(),
+                // 语音讲解的音色策略：三端共用，客户端据此挑本机可用的最自然音色
+                "speech", speechConfig(),
                 "uptimeSec", server.uptimeSeconds());
+    }
+
+    /** 把 app.speech.* 摊平成前端好用的对象；键名用前端习惯的驼峰 */
+    private Map<String, Object> speechConfig() {
+        AppProperties.Speech s = props.getSpeech();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("enabled", s.isEnabled());
+        m.put("voice", s.getVoice());
+        m.put("rate", s.getRate());
+        m.put("pitch", s.getPitch());
+        m.put("gapMs", s.getGapMs());
+        m.put("autoPlay", s.isAutoPlay());
+        return m;
     }
 
     /**

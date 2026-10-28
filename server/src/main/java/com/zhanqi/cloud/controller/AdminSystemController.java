@@ -3,6 +3,7 @@ package com.zhanqi.cloud.controller;
 import com.zhanqi.cloud.auth.RequireRole;
 import com.zhanqi.cloud.common.ApiException;
 import com.zhanqi.cloud.common.R;
+import com.zhanqi.cloud.config.AppProperties;
 import com.zhanqi.cloud.db.Db;
 import com.zhanqi.cloud.db.Tables;
 import com.zhanqi.cloud.service.AdminService;
@@ -47,15 +48,18 @@ public class AdminSystemController {
     private final AiService ai;
     private final AdminService admin;
     private final Db db;
+    /** application.yml 里的 app.* 兜底值：settings 表里没填时，AI 服务用的是它 */
+    private final AppProperties props;
 
     public AdminSystemController(ServerService server, SettingService settings, DiscoveryService discovery,
-                                 AiService ai, AdminService admin, Db db) {
+                                 AiService ai, AdminService admin, Db db, AppProperties props) {
         this.server = server;
         this.settings = settings;
         this.discovery = discovery;
         this.ai = ai;
         this.admin = admin;
         this.db = db;
+        this.props = props;
     }
 
     /* ============================ 服务器状态 ============================ */
@@ -110,6 +114,119 @@ public class AdminSystemController {
         out.put("ok", true);
         out.putAll(ai.testLlm());
         return out;
+    }
+
+    /**
+     * 「内容管理 → AI 知识库」右侧那张配置卡专用：读取大模型接口配置。
+     *
+     * <p>和 {@code GET /api/admin/settings} 的区别是<b>密钥脱敏</b>：
+     * 通用设置接口会把 ai.apiKey 的明文一起返回（服务器管理页要用它回填输入框），
+     * 而这张卡片只是「查看 + 修改」，没必要让明文再进一次浏览器内存，
+     * 所以这里只给「是否已配置」和一个 `****abcd` 形式的尾巴。想改就填新值，填了才覆盖。
+     */
+    @GetMapping("/ai/config")
+    public Map<String, Object> aiConfig() {
+        String key = settings.get("ai.apiKey", props.getAi().getApiKey());
+        return R.ok(
+                "enabled", settings.getBool("ai.enabled", props.getAi().isEnabled()),
+                "baseUrl", settings.get("ai.baseUrl", props.getAi().getBaseUrl()),
+                "model", settings.get("ai.model", props.getAi().getModel()),
+                "systemPrompt", settings.get("ai.systemPrompt", ""),
+                "hasKey", key != null && !key.isBlank(),
+                "keyMasked", maskKey(key),
+                "engine", ai.status());
+    }
+
+    /**
+     * 保存大模型接口配置（同样仅管理员可用）。
+     *
+     * <p>几个刻意的取舍：
+     * <ul>
+     *   <li><b>apiKey 留空 = 保持原值</b>：页面回显的是脱敏串，用户不改就不该被覆盖成空；</li>
+     *   <li><b>启用即校验</b>：勾了「启用」却没填接口地址 / 模型 / 密钥，直接报错，
+     *       而不是存一个「开着但永远连不上」的状态 —— AI 会静默降级成本地知识库，
+     *       运维根本发现不了；</li>
+     *   <li><b>写 settings 表</b>，AiService 每次调用实时读取 —— 保存即生效，不用重启；</li>
+     *   <li>校验失败抛 {@link ApiException}，由全局异常处理器转成中文提示。</li>
+     * </ul>
+     */
+    @PutMapping("/ai/config")
+    public Map<String, Object> saveAiConfig(@RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> in = body == null ? Map.of() : body;
+
+        boolean enabled = asBool(in.get("enabled"), settings.getBool("ai.enabled", props.getAi().isEnabled()));
+        String baseUrl = str(in.get("baseUrl"), settings.get("ai.baseUrl", props.getAi().getBaseUrl()));
+        String model = str(in.get("model"), settings.get("ai.model", props.getAi().getModel()));
+        String prompt = str(in.get("systemPrompt"), settings.get("ai.systemPrompt", ""));
+        String oldKey = settings.get("ai.apiKey", props.getAi().getApiKey());
+        String newKey = str(in.get("apiKey"), "");
+        boolean clearKey = asBool(in.get("clearKey"), false);
+
+        if (baseUrl != null && !baseUrl.isBlank()
+                && !baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+            throw ApiException.badRequest("接口地址必须以 http:// 或 https:// 开头");
+        }
+        if (prompt != null && prompt.length() > 1000) {
+            throw ApiException.badRequest("系统提示词最多 1000 字，当前 " + prompt.length() + " 字");
+        }
+        if (newKey != null && !newKey.isBlank() && newKey.length() < 8) {
+            throw ApiException.badRequest("API Key 太短了，看起来不像有效的密钥");
+        }
+        if (enabled) {
+            if (baseUrl == null || baseUrl.isBlank()) {
+                throw ApiException.badRequest("启用大模型时必须填写接口地址");
+            }
+            if (model == null || model.isBlank()) {
+                throw ApiException.badRequest("启用大模型时必须填写模型名称");
+            }
+            boolean hasKey = (newKey != null && !newKey.isBlank()) || (oldKey != null && !oldKey.isBlank());
+            if (!hasKey || clearKey) {
+                throw ApiException.badRequest("启用大模型时必须先填写 API Key");
+            }
+        }
+
+        Map<String, Object> patch = new LinkedHashMap<>();
+        patch.put("ai.enabled", String.valueOf(enabled));
+        patch.put("ai.baseUrl", baseUrl == null ? "" : baseUrl.trim());
+        patch.put("ai.model", model == null ? "" : model.trim());
+        patch.put("ai.systemPrompt", prompt == null ? "" : prompt.trim());
+        if (clearKey) {
+            patch.put("ai.apiKey", "");
+        } else if (newKey != null && !newKey.isBlank()) {
+            patch.put("ai.apiKey", newKey.trim());
+        }
+        int changed = settings.save(patch);
+
+        String key = settings.get("ai.apiKey", props.getAi().getApiKey());
+        return R.ok(
+                "changed", changed,
+                "message", changed > 0 ? "已保存并立即生效（AI 服务会按新配置调用）" : "没有需要更新的配置",
+                "enabled", enabled,
+                "baseUrl", baseUrl,
+                "model", model,
+                "systemPrompt", prompt,
+                "hasKey", key != null && !key.isBlank(),
+                "keyMasked", maskKey(key),
+                "engine", ai.status());
+    }
+
+    /** 只留尾巴 4 位：够运维确认「是不是那把钥匙」，又不足以拿去用 */
+    private String maskKey(String key) {
+        if (key == null || key.isBlank()) { return ""; }
+        String k = key.trim();
+        if (k.length() <= 4) { return "****"; }
+        return "****" + k.substring(k.length() - 4);
+    }
+
+    private static String str(Object v, String fallback) {
+        return v == null ? fallback : String.valueOf(v);
+    }
+
+    private static boolean asBool(Object v, boolean fallback) {
+        if (v == null) { return fallback; }
+        if (v instanceof Boolean b) { return b; }
+        String s = String.valueOf(v).trim();
+        return "true".equalsIgnoreCase(s) || "1".equals(s);
     }
 
     /* ============================ 在线会话 ============================ */

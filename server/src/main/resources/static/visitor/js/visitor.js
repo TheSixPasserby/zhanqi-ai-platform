@@ -54,12 +54,167 @@
     goods: '农产文创', study: '研学课程', homestay: '民宿住宿', experience: '农事体验',
   };
   var BOOKING_CATS = ['study', 'homestay', 'experience'];
+  /* 订单状态：在原有 4 个的基础上补齐商家发货/入住/完成/退款（旧 used 保留兼容） */
   var STATUS_TEXT = {
-    pending: '待确认', confirmed: '已确认', used: '已核销', cancelled: '已取消',
+    pending: '待确认', confirmed: '已确认', shipped: '已发货', checked_in: '已入住',
+    completed: '已完成', used: '已核销', cancelled: '已取消', refunded: '已退款',
   };
   var STATUS_CLASS = {
-    pending: 'tag-warn', confirmed: 'tag-info', used: 'tag-ok', cancelled: 'tag-muted',
+    pending: 'tag-warn', confirmed: 'tag-info', shipped: 'tag-info', checked_in: 'tag-info',
+    completed: 'tag-ok', used: 'tag-ok', cancelled: 'tag-muted', refunded: 'tag-danger',
   };
+
+  /* 预约类商品的默认场次/房型：后端 products.timeSlots / roomTypes 为空时前端兜底，
+     与 PC 端保持同一套文案，避免两端看到的可选项不一样。 */
+  var BOOKING_SLOTS = {
+    study: ['上午场 09:00-11:30', '下午场 14:00-16:30'],
+    experience: ['上午 09:30-11:00', '下午 14:30-16:00'],
+  };
+  var HOMESTAY_ROOMS = ['标准间', '大床房', '家庭房'];
+
+  /* 举报分类兜底：GET /api/reports/categories 拿不到时先把界面画出来，提交仍以后端为准 */
+  var REPORT_FALLBACK = [
+    { key: 'service', name: '商家服务态度问题', reasons: ['客服不回复', '态度恶劣', '拒绝沟通', '辱骂用户'] },
+    { key: 'product', name: '商品问题', reasons: ['实物与描述不符', '质量问题', '缺斤少两', '虚假宣传'] },
+    { key: 'logistics', name: '发货物流问题', reasons: ['迟迟不发货', '物流信息造假', '包裹丢失 / 损坏', '运费纠纷'] },
+    { key: 'money', name: '钱款纠纷', reasons: ['拒绝退款', '私下收款', '价格欺诈'] },
+    { key: 'fraud', name: '商家欺诈', reasons: ['虚假交易', '诱导线下交易', '售卖假货', '刷单炒信'] },
+  ];
+  var REPORT_STATUS = {
+    pending: '待处理', resolved: '已处理', appealed: '上诉审核中',
+    appeal_resolved: '已处理', closed: '已关闭',
+  };
+  var REPORT_PROGRESS = { pending: '32%', appealed: '66%', resolved: '100%', appeal_resolved: '100%', closed: '100%' };
+
+  /* ---------------------- 后端返回形态兼容小工具 ----------------------
+     本次改造后端与 H5 是并行开发的，接口字段可能在不同阶段略有出入
+     （例如列表叫 list 还是 reports、节点叫 nodes 还是 logisticsNodes）。
+     这里统一做一次归一化，页面模板只认一套字段，避免每加一个字段就改模板。 */
+
+  function listOf(res, keys) {
+    if (!res) { return []; }
+    for (var i = 0; i < keys.length; i++) {
+      if (Array.isArray(res[keys[i]])) { return res[keys[i]]; }
+    }
+    return [];
+  }
+
+  /** products.timeSlots / roomTypes 在库里是 JSON 文本，既要兼容数组也要兼容逗号串 */
+  function parseJsonList(v) {
+    if (!v) { return []; }
+    if (Array.isArray(v)) { return v; }
+    if (typeof v === 'string') {
+      try {
+        var parsed = JSON.parse(v);
+        if (Array.isArray(parsed)) { return parsed; }
+      } catch (e) { /* 不是 JSON，按分隔符拆 */ }
+      return v.split(/[,，|]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+    return [];
+  }
+
+  function normalizeCategory(c) {
+    if (!c) { return null; }
+    var key = c.key || c.code || c.value || c.id || '';
+    var name = c.name || c.text || c.label || c.title || key;
+    var raw = c.reasons || c.children || c.items || c.subs || c.options || [];
+    var reasons = (Array.isArray(raw) ? raw : []).map(function (r) {
+      if (typeof r === 'string') { return { key: r, text: r }; }
+      var text = r.text || r.name || r.label || r.title || r.key || r.code || '';
+      return { key: r.key || r.code || r.value || text, text: text };
+    }).filter(function (r) { return !!r.text; });
+    return { key: key, name: name, reasons: reasons };
+  }
+
+  function normalizeCategories(res) {
+    if (!res || !res.ok) { return []; }
+    var list = listOf(res, ['categories', 'list', 'dict']);
+    return list.map(normalizeCategory).filter(function (c) { return c && c.key; });
+  }
+
+  /** 聊天消息：兼容 fromRole/role、text/content、media/image 等命名 */
+  function normalizeMsg(m) {
+    if (!m) { return { type: 'text', fromRole: 'merchant', text: '' }; }
+    var role = m.fromRole || m.role || m.sender || m.from || '';
+    if (role !== 'buyer' && role !== 'merchant') { role = 'merchant'; }
+    return {
+      id: m.id,
+      type: m.type || 'text',
+      fromRole: role,
+      text: m.text || m.content || '',
+      media: m.media || m.image || m.imageUrl || m.url || '',
+      productId: m.productId || (m.product && m.product.id) || '',
+      orderId: m.orderId || (m.order && m.order.id) || '',
+      product: m.product || null,
+      order: m.order || null,
+      createdAt: m.createdAt || m.at || m.time || '',
+    };
+  }
+
+  /** 物流：后端返回 {company,trackingNo,status,statusText,nodes:[{text,time,done}],progress:0-3} */
+  function normalizeLogistics(res) {
+    var nodes = listOf(res, ['nodes', 'logisticsNodes', 'list']).map(function (n) {
+      if (typeof n === 'string') { return { text: n, time: '', done: true }; }
+      return {
+        text: n.text || n.desc || n.content || n.statusText || n.status || '物流更新',
+        time: n.time || n.at || n.createdAt || '',
+        done: n.done !== false,
+      };
+    });
+    var progress = Number(res.progress);
+    if (!isFinite(progress)) {
+      var doneCount = nodes.filter(function (n) { return n.done; }).length;
+      progress = doneCount - 1;
+    }
+    progress = Math.max(0, Math.min(3, progress));
+    return {
+      company: res.company || res.logisticsCompany || '',
+      trackingNo: res.trackingNo || '',
+      statusText: res.statusText || res.status || '',
+      progress: progress,
+      stops: ['已揽收', '运输中', '派送中', '已签收'],
+      nodes: nodes,
+    };
+  }
+
+  /**
+   * 把用户选的图片压成最长边 900px 的 JPEG dataURL，并尽量压到 400KB 以内。
+   * 聊天图片与举报凭证都直接存 dataURL 进库，不压的话一张手机原图就能把库撑大。
+   * @param {File} file
+   * @param {function(string|null)} done 失败返回 null，调用方提示换一张
+   */
+  function compressImage(file, done) {
+    if (!file) { return done(null); }
+    if (file.type && file.type.indexOf('image/') !== 0) { return done(null); }
+    var reader = new FileReader();
+    reader.onerror = function () { done(null); };
+    reader.onload = function (e) {
+      var img = new Image();
+      img.onerror = function () { done(null); };
+      img.onload = function () {
+        var maxSide = 900;
+        var scale = Math.min(1, maxSide / Math.max(img.width || 1, img.height || 1));
+        var w = Math.max(1, Math.round(img.width * scale));
+        var h = Math.max(1, Math.round(img.height * scale));
+        var canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF'; // PNG 透明底转 JPEG 会变黑，先铺白
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        var url = canvas.toDataURL('image/jpeg', 0.82);
+        var q = 0.82;
+        while (url.length > 400 * 1024 && q > 0.4) {
+          q -= 0.12;
+          url = canvas.toDataURL('image/jpeg', q);
+        }
+        done(url.length > 400 * 1024 ? null : url);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
 
   /* ================================ 应用 ================================ */
 
@@ -108,6 +263,7 @@
         current: {},
         speaking: false,
         showScript: false,
+        voiceName: '',       // 当前语音音色名（语音讲解卡片右上角展示）
 
         /* 商城 */
         products: [],
@@ -157,11 +313,58 @@
           { key: '', text: '全部' },
           { key: 'pending', text: '待确认' },
           { key: 'confirmed', text: '已确认' },
-          { key: 'used', text: '已核销' },
+          { key: 'shipped', text: '已发货' },
+          { key: 'checked_in', text: '已入住' },
+          { key: 'completed', text: '已完成' },
           { key: 'cancelled', text: '已取消' },
+          { key: 'refunded', text: '已退款' },
         ],
         checkoutMode: false,
         submitting: false,
+
+        /* 订单详情 / 物流 / 拒绝协商 */
+        orderDetail: {},
+        orderDetailLoading: false,
+        orderLogs: [],
+        logistics: null,
+        rejectFeedback: '',
+        buyerDeciding: false,
+
+        /* 商品详情：发布商家 + 四类购买表单 */
+        productMerchant: {},
+        productSlots: [],
+        productRooms: [],
+        bookingSlot: '',
+        checkOutDate: '',
+        roomType: '',
+
+        /* 商家主页 */
+        merchantHome: {},
+        merchantHomeProducts: [],
+        merchantHomeLoading: false,
+
+        /* 商家客服聊天 */
+        chatMerchant: {},
+        chatMessages: [],
+        chatText: '',
+        chatOnline: false,
+        chatPeerTyping: false,
+        chatLoading: false,
+        chatSending: false,
+        chatPanel: false,
+        chatPicker: '',
+        chatProducts: [],
+        chatTimer: null,
+        chatLastTyping: 0,
+
+        /* 举报中心 */
+        reportsTab: 'mine',
+        reportCategories: [],
+        reportMine: [],
+        reportMineLoading: false,
+        reportForm: { merchantId: '', merchantName: '', category: '', reason: '', content: '' },
+        reportEvidence: [],
+        reportSubmitting: false,
 
         /* 购物车 */
         cart: [],
@@ -264,34 +467,48 @@
       },
 
       /* 集章扇形图：每个点位一段，已打卡的那段点亮。
-         以前中间是个「印」字、外面是 conic-gradient 圆环，既像文字占位，也看不出细粒度进度。 */
+         以前中间是个「印」字、外面是 conic-gradient 圆环，既像文字占位，也看不出细粒度进度。
+
+         三处必须注意（都踩过）：
+           1. 段数以服务端下发的 total 为准，不能用 spots.length —— 点位列表还没回来、
+              将来加了筛选或分页时，段数会和「x / N 枚」的 N 悄悄对不上。
+           2. 点亮判定优先用点位自带的 checked（与列表、印章墙同一数据源），
+              印章接口还没返回或失败时，不会出现「数字变了、扇形图没变」。
+           3. 纯 SVG 路径绘制，不依赖任何图表库，也不依赖 conic-gradient
+              （OpenGL 缺失、旧安卓 WebView 上 conic-gradient 会整块不显示）。 */
       ringSegments: function () {
         var spots = this.spots || [];
-        var total = spots.length || 14;
+        var total = Number(this.total) || spots.length || 14;
+        if (!(total >= 1)) { return []; }
         var step = 360 / total;
         var gap = Math.min(3.2, step * 0.2);
         var done = {};
-        (this.stamps || []).forEach(function (s) { done[s.spotId] = true; });
+        (this.stamps || []).forEach(function (s) {
+          if (s && s.spotId) { done[s.spotId] = true; }
+        });
         var out = [];
         for (var i = 0; i < total; i++) {
+          var spot = spots[i] || null;
+          var lit = !!(spot && (spot.checked || done[spot.id]));
           var a0 = i * step - 90 + gap / 2;
           var a1 = (i + 1) * step - 90 - gap / 2;
           out.push({
             d: window.ZQSpotIcons.ringSegment(64, 64, 60, 45, a0, a1),
-            checked: !!(spots[i] && done[spots[i].id])
+            checked: lit
           });
         }
         return out;
       },
 
+      /* 首页功能宫格：按需求把「我的订单」放在「活动日历」与「AI 助手」之间 */
       entries: function () {
         return [
           { key: 'spots', text: '点位打卡', icon: 'i-stamp', view: 'spots', tab: true, bg: '#E6F2ED', color: '#146B57' },
           { key: 'booking', text: '研学民宿', icon: 'i-bed', view: 'booking', bg: '#EAF1F9', color: '#2F6BA8' },
-          { key: 'ai', text: 'AI 助手', icon: 'i-ai', view: 'ai', bg: '#FBEDE7', color: '#BE5230' },
-          { key: 'plan', text: '行程规划', icon: 'i-map', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
           { key: 'acts', text: '活动日历', icon: 'i-calendar', view: 'activities', bg: '#F1EEE7', color: '#5C6B65' },
           { key: 'orders', text: '我的订单', icon: 'i-ticket', view: 'orders', bg: '#E8F4EE', color: '#2C7A57' },
+          { key: 'ai', text: 'AI 助手', icon: 'i-ai', view: 'ai', bg: '#FBEDE7', color: '#BE5230' },
+          { key: 'plan', text: '行程规划', icon: 'i-map', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
         ];
       },
 
@@ -303,6 +520,7 @@
           { key: 'plan', text: 'AI 行程规划', desc: '按偏好编排 1-3 天路线', icon: 'i-map', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
           { key: 'acts', text: '村内活动日历', desc: '非遗节庆与农事体验', icon: 'i-calendar', view: 'activities', bg: '#F1EEE7', color: '#5C6B65' },
           { key: 'shop', text: '去逛商城', desc: '农产文创好物', icon: 'i-shop', view: 'shop', tab: true, bg: '#E8F4EE', color: '#2C7A57' },
+          { key: 'reports', text: '举报中心', desc: '商家违规反馈与处理进度', icon: 'i-shield', view: 'reports', bg: '#FBEDE7', color: '#BE5230' },
         ];
       },
 
@@ -340,6 +558,72 @@
           .filter(function (o) { return o.status !== 'cancelled'; })
           .reduce(function (s, o) { return s + (Number(o.amount) || 0); }, 0);
       },
+
+      /* 物流小车位置：progress 0-3 对应 4 个节点，轨道按百分比定位 */
+      truckLeft: function () {
+        var p = this.logistics ? Number(this.logistics.progress) || 0 : 0;
+        return (4 + Math.max(0, Math.min(3, p)) * 29) + '%';
+      },
+
+      truckWidth: function () {
+        var p = this.logistics ? Number(this.logistics.progress) || 0 : 0;
+        return (Math.max(0, Math.min(3, p)) / 3) * 100 + '%';
+      },
+
+      /* 聊天顶部状态：输入中 > 在线 / 离线 */
+      chatPeerText: function () {
+        if (this.chatPeerTyping) { return '对方正在输入…'; }
+        return this.chatOnline ? '在线中' : '离线中';
+      },
+
+      /* 当前商家的订单（聊天「订单」面板用；必须用 computed，模板里才能读 .length） */
+      chatOrders: function () {
+        var id = this.chatMerchant && this.chatMerchant.id;
+        if (!id) { return []; }
+        return (this.orders || []).filter(function (o) { return o.merchantId === id; });
+      },
+
+      /* 举报可选商家：从我的订单 + 当前聊天/商家主页里汇总，去重 */
+      reportMerchantOptions: function () {
+        var seen = {};
+        var out = [];
+        var push = function (id, name) {
+          if (!id || seen[id]) { return; }
+          seen[id] = true;
+          out.push({ id: id, name: name || ('商家 ' + id) });
+        };
+        (this.orders || []).forEach(function (o) { push(o.merchantId, o.merchantName); });
+        push(this.chatMerchant && this.chatMerchant.id, this.chatMerchant && this.chatMerchant.name);
+        push(this.merchantHome && this.merchantHome.id, this.merchantHome && this.merchantHome.name);
+        return out;
+      },
+
+      /* 当前选中违规分类下的细因由 */
+      reportReasons: function () {
+        var key = this.reportForm.category;
+        var cat = (this.reportCategories || []).filter(function (c) { return c.key === key; })[0];
+        return cat ? (cat.reasons || []) : [];
+      },
+    },
+
+    /* 离开点位详情就停朗读。
+       这一条是「退出登录后语音还在念」的根治办法：退出登录 / 令牌过期被踢回登录页，
+       都会把 view 改回 'home'，于是这里立刻停；不用在每处跳转都记得手动调 stop。
+       只挂在 view 上，不挂 viewStack —— 返回栈变化本身不改变当前页面。 */
+    watch: {
+      view: function (now, before) {
+        if (before === 'spotDetail' && now !== 'spotDetail') {
+          this.stopSpeak();
+        }
+        // 聊天轮询只在聊天页跑：切走立刻停，回来再恢复，避免后台一直打接口
+        if (before === 'chat' && now !== 'chat') {
+          this.stopChatPoll();
+        }
+        if (before !== 'chat' && now === 'chat' && this.chatMerchant.id) {
+          this.loadChat(true);
+          this.startChatPoll();
+        }
+      },
     },
 
     created: function () {
@@ -348,6 +632,8 @@
       // 把错误提示接到页面的 Toast 上，统一三端的提示样式
       ZQ.notify.onToast = function (msg) { self.toast(msg); };
       ZQ.notify.onUnauthorized = function (msg) {
+        // 令牌失效：页面会自动退回登录页，语音必须同步停掉，否则会在登录页继续念
+        self.stopSpeak();
         self.user = null;
         self.view = 'home';
         self.viewStack = [];
@@ -540,6 +826,7 @@
         if (view === 'booking' && !this.bookingList.length) { this.loadBooking(); }
         if (view === 'orders' && !this.checkoutMode) { this.loadOrders(); }
         if (view === 'ai' && !Object.keys(this.ai).length) { this.loadAiStatus(); }
+        if (view === 'reports') { this.loadReportCategories(); this.loadMyReports(); }
       },
 
       /* ---------------------------- 站点信息 ---------------------------- */
@@ -549,6 +836,12 @@
         api.get('/api/server/info', null, { silent: true }).then(function (res) {
           if (res && res.ok) {
             self.site = res;
+            // 语音音色策略由服务端统一下发（app.speech.*），三端保持一致。
+            // 取不到也没关系：ZQSpeech 内部有同等兜底值，不会因为少了配置就不念。
+            if (res.speech && window.ZQSpeech) {
+              window.ZQSpeech.configure(res.speech);
+              self.voiceName = window.ZQSpeech.voiceLabel();
+            }
           }
           self.booted = true;
           // 本地存有登录态时，先确认这个令牌还有效，再去拉业务数据。
@@ -663,7 +956,11 @@
       doLogout: function () {
         var self = this;
         if (!confirm('确定退出登录吗？退出后需要重新输入账号密码。')) { return; }
+        // 先停语音再发请求：退出接口是异步的，等它回来才停的话，
+        // 用户在「已确认退出、页面还没跳走」的这段时间里还会听到朗读。
+        this.stopSpeak();
         api.post('/api/auth/logout', {}, { silent: true }).then(function () {
+          self.stopSpeak();
           ZQ.store.clear();
           self.user = null;
           self.view = 'home';
@@ -866,6 +1163,8 @@
       openSpot: function (id, autoSpeak) {
         var self = this;
         this.stopSpeak();
+        // 音色列表可能要等网络音色补进来才完整，进详情时顺手刷新展示名
+        if (window.ZQSpeech) { this.voiceName = window.ZQSpeech.voiceLabel(); }
         // 已经在这一页就别再压一层返回栈，否则要连点两次返回
         if (this.view !== 'spotDetail') { this.go('spotDetail'); }
         this.current = {};
@@ -912,7 +1211,10 @@
         });
       },
 
-      /* ---------------------------- 语音讲解 ---------------------------- */
+      /* ---------------------------- 语音讲解 ----------------------------
+         三端共用 ZQSpeech（assets/js/speech.js）：音色优选、分句朗读、可靠停止。
+         本页只负责「什么时候播、什么时候停」，不再自己拼 SpeechSynthesisUtterance，
+         否则每个页面都得重复一遍 cancel/onend 的坑。 */
 
       toggleSpeak: function () {
         if (this.speaking) {
@@ -921,30 +1223,63 @@
         }
         var text = this.current.tts || this.current.intro || '';
         if (!text) { return this.toast('这个点位还没有讲解内容'); }
-        if (!window.speechSynthesis) {
+        if (!window.ZQSpeech || !window.ZQSpeech.available()) {
           this.showScript = true;
           return this.toast('当前浏览器不支持语音朗读，已为你展开讲解文稿');
         }
 
         var self = this;
-        try {
-          window.speechSynthesis.cancel();
-          var u = new SpeechSynthesisUtterance(text);
-          u.lang = 'zh-CN';
-          u.rate = 1;
-          u.onend = function () { self.speaking = false; };
-          u.onerror = function () { self.speaking = false; };
-          window.speechSynthesis.speak(u);
-          this.speaking = true;
-        } catch (e) {
+        // 语音包由管理员在点位编辑里配置（auto / male / female），这里原样透传；
+        // 设备没有对应性别音色时 ZQSpeech 内部会自动退回打分最优音色，不会报错。
+        var started = window.ZQSpeech.speak(text, {
+          pack: this.current.voice || 'auto',
+          onFail: function () {
+            // 浏览器把 speak 静默吞掉（无 onstart / 无 onerror）时展开文稿，别让按钮一直停在「朗读中」
+            self.showScript = true;
+            self.speaking = false;
+            self.toast('当前浏览器未能发声，已展开讲解文稿');
+          }
+        });
+        if (!started) {
           this.showScript = true;
-          this.toast('语音朗读启动失败，已为你展开讲解文稿');
+          return this.toast('语音朗读启动失败，已为你展开讲解文稿');
         }
+        this.speaking = true;
       },
 
       stopSpeak: function () {
-        try { if (window.speechSynthesis) { window.speechSynthesis.cancel(); } } catch (e) { /* 忽略 */ }
+        if (window.ZQSpeech) { window.ZQSpeech.stop(); }
         this.speaking = false;
+      },
+
+      /** 当前音色名，显示在讲解卡片右上角，让用户知道用的是哪个声音 */
+      voiceLabel: function () {
+        return this.voiceName || (window.ZQSpeech ? window.ZQSpeech.voiceLabel() : '');
+      },
+
+      /** 卡片右上角文案：优先显示管理员配置的语音包（男声/女声），再带出具体音色 */
+      voiceText: function () {
+        var pack = window.ZQSpeech ? window.ZQSpeech.packLabel(this.current.voice || 'auto') : '';
+        var name = this.voiceLabel();
+        if (pack && name && pack !== name) { return '语音包 · ' + pack + ' / ' + name; }
+        return pack || name || '浏览器语音合成';
+      },
+
+      /** 换音色：在设备可用的中文音色里循环，选择记在本地 */
+      switchVoice: function () {
+        if (!window.ZQSpeech || !window.ZQSpeech.available()) {
+          return this.toast('当前浏览器不支持语音朗读');
+        }
+        var self = this;
+        var wasSpeaking = this.speaking;
+        var text = this.current.tts || this.current.intro || '';
+        this.voiceName = window.ZQSpeech.cycleVoice() || this.voiceName;
+        if (wasSpeaking && text) {
+          // 换音色后按新音色重念，否则要再点一次「播放」才有变化
+          this.stopSpeak();
+          this.$nextTick(function () { self.toggleSpeak(); });
+        }
+        this.toast(this.voiceName ? '已切换音色：' + this.voiceName : '没有更多可用音色');
       },
 
       waveStyle: function (n) {
@@ -957,6 +1292,12 @@
         var self = this;
         this.go('productDetail');
         this.product = {};
+        this.productMerchant = {};
+        this.productSlots = [];
+        this.productRooms = [];
+        this.bookingSlot = '';
+        this.checkOutDate = '';
+        this.roomType = '';
         this.qty = 1;
         this.people = 2;
         this.bookDate = dayAfter(1);
@@ -964,20 +1305,70 @@
         this.remark = '';
         window.scrollTo(0, 0);
         api.get('/api/shop/products/' + id).then(function (res) {
-          if (res && res.ok && res.product) {
-            self.product = Object.assign({}, res.product, {
-              categoryText: CATEGORY_TEXT[res.product.category] || res.product.category,
-            });
-          }
+          if (!res || !res.ok || !res.product) { return; }
+          var p = Object.assign({}, res.product, {
+            categoryText: CATEGORY_TEXT[res.product.category] || res.product.category,
+          });
+          self.product = p;
+          self.productSlots = self.bookingSlotsOf(p);
+          self.productRooms = self.roomTypesOf(p);
+          self.bookingSlot = self.productSlots[0] || '';
+          self.roomType = self.productRooms[0] || '';
+          self.checkOutDate = dayAfter(2);
+          self.loadProductMerchant(p);
+        });
+      },
+
+      /** 可预约场次：优先商品配置，其次按分类给默认场次 */
+      bookingSlotsOf: function (p) {
+        var list = parseJsonList(p && (p.timeSlots || p.slots || p.bookingSlots));
+        if (!list.length) { list = BOOKING_SLOTS[p && p.category] || []; }
+        return list.map(function (x) {
+          return typeof x === 'string' ? x : (x.name || x.text || x.slot || '');
+        }).filter(Boolean);
+      },
+
+      /** 民宿房型：优先商品配置，其次给默认房型 */
+      roomTypesOf: function (p) {
+        var list = parseJsonList(p && (p.roomTypes || p.rooms));
+        if (!list.length) { list = HOMESTAY_ROOMS; }
+        return list.map(function (x) {
+          return typeof x === 'string' ? x : (x.name || x.text || x.roomType || '');
+        }).filter(Boolean);
+      },
+
+      /** 商品详情里的发布商家卡片数据（失败时退回商品自带的 merchantName） */
+      loadProductMerchant: function (p) {
+        var self = this;
+        if (!p || !p.merchantId) {
+          this.productMerchant = p && p.merchantName ? { name: p.merchantName } : {};
+          return;
+        }
+        api.get('/api/shop/merchants/' + p.merchantId, null, { silent: true }).then(function (res) {
+          var m = (res && res.ok && (res.merchant || res.shop)) || {};
+          self.productMerchant = Object.assign({ id: p.merchantId, name: p.merchantName }, m);
         });
       },
 
       buyNow: function () {
         var self = this;
+        var cat = this.product.category || 'goods';
         if (this.product.stock <= 0) { return this.toast('该商品已售罄'); }
         if (!this.user) { return this.toast('请先登录再下单'); }
-        if (this.isBooking && !this.bookDate) { return this.toast('请选择预约日期'); }
-        if (!this.isBooking && !this.address) { return this.toast('请填写收货地址'); }
+
+        // 四类商品各自的必填项：实物要地址，预约要看日期/场次/离店/房型
+        if (cat === 'goods') {
+          if (!this.address) { return this.toast('请填写收货地址'); }
+        } else {
+          if (!this.bookDate) { return this.toast('请选择' + (cat === 'homestay' ? '入住' : '预约') + '日期'); }
+          if (cat === 'homestay') {
+            if (!this.checkOutDate) { return this.toast('请选择离店日期'); }
+            if (this.checkOutDate <= this.bookDate) { return this.toast('离店日期要晚于入住日期'); }
+            if (!this.roomType) { return this.toast('请选择房型'); }
+          } else if (!this.bookingSlot) {
+            return this.toast(cat === 'study' ? '请选择上课场次' : '请选择体验时段');
+          }
+        }
 
         this.submitting = true;
         api.post('/api/shop/orders', {
@@ -985,6 +1376,9 @@
           bookDate: this.isBooking ? this.bookDate : '',
           people: this.isBooking ? this.people : 1,
           address: this.isBooking ? '' : this.address,
+          bookingSlot: this.isBooking ? (this.bookingSlot || '') : '',
+          checkOutDate: cat === 'homestay' ? this.checkOutDate : '',
+          roomType: cat === 'homestay' ? this.roomType : '',
           remark: this.remark,
         }).then(function (res) {
           self.submitting = false;
@@ -1005,9 +1399,425 @@
             self.toast(res.message || '已取消');
             self.loadOrders();
             self.loadProducts();
+            // 详情页里取消：顺带刷新详情，否则状态还停在「待确认」
+            if (self.view === 'orderDetail' && self.orderDetail.id === o.id) { self.loadOrderDetail(o.id); }
           }
         });
       },
+
+      /* ---------------------------- 订单详情 / 物流 / 拒绝协商 ---------------------------- */
+
+      openOrder: function (id) {
+        if (!id) { return; }
+        this.go('orderDetail');
+        this.orderDetail = { id: id };
+        this.orderDetailLoading = true;
+        this.orderLogs = [];
+        this.logistics = null;
+        this.rejectFeedback = '';
+        this.loadOrderDetail(id);
+        window.scrollTo(0, 0);
+      },
+
+      loadOrderDetail: function (id) {
+        var self = this;
+        api.get('/api/shop/orders/' + id).then(function (res) {
+          self.orderDetailLoading = false;
+          if (!res || !res.ok) { self.orderDetail = {}; return; }
+          // 兼容 {order:{...}} 与直接返回订单对象两种形态
+          var o = Object.assign({}, res.order || res.detail || res);
+          if (!o.id) { o.id = id; }
+          if (o.merchant) {
+            if (!o.merchantId) { o.merchantId = o.merchant.id; }
+            if (!o.merchantName) { o.merchantName = o.merchant.name; }
+            if (!o.merchantPhone) { o.merchantPhone = o.merchant.phone; }
+          }
+          self.orderDetail = o;
+          self.orderLogs = listOf(res, ['logs', 'orderLogs', 'records'])
+            .concat(Array.isArray(o.logs) ? o.logs : []);
+          // 只有实物商品才查物流；预约类调了也只会拿到空数据
+          if (self.isGoodsOrder(o)) { self.loadOrderLogistics(id); }
+          else { self.logistics = null; }
+        });
+      },
+
+      loadOrderLogistics: function (id) {
+        var self = this;
+        api.get('/api/shop/orders/' + id + '/logistics', null, { silent: true }).then(function (res) {
+          if (!res || !res.ok) { self.logistics = null; return; }
+          self.logistics = normalizeLogistics(res);
+        });
+      },
+
+      /** 买家对「商家申请关闭订单」的决策：同意关单 / 不同意继续协商 */
+      decideOrder: function (agree) {
+        var self = this;
+        var o = this.orderDetail;
+        if (!o || !o.id || this.buyerDeciding) { return; }
+        this.buyerDeciding = true;
+        api.post('/api/shop/orders/' + o.id + '/buyer-decision', {
+          agree: !!agree,
+          reason: this.rejectFeedback || (agree ? '同意关闭订单' : '不同意，继续协商'),
+        }).then(function (res) {
+          self.buyerDeciding = false;
+          if (!res || !res.ok) { return; }
+          self.toast(res.message || (agree ? '订单已关闭' : '已提交协商，商家会继续处理'));
+          self.loadOrderDetail(o.id);
+          self.loadOrders();
+          self.loadProducts();
+        });
+      },
+
+      /** 订单状态下方的人话说明（含拒绝协商的中间态） */
+      orderStatusTip: function (o) {
+        if (!o) { return ''; }
+        if (o.rejectStatus === 'waiting_buyer') { return '商家提出关闭订单，等待你确认'; }
+        if (o.rejectStatus === 'buyer_disagreed') { return '已提交协商，等待商家继续处理'; }
+        var map = {
+          pending: '等待商家确认', confirmed: '商家已确认，等待处理', shipped: '商家已发货，留意物流',
+          checked_in: '已办理入住', completed: '交易已完成', used: '交易已完成（历史）',
+          cancelled: '订单已关闭', refunded: '退款已登记，到账时间以支付渠道为准',
+        };
+        return map[o.status] || '订单处理中';
+      },
+
+      /** 实物商品才有物流；预约类（研学/民宿/农事）没有 */
+      isGoodsOrder: function (o) {
+        if (!o) { return false; }
+        if (o.category) { return o.category === 'goods'; }
+        return !o.bookDate && !o.bookingSlot && !o.checkOutDate && !o.roomType;
+      },
+
+      orderMerchantName: function (o) {
+        return (o && (o.merchantName || (o.merchant && o.merchant.name))) || '村内商家';
+      },
+
+      orderMerchantPhone: function (o) {
+        return (o && (o.merchantPhone || (o.merchant && o.merchant.phone))) || '';
+      },
+
+      /** 商家头像：自定义照片优先，否则用统一的商家默认头像 */
+      avatarFrom: function (obj) {
+        var a = obj && (obj.avatar || obj.merchantAvatar || (obj.merchant && obj.merchant.avatar));
+        return a ? this.asset(a) : window.ZQProfile.defaultFor('merchant');
+      },
+
+      merchantType: function (m) {
+        return (m && (m.typeText || m.type || m.business || m.categoryText)) || '村内商家';
+      },
+
+      roleText: function (role) {
+        return { buyer: '我', merchant: '商家', admin: '平台', system: '系统' }[role] || '系统';
+      },
+
+      /* ---------------------------- 商家主页 ---------------------------- */
+
+      openMerchant: function (id, fallback) {
+        if (!id) { return; }
+        var self = this;
+        this.go('merchantHome');
+        this.merchantHome = Object.assign({ id: id }, fallback || {});
+        this.merchantHomeProducts = [];
+        this.merchantHomeLoading = true;
+        window.scrollTo(0, 0);
+        api.get('/api/shop/merchants/' + id, null, { silent: true }).then(function (res) {
+          self.merchantHomeLoading = false;
+          if (!res || !res.ok) {
+            if (!self.merchantHome.name) { self.toast((res && res.error) || '商家信息暂时打不开'); }
+            return;
+          }
+          var m = res.merchant || res.shop || res;
+          self.merchantHome = Object.assign({}, self.merchantHome, m, { id: id });
+          self.merchantHomeProducts = (res.products || []).map(function (p) {
+            return Object.assign({}, p, { categoryText: CATEGORY_TEXT[p.category] || p.category });
+          });
+        });
+      },
+
+      /* ---------------------------- 商家客服聊天 ---------------------------- */
+
+      openChat: function (merchantId, merchantName) {
+        if (!this.user) { return this.toast('登录后才能联系商家'); }
+        if (!merchantId) { return this.toast('这个商家暂时没有开通在线客服'); }
+        this.stopSpeak();
+        if (this.view !== 'chat') { this.go('chat'); }
+        this.chatMerchant = { id: merchantId, name: merchantName || '' };
+        this.chatMessages = [];
+        this.chatText = '';
+        this.chatPanel = false;
+        this.chatPicker = '';
+        this.chatProducts = [];
+        this.chatOnline = false;
+        this.chatPeerTyping = false;
+        this.chatLastTyping = 0;
+        this.loadChatPeer();
+        this.loadChat();
+        this.startChatPoll();
+        if (!this.orders.length) { this.loadOrders(); }
+        window.scrollTo(0, 0);
+      },
+
+      startChatPoll: function () {
+        var self = this;
+        this.stopChatPoll();
+        this.chatTimer = setInterval(function () {
+          if (self.view === 'chat') { self.loadChat(true); }
+        }, 3000);
+      },
+
+      stopChatPoll: function () {
+        if (this.chatTimer) { clearInterval(this.chatTimer); this.chatTimer = null; }
+      },
+
+      /** 商家在线状态：接口失败就按「离线中」显示，不打扰用户 */
+      loadChatPeer: function () {
+        var self = this;
+        var id = this.chatMerchant.id;
+        if (!id) { return; }
+        api.get('/api/chat/peer', { merchantId: id }, { silent: true }).then(function (res) {
+          if (!res || !res.ok) { return; }
+          var m = res.merchant || res.peer || {};
+          if (!self.chatMerchant.name) { self.chatMerchant.name = m.name || res.name || ''; }
+          if (typeof res.online === 'boolean') { self.chatOnline = res.online; }
+          else if (typeof m.online === 'boolean') { self.chatOnline = m.online; }
+        });
+      },
+
+      loadChat: function (silent) {
+        var self = this;
+        var id = this.chatMerchant.id;
+        if (!id || this.chatLoading) { return; }
+        this.chatLoading = true;
+        var before = this.chatMessages.length;
+        api.get('/api/chat/messages', { merchantId: id }, { silent: true }).then(function (res) {
+          self.chatLoading = false;
+          if (!res || !res.ok) { return; }
+          var list = listOf(res, ['messages', 'list', 'chatMessages']);
+          self.chatMessages = list.map(normalizeMsg);
+          if (res.merchant && res.merchant.name) { self.chatMerchant.name = res.merchant.name; }
+          if (typeof res.online === 'boolean') { self.chatOnline = res.online; }
+          if (typeof res.merchantOnline === 'boolean') { self.chatOnline = res.merchantOnline; }
+          // 后端 /api/chat/messages 用 peerOnline / peerTyping 表示对方状态
+          if (typeof res.peerOnline === 'boolean') { self.chatOnline = res.peerOnline; }
+          if (res.merchant && typeof res.merchant.online === 'boolean') { self.chatOnline = res.merchant.online; }
+          self.chatPeerTyping = !!(res.typing || res.peerTyping || res.merchantTyping);
+          if (!silent || self.chatMessages.length !== before) { self.scrollIm(); }
+        });
+      },
+
+      scrollIm: function () {
+        var self = this;
+        this.$nextTick(function () {
+          var el = self.$refs.imScroll;
+          if (el) { el.scrollTop = el.scrollHeight; }
+        });
+      },
+
+      sendChat: function () {
+        var text = String(this.chatText || '').trim();
+        if (!text || this.chatSending) { return; }
+        this.chatText = '';
+        this.sendChatMessage({ type: 'text', text: text });
+      },
+
+      sendChatMessage: function (payload) {
+        var self = this;
+        var id = this.chatMerchant.id;
+        if (!id || this.chatSending) { return; }
+        this.chatSending = true;
+        payload.merchantId = id;
+        api.post('/api/chat/messages', payload).then(function (res) {
+          self.chatSending = false;
+          if (!res || !res.ok) { return; }
+          // 先就地插入，避免等下一轮轮询才看到自己发的消息
+          var msg = res.message || res.msg;
+          if (msg && typeof msg === 'object' && !Array.isArray(msg)) {
+            self.chatMessages.push(normalizeMsg(msg));
+          }
+          self.chatPanel = false;
+          self.chatPicker = '';
+          self.scrollIm();
+          self.loadChat(true);
+        });
+      },
+
+      sendChatProduct: function (p) {
+        if (!p) { return; }
+        this.sendChatMessage({ type: 'product', productId: p.id, text: p.name || '商品' });
+      },
+
+      sendChatOrder: function (o) {
+        if (!o) { return; }
+        this.sendChatMessage({ type: 'order', orderId: o.id, text: o.productName || '订单' });
+      },
+
+      /** 聊天图片：拍照/相册统一走压缩，失败提示换一张 */
+      onChatImage: function (e) {
+        var self = this;
+        var input = e.target;
+        var file = (input.files || [])[0];
+        input.value = ''; // 允许重复选同一张
+        if (!file) { return; }
+        this.toast('正在处理图片…');
+        compressImage(file, function (dataUrl) {
+          if (!dataUrl) { return self.toast('图片处理失败，请换一张小一点的图片'); }
+          self.sendChatMessage({ type: 'image', media: dataUrl, text: '[图片]' });
+        });
+      },
+
+      openChatPicker: function (kind) {
+        this.chatPicker = kind;
+        if (kind === 'product') { this.loadChatProducts(); }
+      },
+
+      loadChatProducts: function () {
+        var self = this;
+        var id = this.chatMerchant.id;
+        if (!id || this.chatProducts.length) { return; }
+        api.get('/api/shop/merchants/' + id, null, { silent: true }).then(function (res) {
+          if (res && res.ok) { self.chatProducts = res.products || []; }
+        });
+      },
+
+      /** 输入中状态：2 秒最多报一次，别把接口打满 */
+      onChatInput: function () {
+        var now = Date.now();
+        if (!this.chatMerchant.id || now - this.chatLastTyping < 2000) { return; }
+        this.chatLastTyping = now;
+        api.post('/api/chat/typing', { merchantId: this.chatMerchant.id }, { silent: true });
+      },
+
+      /** 聊天卡片里引用的商品/订单：优先消息自带，其次从本地缓存里找 */
+      chatProductOf: function (m) {
+        if (m && m.product) { return m.product; }
+        var id = m && m.productId;
+        return this.chatProducts.filter(function (p) { return p.id === id; })[0]
+          || this.products.filter(function (p) { return p.id === id; })[0]
+          || {};
+      },
+
+      chatOrderOf: function (m) {
+        if (m && m.order) { return m.order; }
+        var id = m && m.orderId;
+        return this.orders.filter(function (o) { return o.id === id; })[0] || {};
+      },
+
+      reportFromChat: function () {
+        var m = this.chatMerchant || {};
+        if (!m.id) { return this.toast('还没有可举报的商家'); }
+        this.openReports({ merchantId: m.id, merchantName: m.name });
+      },
+
+      /* ---------------------------- 举报中心 ---------------------------- */
+
+      openReports: function (pre) {
+        if (!this.user) { return this.toast('登录后才能提交举报'); }
+        this.go('reports');
+        if (pre && pre.merchantId) {
+          this.reportsTab = 'form';
+          this.reportForm.merchantId = pre.merchantId;
+          this.reportForm.merchantName = pre.merchantName || '';
+        } else {
+          this.reportsTab = 'mine';
+        }
+        window.scrollTo(0, 0);
+      },
+
+      loadReportCategories: function () {
+        var self = this;
+        if (this.reportCategories.length) { return; }
+        api.get('/api/reports/categories', null, { silent: true }).then(function (res) {
+          var list = normalizeCategories(res);
+          self.reportCategories = list.length
+            ? list
+            : REPORT_FALLBACK.map(normalizeCategory);
+        });
+      },
+
+      loadMyReports: function () {
+        var self = this;
+        if (!this.user) { this.reportMine = []; return; }
+        this.reportMineLoading = true;
+        api.get('/api/reports/mine', null, { silent: true }).then(function (res) {
+          self.reportMineLoading = false;
+          if (!res || !res.ok) { return; }
+          self.reportMine = listOf(res, ['reports', 'list']).map(function (r) {
+            return Object.assign({}, r, {
+              categoryText: r.categoryText || self.reportCategoryText(r.category),
+            });
+          });
+        });
+      },
+
+      chooseReportCategory: function (c) {
+        this.reportForm.category = c.key;
+        this.reportForm.reason = (c.reasons[0] && c.reasons[0].text) || '';
+      },
+
+      syncReportMerchantName: function () {
+        var id = this.reportForm.merchantId;
+        var opt = this.reportMerchantOptions.filter(function (m) { return m.id === id; })[0];
+        this.reportForm.merchantName = opt ? opt.name : '';
+      },
+
+      resetReportMerchant: function () {
+        this.reportForm.merchantId = '';
+        this.reportForm.merchantName = '';
+      },
+
+      onEvidencePick: function (e) {
+        var self = this;
+        var input = e.target;
+        var file = (input.files || [])[0];
+        input.value = '';
+        if (!file) { return; }
+        if (this.reportEvidence.length >= 3) { return this.toast('最多上传 3 张凭证'); }
+        compressImage(file, function (dataUrl) {
+          if (!dataUrl) { return self.toast('图片处理失败，请换一张小一点的图片'); }
+          self.reportEvidence.push(dataUrl);
+        });
+      },
+
+      removeEvidence: function (i) {
+        this.reportEvidence.splice(i, 1);
+      },
+
+      submitReport: function () {
+        var self = this;
+        var f = this.reportForm;
+        if (!f.merchantId) { return this.toast('请选择要举报的商家'); }
+        if (!f.category) { return this.toast('请选择违规分类'); }
+        if (!f.reason) { return this.toast('请选择具体的举报原因'); }
+        if (!f.content || f.content.length < 5) { return this.toast('请把情况写清楚一点（至少 5 个字）'); }
+        if (this.reportSubmitting) { return; }
+        this.reportSubmitting = true;
+        api.post('/api/reports', {
+          merchantId: f.merchantId,
+          category: f.category,
+          reason: f.reason,
+          content: f.content,
+          evidence: this.reportEvidence.slice(0, 3),
+        }).then(function (res) {
+          self.reportSubmitting = false;
+          if (!res || !res.ok) { return; }
+          self.toast(res.message || '举报已提交，管理员会尽快处理');
+          self.reportForm = { merchantId: '', merchantName: '', category: '', reason: '', content: '' };
+          self.reportEvidence = [];
+          self.reportsTab = 'mine';
+          self.loadMyReports();
+        });
+      },
+
+      reportCategoryText: function (key) {
+        var cat = (this.reportCategories || []).filter(function (c) { return c.key === key; })[0];
+        return cat ? cat.name : (key || '举报');
+      },
+      reportStatusText: function (s) { return REPORT_STATUS[s] || s || '待处理'; },
+      reportStatusClass: function (s) {
+        if (s === 'resolved' || s === 'appeal_resolved' || s === 'closed') { return 'tag-ok'; }
+        return s === 'appealed' ? 'tag-info' : 'tag-warn';
+      },
+      reportProgress: function (s) { return REPORT_PROGRESS[s] || '32%'; },
 
       /* ---------------------------- 购物车 ---------------------------- */
 
@@ -1079,6 +1889,10 @@
           bookDate: this.cartHasBooking ? this.bookDate : '',
           people: this.cartHasBooking ? this.people : 1,
           address: this.cartHasBooking ? '' : this.address,
+          // 购物车可能混着不同分类，场次/离店/房型在商品详情里单独填，这里留空交给后端按分类校验
+          bookingSlot: '',
+          checkOutDate: '',
+          roomType: '',
           remark: this.remark,
         }).then(function (res) {
           self.submitting = false;
@@ -1229,8 +2043,18 @@
         this.baseUrlInput = window.location.origin;
       }
 
-      // 离开页面时停掉语音，避免在别的页面继续朗读
+      // 离开页面时停掉语音，避免在别的页面继续朗读。
+      // pagehide 必须一起听：手机 Safari / 微信内置浏览器切走或返回桌面时
+      // 不会触发 beforeunload，只靠它会出现「页面没了声音还在」。
       window.addEventListener('beforeunload', function () { self.stopSpeak(); });
+      window.addEventListener('pagehide', function () { self.stopSpeak(); });
+
+      // 语音模块预热：先把设备音色列表取回来，并把「正在朗读」状态同步到按钮
+      if (window.ZQSpeech) {
+        window.ZQSpeech.preload();
+        window.ZQSpeech.bind(function (speaking) { self.speaking = speaking; });
+        self.voiceName = window.ZQSpeech.voiceLabel();
+      }
     },
   });
 })();

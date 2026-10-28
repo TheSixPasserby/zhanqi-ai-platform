@@ -67,7 +67,9 @@ CREATE TABLE IF NOT EXISTS `merchants` (
   `loginCount`  INT         NOT NULL DEFAULT 0      COMMENT '登录次数',
   `lastLoginAt` VARCHAR(32) DEFAULT NULL            COMMENT '最近登录时间',
   `rememberToken` VARCHAR(64) DEFAULT NULL          COMMENT '免密登录令牌',
-  `status`      VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT '账号状态',
+  `status`      VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT '账号状态：active 正常 / suspended 临时停用 / disabled 永久停用',
+  `suspendUntil` VARCHAR(32) DEFAULT NULL          COMMENT '临时停用截止时间（ISO），到期自动恢复',
+  `suspendReason` VARCHAR(255) DEFAULT NULL        COMMENT '停用原因（管理员处理举报时填写）',
   `createdAt`   VARCHAR(32) DEFAULT NULL            COMMENT '注册日期',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_merchants_seq` (`seq`),
@@ -113,7 +115,8 @@ CREATE TABLE IF NOT EXISTS `spots` (
   `intro`     TEXT                            COMMENT '点位介绍',
   `tts`       TEXT                            COMMENT '语音讲解文稿（前端用系统 TTS 朗读）',
   `stamp`     VARCHAR(32)  DEFAULT NULL       COMMENT '对应印章名称',
-  `stampIcon` VARCHAR(8)   DEFAULT NULL       COMMENT '印章上的单字图标',
+  `stampIcon` VARCHAR(32)  DEFAULT NULL       COMMENT '印章图标：icons.svg 的图标 key（如 i-rice）；兼容旧版单字',
+  `voice`     VARCHAR(16)  DEFAULT 'auto'      COMMENT '讲解语音包：auto 自动 / male 男声 / female 女声',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_spots_seq` (`seq`),
   KEY `idx_spots_type` (`type`)
@@ -157,6 +160,8 @@ CREATE TABLE IF NOT EXISTS `products` (
   `status`      VARCHAR(8)    NOT NULL DEFAULT 'on' COMMENT 'on 在售 / off 已下架',
   `tags`        JSON          DEFAULT NULL       COMMENT '卖点标签数组',
   `desc`        TEXT                             COMMENT '商品介绍',
+  `timeSlots`   JSON                             COMMENT '可预约场次/时段数组，如 ["上午场 09:00","下午场 14:00"]',
+  `roomTypes`   JSON                             COMMENT '民宿房型数组，如 ["标准间","大床房"]',
   `intro`       TEXT                             COMMENT '补充说明',
   `createdAt`   VARCHAR(32)   DEFAULT NULL       COMMENT '创建日期',
   PRIMARY KEY (`id`),
@@ -184,7 +189,7 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `qty`         INT           NOT NULL DEFAULT 1 COMMENT '数量；预约类即人数',
   `amount`      DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '订单金额（元）',
   `status`      VARCHAR(16)   NOT NULL DEFAULT 'pending'
-                                                 COMMENT 'pending 待确认 / confirmed 已确认 / used 已核销 / cancelled 已取消',
+                                                 COMMENT 'pending 待确认 / confirmed 已确认 / shipped 已发货 / checked_in 已入住 / completed 已完成 / used 已核销（历史兼容） / cancelled 已取消 / refunded 已退款',
   `bookDate`    VARCHAR(16)   DEFAULT NULL       COMMENT '预约日期 YYYY-MM-DD',
   `people`      INT           DEFAULT NULL       COMMENT '预约人数',
   `address`     VARCHAR(255)  DEFAULT NULL       COMMENT '收货地址',
@@ -194,6 +199,23 @@ CREATE TABLE IF NOT EXISTS `orders` (
   `verifiedAt`  VARCHAR(32)   DEFAULT NULL       COMMENT '核销时间',
   `cancelledAt` VARCHAR(32)   DEFAULT NULL       COMMENT '取消时间',
   `cancelledBy` VARCHAR(16)   DEFAULT NULL       COMMENT '取消方：buyer / merchant / admin',
+  `rejectReason` TEXT                            COMMENT '商家拒绝原因（必填）',
+  `rejectStatus` VARCHAR(24)  DEFAULT NULL       COMMENT 'waiting_buyer 待买家决定 / buyer_agreed 买家同意关闭 / buyer_disagreed 买家不同意，协商中',
+  `rejectedAt`  VARCHAR(32)   DEFAULT NULL       COMMENT '商家拒绝时间',
+  `buyerFeedback` TEXT                          COMMENT '买家不同意关闭时填写的协商意见',
+  `feedbackAt`  VARCHAR(32)   DEFAULT NULL       COMMENT '买家反馈时间',
+  `logisticsCompany` VARCHAR(64) DEFAULT NULL    COMMENT '快递公司',
+  `trackingNo`  VARCHAR(64)   DEFAULT NULL       COMMENT '运单号',
+  `logisticsStatus` VARCHAR(32) DEFAULT NULL     COMMENT '物流状态（由 LogisticsService 按公司/运单号计算）',
+  `logisticsUpdatedAt` VARCHAR(32) DEFAULT NULL  COMMENT '物流状态更新时间',
+  `shippedAt`   VARCHAR(32)   DEFAULT NULL       COMMENT '发货时间',
+  `bookingSlot` VARCHAR(64)   DEFAULT NULL       COMMENT '预约场次/时段（研学、农事体验）',
+  `checkOutDate` VARCHAR(16)  DEFAULT NULL       COMMENT '民宿离店日期 YYYY-MM-DD',
+  `roomType`   VARCHAR(64)   DEFAULT NULL        COMMENT '民宿房型',
+  `completedAt` VARCHAR(32)  DEFAULT NULL        COMMENT '完成时间（体验完成 / 订单完成）',
+  `refundAmount` DECIMAL(10,2) DEFAULT NULL      COMMENT '退款金额',
+  `refundedAt` VARCHAR(32)   DEFAULT NULL        COMMENT '退款时间',
+  `refundNote` VARCHAR(255)  DEFAULT NULL        COMMENT '退款说明',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_orders_seq` (`seq`),
   KEY `idx_orders_buyer` (`buyerId`),
@@ -298,3 +320,120 @@ CREATE TABLE IF NOT EXISTS `settings` (
   UNIQUE KEY `uk_settings_seq` (`seq`),
   KEY `idx_settings_group` (`groupName`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='平台参数（键值对）';
+
+
+-- ---------------------------------------------------------------------------
+-- 12. chatMessages —— 用户 ↔ 商家聊天消息（按 merchantId + buyerId 组成会话）
+--     图片/拍摄只存前端压缩后的 dataURL，项目不新增文件上传目录。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `chatMessages` (
+  `seq`        BIGINT      NOT NULL AUTO_INCREMENT COMMENT '写入顺序号',
+  `id`         VARCHAR(32) NOT NULL COMMENT '主键，形如 cm1712…',
+  `merchantId` VARCHAR(32) NOT NULL COMMENT '商家 id',
+  `buyerId`    VARCHAR(32) NOT NULL COMMENT '买家 id',
+  `fromRole`   VARCHAR(16) NOT NULL COMMENT '发送方：buyer / merchant',
+  `type`       VARCHAR(16) NOT NULL DEFAULT 'text' COMMENT 'text 文本 / product 商品卡 / order 订单卡 / image 图片',
+  `text`       TEXT        DEFAULT NULL COMMENT '文本内容',
+  `productId`  VARCHAR(32) DEFAULT NULL COMMENT '商品卡指向的商品 id',
+  `orderId`    VARCHAR(32) DEFAULT NULL COMMENT '订单卡指向的订单 id',
+  `media`      MEDIUMTEXT  DEFAULT NULL COMMENT '图片 dataURL（前端已压缩）',
+  `createdAt`  VARCHAR(32) DEFAULT NULL COMMENT '发送时间',
+  `readAt`     VARCHAR(32) DEFAULT NULL COMMENT '对方阅读时间（预留）',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_chatMessages_seq` (`seq`),
+  KEY `idx_chat_merchant_buyer` (`merchantId`, `buyerId`),
+  KEY `idx_chat_buyer` (`buyerId`),
+  KEY `idx_chat_created` (`createdAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户与商家聊天消息';
+
+
+-- ---------------------------------------------------------------------------
+-- 13. chatTyping —— 「对方输入中」状态（4 秒内有效，按会话唯一）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `chatTyping` (
+  `seq`        BIGINT      NOT NULL AUTO_INCREMENT COMMENT '写入顺序号',
+  `id`         VARCHAR(64) NOT NULL COMMENT '主键：merchantId + "_" + buyerId',
+  `merchantId` VARCHAR(32) NOT NULL COMMENT '商家 id',
+  `buyerId`    VARCHAR(32) NOT NULL COMMENT '买家 id',
+  `role`       VARCHAR(16) DEFAULT NULL COMMENT '正在输入的一方：buyer / merchant',
+  `at`         BIGINT      DEFAULT NULL COMMENT '最后输入时间（毫秒时间戳）',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_chatTyping_seq` (`seq`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天输入中状态';
+
+
+-- ---------------------------------------------------------------------------
+-- 14. reports —— 用户举报、管理员处理、商家上诉（一条举报一行）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `reports` (
+  `seq`            BIGINT      NOT NULL AUTO_INCREMENT COMMENT '写入顺序号',
+  `id`             VARCHAR(32) NOT NULL COMMENT '主键，形如 rp1712…',
+  `buyerId`        VARCHAR(32) NOT NULL COMMENT '举报人 id',
+  `buyerName`      VARCHAR(64) DEFAULT NULL COMMENT '举报人昵称快照',
+  `merchantId`     VARCHAR(32) NOT NULL COMMENT '被举报商家 id',
+  `merchantName`   VARCHAR(64) DEFAULT NULL COMMENT '商家名称快照',
+  `category`       VARCHAR(24) NOT NULL COMMENT 'service / product / logistics / money / fraud',
+  `reason`         VARCHAR(64) DEFAULT NULL COMMENT '细因由',
+  `content`        TEXT        COMMENT '举报内容',
+  `evidence`       JSON        DEFAULT NULL COMMENT '凭证图片 dataURL 数组',
+  `orderId`        VARCHAR(32) DEFAULT NULL COMMENT '关联订单 id',
+  `productId`      VARCHAR(32) DEFAULT NULL COMMENT '关联商品 id',
+  `status`         VARCHAR(24) NOT NULL DEFAULT 'pending' COMMENT 'pending 待处理 / resolved 已处理 / appealed 上诉审核中 / appeal_resolved 上诉已处理',
+  `result`         TEXT        COMMENT '管理员处理结果（告知用户）',
+  `resultAction`   VARCHAR(32) DEFAULT NULL COMMENT 'suspend_temp / suspend_permanent / product_off / refund / warning / none',
+  `adminId`        VARCHAR(32) DEFAULT NULL COMMENT '处理管理员 id',
+  `adminName`      VARCHAR(64) DEFAULT NULL COMMENT '处理管理员姓名',
+  `handledAt`      VARCHAR(32) DEFAULT NULL COMMENT '处理时间',
+  `appealContent`  TEXT        COMMENT '商家上诉内容',
+  `appealEvidence` JSON        DEFAULT NULL COMMENT '商家上诉凭证 dataURL 数组',
+  `appealAt`       VARCHAR(32) DEFAULT NULL COMMENT '上诉时间',
+  `appealStatus`   VARCHAR(24) DEFAULT NULL COMMENT 'none / pending / upheld 维持 / rejected 改判',
+  `appealResult`   TEXT        COMMENT '上诉审核结果',
+  `appealHandledAt` VARCHAR(32) DEFAULT NULL COMMENT '上诉审核时间',
+  `notice`         TEXT        COMMENT '给用户的处理结果通知文案',
+  `createdAt`      VARCHAR(32) DEFAULT NULL COMMENT '提交时间',
+  `updatedAt`      VARCHAR(32) DEFAULT NULL COMMENT '最近更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_reports_seq` (`seq`),
+  KEY `idx_reports_buyer` (`buyerId`),
+  KEY `idx_reports_merchant` (`merchantId`),
+  KEY `idx_reports_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户举报与商家上诉';
+
+
+-- ---------------------------------------------------------------------------
+-- 15. orderLogs —— 订单操作与协商留痕（拒绝原因、买家反馈、发货、完成……）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `orderLogs` (
+  `seq`       BIGINT      NOT NULL AUTO_INCREMENT COMMENT '写入顺序号',
+  `id`        VARCHAR(32) NOT NULL COMMENT '主键，形如 ol1712…',
+  `orderId`   VARCHAR(32) NOT NULL COMMENT '订单 id',
+  `role`      VARCHAR(16) DEFAULT NULL COMMENT '操作方：buyer / merchant / admin / system',
+  `action`    VARCHAR(32) DEFAULT NULL COMMENT '动作标识：reject / buyer_agree / buyer_disagree / ship / complete / refund …',
+  `content`   TEXT        COMMENT '可读的操作内容',
+  `createdAt` VARCHAR(32) DEFAULT NULL COMMENT '操作时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_orderLogs_seq` (`seq`),
+  KEY `idx_orderLogs_order` (`orderId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单操作与协商记录';
+
+
+-- ---------------------------------------------------------------------------
+-- 16. notifications —— 处理结果通知（用户 / 商家）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `notifications` (
+  `seq`       BIGINT      NOT NULL AUTO_INCREMENT COMMENT '写入顺序号',
+  `id`        VARCHAR(32) NOT NULL COMMENT '主键，形如 n1712…',
+  `userId`    VARCHAR(32) DEFAULT NULL COMMENT '接收账号 id（buyerId / merchantId）',
+  `role`      VARCHAR(16) DEFAULT NULL COMMENT 'buyer / merchant',
+  `title`     VARCHAR(128) DEFAULT NULL COMMENT '通知标题',
+  `content`   TEXT        COMMENT '通知正文',
+  `type`      VARCHAR(24) DEFAULT NULL COMMENT 'report / order / system',
+  `refId`     VARCHAR(32) DEFAULT NULL COMMENT '关联业务 id',
+  `readAt`    VARCHAR(32) DEFAULT NULL COMMENT '阅读时间，空=未读',
+  `createdAt` VARCHAR(32) DEFAULT NULL COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_notifications_seq` (`seq`),
+  KEY `idx_notifications_user` (`userId`, `role`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='处理结果通知';
+

@@ -297,6 +297,12 @@ public class AdminService {
         if ("disabled".equals(target)) {
             // 清掉快捷登录令牌 = 立刻收回免密入口
             patch.put("rememberToken", null);
+            patch.put("suspendUntil", null);
+            patch.put("suspendReason", null);
+        } else {
+            // 重新启用时把临时停用标记一起清掉，避免「启用了却仍被 suspendUntil 拦着」
+            patch.put("suspendUntil", null);
+            patch.put("suspendReason", null);
         }
         db.update(table, id, patch);
         if ("disabled".equals(target)) {
@@ -478,6 +484,12 @@ public class AdminService {
             if ("used".equals(st) && o.get("verifiedAt") == null) {
                 patch.put("verifiedAt", Instant.now().toString());
             }
+            if ("completed".equals(st) && o.get("completedAt") == null) {
+                patch.put("completedAt", Instant.now().toString());
+            }
+            if ("shipped".equals(st) && o.get("shippedAt") == null) {
+                patch.put("shippedAt", Instant.now().toString());
+            }
         }
 
         if (body.containsKey("address")) {
@@ -589,6 +601,14 @@ public class AdminService {
             Object tags = body.get("tags");
             patch.put("tags", tags instanceof List ? tags : List.of(text(tags).split("[,，、\\s]+")));
         }
+        if (body.containsKey("timeSlots")) {
+            Object slots = body.get("timeSlots");
+            patch.put("timeSlots", slots instanceof List ? slots : List.of(text(slots).split("[,，、\\s]+")));
+        }
+        if (body.containsKey("roomTypes")) {
+            Object rooms = body.get("roomTypes");
+            patch.put("roomTypes", rooms instanceof List ? rooms : List.of(text(rooms).split("[,，、\\s]+")));
+        }
 
         if (patch.isEmpty()) {
             throw ApiException.badRequest("没有需要保存的改动");
@@ -696,6 +716,8 @@ public class AdminService {
         out.put("intro", m.get("intro"));
         out.put("since", m.get("since"));
         out.put("status", m.get("status"));
+        out.put("suspendUntil", m.get("suspendUntil"));
+        out.put("suspendReason", m.get("suspendReason"));
         out.put("loginCount", m.get("loginCount"));
         out.put("lastLoginAt", m.get("lastLoginAt"));
         out.put("createdAt", m.get("createdAt"));

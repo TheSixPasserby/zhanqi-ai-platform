@@ -26,15 +26,50 @@ public final class Dict {
     /** 需要「选日期 + 填人数」的预约类分类 */
     public static final List<String> BOOKING_CATEGORIES = List.of("study", "homestay", "experience");
 
-    /** 订单状态（声明顺序 = 业务流转顺序） */
+    /** 订单状态（声明顺序 = 业务流转顺序；used 仅保留给历史数据兼容） */
     public static final Map<String, String> STATUS_TEXT = ordered(
             Map.entry("pending", "待确认"),
             Map.entry("confirmed", "已确认"),
+            Map.entry("shipped", "已发货"),
+            Map.entry("checked_in", "已入住"),
+            Map.entry("completed", "已完成"),
             Map.entry("used", "已核销"),
-            Map.entry("cancelled", "已取消"));
+            Map.entry("cancelled", "已取消"),
+            Map.entry("refunded", "已退款"));
 
-    /** 计入营收的订单状态（前端统计口径与此一致） */
-    public static final List<String> REVENUE_STATUS = List.of("confirmed", "used");
+    /** 计入营收的订单状态（与旧口径兼容：已确认及之后、且未取消/退款） */
+    public static final List<String> REVENUE_STATUS =
+            List.of("confirmed", "shipped", "checked_in", "completed", "used");
+
+    /** 举报分类（需求要求至少 5 类） */
+    public static final Map<String, String> REPORT_CATEGORY_TEXT = ordered(
+            Map.entry("service", "商家服务态度问题"),
+            Map.entry("product", "商品问题"),
+            Map.entry("logistics", "发货物流问题"),
+            Map.entry("money", "钱款纠纷"),
+            Map.entry("fraud", "商家欺诈"));
+
+    /** 举报细因由：分类 → 可选原因，由后端统一下发，前端不自行维护 */
+    public static final Map<String, List<String>> REPORT_REASONS = Map.of(
+            "service", List.of("语气恶劣 / 不耐烦", "不回复消息", "拒绝提供服务", "态度歧视"),
+            "product", List.of("商品与描述不符", "质量问题 / 破损", "缺斤少两", "假冒伪劣"),
+            "logistics", List.of("迟迟不发货", "物流信息造假", "包裹丢失 / 损坏", "运费纠纷"),
+            "money", List.of("拒绝退款", "多收费用", "押金不退", "价格欺诈"),
+            "fraud", List.of("虚假宣传", "收款不发货", "诱导线下交易", "其他欺诈行为"));
+
+    /** 举报状态 */
+    public static final Map<String, String> REPORT_STATUS_TEXT = ordered(
+            Map.entry("pending", "待处理"),
+            Map.entry("resolved", "已处理"),
+            Map.entry("appealed", "上诉审核中"),
+            Map.entry("appeal_resolved", "上诉已处理"));
+
+    /** 消息类型 */
+    public static final Map<String, String> CHAT_TYPE_TEXT = ordered(
+            Map.entry("text", "文本"),
+            Map.entry("product", "商品"),
+            Map.entry("order", "订单"),
+            Map.entry("image", "图片"));
 
     /** 商家经营类型 */
     public static final List<String> MERCHANT_TYPES =
@@ -56,6 +91,14 @@ public final class Dict {
 
     public static boolean isBooking(Object category) {
         return BOOKING_CATEGORIES.contains(String.valueOf(category));
+    }
+
+    public static String reportCategoryText(Object category) {
+        return REPORT_CATEGORY_TEXT.getOrDefault(String.valueOf(category), "其他问题");
+    }
+
+    public static String reportStatusText(Object status) {
+        return REPORT_STATUS_TEXT.getOrDefault(String.valueOf(status), String.valueOf(status));
     }
 
     public static boolean countsAsRevenue(Object status) {

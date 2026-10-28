@@ -254,7 +254,7 @@
 
     <div class="grid-2 mt-16">
       <div class="card">
-        <div class="card-head"><h3>商家营收排行</h3><span class="hint">口径：已确认 + 已核销</span></div>
+        <div class="card-head"><h3>商家营收排行</h3><span class="hint">口径：已确认及之后（含已发货/已入住/已完成；历史已核销兼容，退款不计）</span></div>
         <!-- merchantRank 里营收字段叫 revenue（买家那边是 amount），必须显式指定，否则柱子恒为 0 -->
         <div class="card-body"><zq-bars :items="merchantRank.slice(0, 6)" value-key="revenue"></zq-bars></div>
       </div>
@@ -274,6 +274,7 @@
                   style="width:290px" clearable @clear="load" @keyup.enter.native="load"></el-input>
         <el-select v-model="status" placeholder="账号状态" clearable style="width:140px" @change="load">
           <el-option label="正常" value="active"></el-option>
+          <el-option label="临时停用" value="suspended"></el-option>
           <el-option label="已停用" value="disabled"></el-option>
         </el-select>
         <el-button type="primary" @click="load">查询</el-button>
@@ -300,9 +301,9 @@
         <el-table-column label="营收" width="120" align="right">
           <template slot-scope="s"><span class="mono">{{ fmt.money(s.row.revenue) }}</span></template>
         </el-table-column>
-        <el-table-column label="状态" width="90" align="center">
+        <el-table-column label="状态" width="150" align="center">
           <template slot-scope="s">
-            <span class="pill" :class="s.row.status">{{ s.row.status === 'active' ? '正常' : '已停用' }}</span>
+            <span class="pill" :class="statusClass(s.row)">{{ statusTextOf(s.row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="230" align="right">
@@ -356,8 +357,8 @@
             <div class="mt-8">
               <span class="tag brand">{{ current.type || '未填写' }}</span>
               <span class="tag">{{ current.phone || '未填写电话' }}</span>
-              <span class="tag" :class="current.status === 'active' ? 'ok' : 'danger'">
-                {{ current.status === 'active' ? '正常' : '已停用' }}</span>
+              <span class="tag" :class="current.status === 'active' ? 'ok' : (current.status === 'suspended' ? 'warn' : 'danger')">
+                {{ statusTextOf(current) }}</span>
             </div>
           </div>
         </div>
@@ -557,7 +558,7 @@
 
     <div class="card">
       <el-table :data="list" v-loading="loading" stripe style="width:100%">
-        <el-table-column label="订单" min-width="240">
+        <el-table-column label="订单" min-width="220">
           <template slot-scope="s">
             <div class="flex items-center gap-8">
               <img v-if="s.row.cover" :src="s.row.cover" class="thumb" alt="">
@@ -569,23 +570,26 @@
           </template>
         </el-table-column>
         <el-table-column label="买家" width="110" prop="buyerName"></el-table-column>
-        <el-table-column label="商家" width="140" prop="merchantName"></el-table-column>
+        <el-table-column label="商家" width="130" prop="merchantName"></el-table-column>
         <el-table-column label="数量" width="70" align="center" prop="qty"></el-table-column>
-        <el-table-column label="金额" width="110" align="right">
+        <el-table-column label="金额" width="100" align="right">
           <template slot-scope="s"><span class="mono">{{ fmt.money(s.row.amount) }}</span></template>
         </el-table-column>
-        <el-table-column label="预约日期" width="110">
+        <el-table-column label="预约日期" width="100">
           <template slot-scope="s">{{ s.row.bookDate || '—' }}</template>
         </el-table-column>
-        <el-table-column label="下单时间" width="150">
+        <el-table-column label="下单时间" width="140">
           <template slot-scope="s">{{ fmt.time(s.row.createdAt) }}</template>
         </el-table-column>
         <el-table-column label="状态" width="100" align="center">
-          <template slot-scope="s"><span class="pill" :class="s.row.status">{{ s.row.statusText }}</span></template>
+          <template slot-scope="s">
+            <span class="pill" :class="s.row.status">{{ s.row.statusText || statusText[s.row.status] }}</span>
+          </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" align="right">
+        <el-table-column label="操作" width="230" align="right">
           <template slot-scope="s">
             <el-button type="text" @click="openDetail(s.row)">详情 / 编辑</el-button>
+            <el-button v-if="canRefund(s.row)" type="text" class="danger" @click="refund(s.row)">退款</el-button>
             <el-button v-if="s.row.cancellable" type="text" class="danger" @click="cancel(s.row)">
               强制取消
             </el-button>
@@ -602,11 +606,17 @@
         <div class="detail-row"><span>买家</span><b>{{ detail.buyerName }}<em v-if="detail.buyerPhone"> · {{ detail.buyerPhone }}</em></b></div>
         <div class="detail-row"><span>商家</span><b>{{ detail.merchantName }}<em v-if="detail.merchantPhone"> · {{ detail.merchantPhone }}</em></b></div>
         <div class="detail-row"><span>下单时间</span><b>{{ fmt.time(detail.createdAt) }}</b></div>
+        <div class="detail-row" v-if="detail.refundedAt || detail.refundAmount">
+          <span>退款</span><b class="mono">{{ fmt.money(detail.refundAmount) }} · {{ fmt.time(detail.refundedAt) }}</b>
+        </div>
+        <div class="detail-row" v-if="detail.refundNote"><span>退款说明</span><b>{{ detail.refundNote }}</b></div>
       </div>
       <el-form :model="detail" label-width="96px" style="margin-top:18px">
         <el-form-item label="订单状态">
-          <el-select v-model="detail.status" style="width:100%" :disabled="detail.status === 'cancelled'">
-            <el-option v-for="(text, key) in statusText" :key="key" :label="text" :value="key" :disabled="key === 'cancelled'"></el-option>
+          <el-select v-model="detail.status" style="width:100%"
+                     :disabled="detail.status === 'cancelled' || detail.status === 'refunded'">
+            <el-option v-for="(text, key) in statusText" :key="key" :label="text" :value="key"
+                       :disabled="key === 'cancelled' || key === 'refunded'"></el-option>
           </el-select>
         </el-form-item>
         <el-form-item label="预约日期">
@@ -625,6 +635,7 @@
       </el-form>
       <div class="dim" style="font-size:12px">商品、数量与金额属于交易凭证，后台不可修改；如需变更请取消后重新下单。</div>
       <span slot="footer">
+        <el-button v-if="canRefund(detail)" type="danger" :loading="refunding" @click="refund(detail)">退款</el-button>
         <el-button @click="detailVisible = false">关闭</el-button>
         <el-button type="primary" :loading="detailSaving" @click="saveDetail">保存修改</el-button>
       </span>
@@ -645,13 +656,15 @@
     </div>
 
     <div class="card">
-      <el-table :data="list" v-loading="loading" stripe style="width:100%">
+      <el-table :data="list" v-loading="loading" stripe style="width:100%" :row-class-name="rowClassName">
         <el-table-column label="商品" min-width="260">
           <template slot-scope="s">
             <div class="flex items-center gap-8">
               <img v-if="s.row.cover" :src="s.row.cover" class="thumb" alt="">
               <div>
-                <div class="cell-main">{{ s.row.name }}</div>
+                <div class="cell-main">{{ s.row.name }}
+                  <span v-if="s.row.status !== 'on'" class="tag danger" style="margin-left:6px">已下架</span>
+                </div>
                 <div class="cell-sub mono">#{{ s.row.id }}</div>
               </div>
             </div>
@@ -666,17 +679,22 @@
         </el-table-column>
         <el-table-column prop="stock" label="库存" width="80" align="center"></el-table-column>
         <el-table-column prop="sold" label="已售" width="80" align="center"></el-table-column>
-        <el-table-column label="状态" width="90" align="center">
-          <template slot-scope="s"><span class="tag" :class="s.row.status === 'on' ? 'ok' : ''">
+        <el-table-column label="状态" width="100" align="center">
+          <template slot-scope="s"><span class="tag" :class="s.row.status === 'on' ? 'ok' : 'danger'">
             {{ s.row.status === 'on' ? '在售' : '已下架' }}</span></template>
         </el-table-column>
-        <el-table-column label="操作" width="90" align="right">
-          <template slot-scope="s"><el-button type="text" @click="openEdit(s.row)">编辑</el-button></template>
+        <el-table-column label="操作" width="150" align="right">
+          <template slot-scope="s">
+            <el-button type="text" @click="openEdit(s.row)">编辑</el-button>
+            <el-button type="text" :class="{ danger: s.row.status === 'on' }" @click="toggleStatus(s.row)">
+              {{ s.row.status === 'on' ? '下架' : '上架' }}
+            </el-button>
+          </template>
         </el-table-column>
       </el-table>
     </div>
     <div class="dim mt-12" style="font-size:12.5px">
-      商品上下架由商家在工作台自行操作（本平台不设独立审核流程）；管理员可在此查看并修正全平台商品的资料、价格与库存。
+      商品上下架由商家在工作台自行操作（本平台不设独立审核流程）；管理员可在此查看并修正全平台商品的资料、价格、库存，也可直接上架/下架违规商品。
     </div>
 
     <el-dialog title="编辑商品" :visible.sync="editVisible" width="640px">
@@ -696,13 +714,25 @@
           </el-form-item>
         </div>
         <div class="flex gap-12">
-          <el-form-item label="价格" style="flex:1">
-            <el-input-number v-model="form.price" :min="0" :precision="2" :step="1" style="width:100%"></el-input-number>
+          <el-form-item label="价格" label-width="52px" style="flex:1;min-width:0">
+            <!-- 原生 type=number：避免 el-input-number 失焦前不同步、保存到旧值的问题 -->
+            <div class="num-field">
+              <span class="unit">¥</span>
+              <input type="number" min="0" step="0.01" v-model="form.price" placeholder="0.00">
+            </div>
           </el-form-item>
-          <el-form-item label="单位" style="flex:1"><el-input v-model="form.unit" placeholder="袋 / 份 / 人"></el-input></el-form-item>
-          <el-form-item label="库存" style="flex:1">
-            <el-input-number v-model="form.stock" :min="0" style="width:100%"></el-input-number>
+          <el-form-item label="单位" label-width="52px" style="flex:1;min-width:0">
+            <el-input v-model="form.unit" placeholder="袋 / 份 / 人"></el-input>
           </el-form-item>
+          <el-form-item label="库存" label-width="52px" style="flex:1;min-width:0">
+            <div class="num-field">
+              <input type="number" min="0" step="1" v-model="form.stock" placeholder="0">
+              <span class="unit">件</span>
+            </div>
+          </el-form-item>
+        </div>
+        <div class="dim" style="font-size:12px;margin:-4px 0 14px 64px">
+          价格与库存使用原生数字输入，保存时会显式转成数字并校验（价格 ≥0、库存为 ≥0 整数）；保存成功后自动回读服务端数据核对。
         </div>
         <el-form-item label="标签"><el-input v-model="tagsText" placeholder="用逗号分隔，如：产地直发，当季新米"></el-input></el-form-item>
         <el-form-item label="一句话卖点"><el-input v-model="form.intro"></el-input></el-form-item>
@@ -721,6 +751,224 @@
         <el-button @click="editVisible = false">取消</el-button>
         <el-button type="primary" :loading="saving" @click="save">保存</el-button>
       </span>
+    </el-dialog>
+  </div>
+</script>
+
+<script type="text/x-template" id="tpl-reports">
+  <div>
+    <!-- 筛选：状态 + 关键词。默认落到「待处理」，管理员进页面就能看到待办 -->
+    <div class="card mb-16">
+      <div class="card-body flex items-center gap-12" style="flex-wrap:wrap">
+        <el-radio-group v-model="status" size="small" @change="load">
+          <el-radio-button label="">全部</el-radio-button>
+          <el-radio-button label="pending">待处理</el-radio-button>
+          <el-radio-button label="resolved">已处理</el-radio-button>
+          <el-radio-button label="appealed">上诉审核中</el-radio-button>
+          <el-radio-button label="appeal_resolved">上诉已处理</el-radio-button>
+        </el-radio-group>
+        <div class="flex-1"></div>
+        <el-input v-model="keyword" placeholder="搜索举报人 / 商家 / 分类 / 内容"
+                  prefix-icon="el-icon-search" style="width:300px" clearable
+                  @clear="load" @keyup.enter.native="load"></el-input>
+        <el-button type="primary" @click="load">查询</el-button>
+      </div>
+    </div>
+
+    <div class="card">
+      <el-table :data="list" v-loading="loading" stripe style="width:100%">
+        <el-table-column label="举报人 / 商家" min-width="170">
+          <template slot-scope="s">
+            <div class="cell-main">{{ s.row.buyerName || '匿名买家' }}</div>
+            <div class="cell-sub">被举报：{{ s.row.merchantName || '—' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="分类 / 原因" min-width="190">
+          <template slot-scope="s">
+            <div class="cell-main">{{ s.row.categoryText || s.row.category }}</div>
+            <div class="cell-sub">{{ s.row.reason || '—' }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="举报内容" min-width="260">
+          <!-- 用户输入一律用 {{ }} 插值，禁止 v-html，避免举报内容里的标签被执行 -->
+          <template slot-scope="s"><div class="cell-sub report-content">{{ s.row.content }}</div></template>
+        </el-table-column>
+        <el-table-column label="关联" width="130">
+          <template slot-scope="s">
+            <div v-if="s.row.orderId" class="cell-sub">订单 #{{ s.row.orderId }}</div>
+            <div v-if="s.row.productId" class="cell-sub">商品 #{{ s.row.productId }}</div>
+            <span v-if="!s.row.orderId && !s.row.productId" class="dim">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="130" align="center">
+          <template slot-scope="s">
+            <span class="pill" :class="s.row.status">{{ s.row.statusText || statusLabel(s.row.status) }}</span>
+            <div v-if="s.row.appealStatus" class="cell-sub" style="margin-top:4px">上诉：{{ appealLabel(s.row.appealStatus) }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="举报时间" width="150">
+          <template slot-scope="s">{{ fmt.time(s.row.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="170" align="right">
+          <template slot-scope="s">
+            <el-button type="text" @click="openDetail(s.row)">查看 / 处理</el-button>
+            <el-button v-if="s.row.appealStatus === 'pending'" type="text" @click="openDetail(s.row)">审核上诉</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+    <div class="dim mt-12" style="font-size:12.5px">
+      处理动作会通知举报人与商家；商家若不服，可在商户工作台提出上诉，单据进入「上诉审核中」。
+    </div>
+
+    <el-drawer title="举报详情 / 处理" :visible.sync="detailVisible" size="700px">
+      <div class="drawer-body" v-loading="detailLoading">
+        <div v-if="detail.id">
+          <div class="profile">
+            <div>
+              <h3>{{ detail.categoryText || detail.category || '举报详情' }} · {{ detail.reason || '未填写细因由' }}</h3>
+              <div class="dim">举报人 {{ detail.buyerName || '—' }} → 商家 {{ detail.merchantName || '—' }}</div>
+              <div class="mt-8">
+                <span class="pill" :class="detail.status">{{ detail.statusText || statusLabel(detail.status) }}</span>
+                <span class="tag" style="margin-left:6px">{{ fmt.time(detail.createdAt) }}</span>
+                <span v-if="detail.appealStatus" class="tag warn" style="margin-left:6px">上诉：{{ appealLabel(detail.appealStatus) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <el-descriptions :column="2" border size="small" class="mt-16">
+            <el-descriptions-item label="分类">{{ detail.categoryText || detail.category || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="细因由">{{ detail.reason || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="举报人">{{ detail.buyerName || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="被举报商家">{{ detail.merchantName || '—' }}</el-descriptions-item>
+            <el-descriptions-item label="举报时间">{{ fmt.time(detail.createdAt) }}</el-descriptions-item>
+            <el-descriptions-item label="处理时间">{{ detail.handledAt ? fmt.time(detail.handledAt) : '—' }}</el-descriptions-item>
+          </el-descriptions>
+
+          <div class="report-block">
+            <h4>举报内容</h4>
+            <p class="report-text">{{ detail.content || '—' }}</p>
+          </div>
+
+          <div class="report-block" v-if="evidenceList.length">
+            <h4>举报凭证 <span class="dim" style="font-weight:400">（{{ evidenceList.length }} 张，点击查看大图）</span></h4>
+            <div class="evi-grid">
+              <img v-for="(img, i) in evidenceList" :key="'evidence-' + i" :src="img"
+                   class="evi" alt="举报凭证" @click="previewImage(img)">
+            </div>
+          </div>
+
+          <div class="report-block" v-if="detail.orderId || detail.productId">
+            <h4>关联订单 / 商品</h4>
+            <div class="rel-grid">
+              <div v-if="detail.orderId" class="rel-item">
+                <div class="cell-main">订单 #{{ detail.orderId }}</div>
+                <div v-if="detail.order" class="cell-sub">
+                  {{ detail.order.productName || '—' }} · {{ fmt.money(detail.order.amount) }} · {{ detail.order.statusText || detail.order.status }}
+                </div>
+                <div v-else class="cell-sub">处理方式选「退款给客户」时可直接选中该订单</div>
+              </div>
+              <div v-if="detail.productId" class="rel-item">
+                <div class="cell-main">商品 #{{ detail.productId }}</div>
+                <div v-if="detail.product" class="cell-sub">
+                  {{ detail.product.name || '—' }} · {{ fmt.money(detail.product.price) }} · {{ detail.product.status === 'on' ? '在售' : '已下架' }}
+                </div>
+                <div v-else class="cell-sub">处理方式选「下架违规商品」时可直接选中该商品</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="report-block" v-if="detail.result || detail.handledAt">
+            <h4>处理结果</h4>
+            <p class="report-text">{{ detail.result || '—' }}</p>
+            <div class="dim" style="font-size:12px;margin-top:6px">
+              <span v-if="detail.resultAction">处理动作：{{ actionLabel(detail.resultAction) }} · </span>
+              <span v-if="detail.adminName">处理人：{{ detail.adminName }} · </span>
+              <span v-if="detail.handledAt">{{ fmt.time(detail.handledAt) }}</span>
+            </div>
+          </div>
+
+          <div class="report-block" v-if="detail.appealContent || detail.appealAt">
+            <h4>商家上诉</h4>
+            <p class="report-text">{{ detail.appealContent || '—' }}</p>
+            <div v-if="appealEvidenceList.length" class="evi-grid" style="margin-top:10px">
+              <img v-for="(img, i) in appealEvidenceList" :key="'appeal-' + i" :src="img"
+                   class="evi" alt="上诉凭证" @click="previewImage(img)">
+            </div>
+            <div class="dim" style="font-size:12px;margin-top:6px" v-if="detail.appealAt">
+              上诉时间：{{ fmt.time(detail.appealAt) }}
+            </div>
+            <div class="report-result" v-if="detail.appealResult || detail.appealHandledAt">
+              <div class="cell-main">审核结论：{{ appealLabel(detail.appealStatus) }}</div>
+              <p class="report-text">{{ detail.appealResult || '—' }}</p>
+              <div class="dim" style="font-size:12px" v-if="detail.appealHandledAt">
+                审核时间：{{ fmt.time(detail.appealHandledAt) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- 处理表单：仅待处理举报显示；处置副作用全部在服务端 -->
+          <div class="report-block" v-if="canHandle">
+            <h4>处理举报</h4>
+            <el-form label-width="110px" size="small">
+              <el-form-item label="处理方式">
+                <el-select v-model="actionForm.action" style="width:100%">
+                  <el-option v-for="(text, key) in actionText" :key="key" :label="text" :value="key"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="actionForm.action === 'suspend_temp'" label="停用天数">
+                <el-input v-model="actionForm.days" type="number" min="1" max="365" style="width:150px"></el-input>
+                <span class="dim" style="margin-left:10px;font-size:12px">1–365 天，服务端到期自动恢复并放行登录</span>
+              </el-form-item>
+              <el-form-item v-if="actionForm.action === 'product_off'" label="违规商品">
+                <el-select v-model="actionForm.productId" filterable placeholder="选择该商家名下的商品" style="width:100%">
+                  <el-option v-for="p in merchantProducts" :key="p.id"
+                             :label="p.name + ' · ' + fmt.money(p.price) + (p.status === 'on' ? '' : '（已下架）')"
+                             :value="p.id"></el-option>
+                </el-select>
+                <div v-if="!merchantProducts.length" class="dim" style="font-size:12px">未加载到该商家的商品，可先到「商品总览」下架</div>
+              </el-form-item>
+              <el-form-item v-if="actionForm.action === 'refund'" label="退款订单">
+                <el-select v-model="actionForm.orderId" filterable placeholder="选择该商家名下的订单" style="width:100%">
+                  <el-option v-for="o in merchantOrders" :key="o.id"
+                             :label="'#' + o.id + ' ' + o.productName + ' · ' + fmt.money(o.amount)"
+                             :value="o.id"></el-option>
+                </el-select>
+                <div v-if="!merchantOrders.length" class="dim" style="font-size:12px">未加载到该商家的订单</div>
+              </el-form-item>
+              <el-form-item label="处理结果">
+                <el-input type="textarea" :rows="3" v-model="actionForm.result" maxlength="500" show-word-limit
+                          placeholder="必填，会同时通知举报人与商家，请写清处理结论"></el-input>
+              </el-form-item>
+            </el-form>
+            <el-button type="primary" size="small" :loading="actionLoading" @click="submitHandle">提交处理</el-button>
+            <span class="dim" style="font-size:12px;margin-left:10px">处理后举报状态变为「已处理」，商家可提出上诉</span>
+          </div>
+
+          <!-- 上诉审核：仅 appealStatus=pending 时显示 -->
+          <div class="report-block" v-if="canReviewAppeal">
+            <h4>上诉审核</h4>
+            <el-radio-group v-model="appealForm.decision">
+              <el-radio label="upheld">维持原处理</el-radio>
+              <el-radio label="rejected">改判（撤销原处理）</el-radio>
+            </el-radio-group>
+            <el-input class="mt-8" type="textarea" :rows="3" v-model="appealForm.result" maxlength="500"
+                      show-word-limit placeholder="必填，审核结论会通知商家"></el-input>
+            <el-button class="mt-8" type="primary" size="small" :loading="appealLoading" @click="submitAppeal">提交审核</el-button>
+          </div>
+
+          <div class="dim mt-16" style="font-size:12px;line-height:1.7">
+            处置规则：临时停用会踢掉该商家所有在线会话并显示停用截止日期；永久停用不可自行恢复；
+            下架商品后游客端立即不可见、不可下单；退款只登记业务状态（本项目无真实支付通道）。
+          </div>
+        </div>
+        <div v-else class="empty">正在加载举报详情…</div>
+      </div>
+    </el-drawer>
+
+    <!-- 凭证大图：dataURL 只作为 img src 渲染，不经过 v-html -->
+    <el-dialog :visible.sync="previewVisible" title="凭证大图" width="720px" append-to-body>
+      <img v-if="previewSrc" :src="previewSrc" alt="凭证大图" style="max-width:100%;display:block;margin:0 auto">
     </el-dialog>
   </div>
 </script>
@@ -744,7 +992,9 @@
           <el-tab-pane label="AI 知识库" name="knowledge"></el-tab-pane>
         </el-tabs>
 
-        <el-table :data="list" v-loading="loading" stripe size="small" style="width:100%">
+        <div class="split" :class="{ 'split-side-on': tab === 'knowledge' }">
+        <div class="split-main">
+          <el-table :data="list" v-loading="loading" stripe size="small" style="width:100%">
           <el-table-column v-if="tab !== 'knowledge'" label="" width="66">
             <template slot-scope="s"><img v-if="s.row.cover" :src="s.row.cover" class="thumb" alt=""></template>
           </el-table-column>
@@ -756,9 +1006,15 @@
           </el-table-column>
           <el-table-column v-if="tab === 'spots'" prop="type" label="类型" width="110"></el-table-column>
           <el-table-column v-if="tab === 'spots'" prop="location" label="位置" width="170"></el-table-column>
-          <el-table-column v-if="tab === 'spots'" label="印章" width="110">
+          <el-table-column v-if="tab === 'spots'" label="印章" width="150">
             <template slot-scope="s">
-              <span class="tag brand">{{ s.row.stampIcon }} {{ s.row.stamp }}</span>
+              <span class="tag brand stamp-tag">
+                <svg v-if="isStampIcon(s.row.stampIcon)" class="spr" viewBox="0 0 24 24" aria-hidden="true">
+                  <use :href="stampIconUrl(s.row.stampIcon)"></use>
+                </svg>
+                <span v-else class="dim" style="font-size:11px">旧单字</span>
+                {{ s.row.stamp }}
+              </span>
             </template>
           </el-table-column>
           <el-table-column v-if="tab === 'activities'" prop="date" label="开始" width="110"></el-table-column>
@@ -785,6 +1041,51 @@
             </template>
           </el-table-column>
         </el-table>
+        </div>
+        <aside v-if="tab === 'knowledge'" class="split-side">
+          <div class="card">
+            <div class="card-head">
+              <h3>大模型 API 配置</h3>
+              <el-tag size="mini" effect="plain" :type="aiForm.enabled ? 'success' : 'info'">
+                {{ aiForm.enabled ? '大模型已启用' : '本地知识库' }}
+              </el-tag>
+            </div>
+            <div class="card-body">
+              <el-form label-width="92px" size="small">
+                <el-form-item label="启用大模型">
+                  <el-switch v-model="aiForm.enabled"></el-switch>
+                </el-form-item>
+                <el-form-item label="接口地址">
+                  <el-input v-model="aiForm.baseUrl" placeholder="https://api.deepseek.com/v1"></el-input>
+                </el-form-item>
+                <el-form-item label="API Key">
+                  <el-input v-model="aiForm.apiKey" show-password
+                            :placeholder="aiForm.hasKey ? ('已配置 ' + aiForm.keyMasked + '，留空表示不改') : 'sk-...'"></el-input>
+                  <div class="dim" style="font-size:12px;line-height:1.6;margin-top:6px">
+                    密钥只保存不回显，界面只显示尾巴 4 位；留空 = 保持原密钥
+                  </div>
+                </el-form-item>
+                <el-form-item label="模型名称">
+                  <el-input v-model="aiForm.model" placeholder="deepseek-chat"></el-input>
+                </el-form-item>
+                <el-form-item label="系统提示词">
+                  <el-input type="textarea" :rows="3" v-model="aiForm.systemPrompt"
+                            placeholder="约束模型只依据知识库作答"></el-input>
+                </el-form-item>
+              </el-form>
+              <div class="mt-8 flex items-center gap-8">
+                <el-button type="primary" size="mini" :loading="aiSaving" @click="saveAi">保存并生效</el-button>
+                <el-button size="mini" :loading="aiTesting" @click="testAi">测试连接</el-button>
+                <el-button v-if="aiForm.hasKey" type="text" size="mini" class="danger" @click="clearAiKey">清除密钥</el-button>
+              </div>
+              <div class="dim" style="font-size:12px;margin-top:10px;line-height:1.6">
+                保存即生效（写入 settings 表，AI 服务每次调用实时读取），不需重启；
+                未配置或调用失败时自动回退本地知识库，不影响游客端。
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
       </div>
     </div>
 
@@ -800,8 +1101,34 @@
             </el-select>
           </el-form-item>
           <el-form-item label="印章名称"><el-input v-model="form.stamp"></el-input></el-form-item>
-          <el-form-item label="印章单字"><el-input v-model="form.stampIcon" maxlength="2" style="width:90px"></el-input></el-form-item>
+          <el-form-item label="印章图标">
+            <el-select v-model="form.stampIcon" filterable style="width:100%">
+              <el-option v-for="ic in stampIcons" :key="ic.key" :label="ic.name + '（' + ic.key + '）'" :value="ic.key">
+                <span class="stamp-opt">
+                  <svg class="spr" viewBox="0 0 24 24" aria-hidden="true"><use :href="stampIconUrl(ic.key)"></use></svg>
+                  <span>{{ ic.name }}</span>
+                  <span class="dim mono">{{ ic.key }}</span>
+                </span>
+              </el-option>
+              <!-- 历史数据是单个汉字：保留一个只读选项，避免编辑其它字段时被悄悄清空 -->
+              <el-option v-if="form.stampIcon && !isStampIcon(form.stampIcon)"
+                         :label="'历史单字：' + form.stampIcon" :value="form.stampIcon"></el-option>
+            </el-select>
+            <div class="stamp-preview">
+              <svg v-if="isStampIcon(form.stampIcon)" class="spr" viewBox="0 0 24 24" aria-hidden="true">
+                <use :href="stampIconUrl(form.stampIcon)"></use>
+              </svg>
+              <span v-else class="seal-char">{{ form.stampIcon || '印' }}</span>
+              <span class="dim">{{ stampIconLabel(form.stampIcon) }} · 游客端印章墙会显示此图标；老数据单字自动兼容</span>
+            </div>
+          </el-form-item>
           <el-form-item label="点位介绍"><el-input type="textarea" :rows="3" v-model="form.intro"></el-input></el-form-item>
+          <el-form-item label="语音讲解包">
+            <el-select v-model="form.voice" style="width:220px">
+              <el-option v-for="v in voicePacks" :key="v.value" :label="v.label" :value="v.value"></el-option>
+            </el-select>
+            <span class="dim" style="margin-left:10px;font-size:12px">老点位没有该字段时按「自动」处理</span>
+          </el-form-item>
           <el-form-item label="语音讲解稿"><el-input type="textarea" :rows="4" v-model="form.tts"></el-input></el-form-item>
         </template>
 

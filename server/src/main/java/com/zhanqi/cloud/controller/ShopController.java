@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/** 商城：商品浏览 / 下单预约 / 商家上架与核销 */
+/** 商城：商品浏览 / 下单预约 / 订单履约（接单、拒绝协商、发货物流、完成） */
 @RestController
 @RequestMapping("/api/shop")
 public class ShopController {
@@ -49,6 +49,18 @@ public class ShopController {
     @GetMapping("/products/{id}")
     public Map<String, Object> product(@PathVariable String id) {
         return R.ok("product", shop.product(id));
+    }
+
+    /**
+     * 商家公开主页：商品详情点商家头像进入。
+     * 只返回店铺公开资料与在售商品，不含账号/登录信息。
+     */
+    @GetMapping("/merchants/{id}")
+    public Map<String, Object> merchantHome(@PathVariable String id) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.putAll(shop.merchantHome(id));
+        return out;
     }
 
     @PostMapping("/products")
@@ -107,21 +119,73 @@ public class ShopController {
         return out;
     }
 
+    /** 订单详情：买家/商家按归属可见，管理员可全量查看 */
+    @GetMapping("/orders/{id}")
+    @RequireRole({"buyer", "merchant", "admin"})
+    public Map<String, Object> orderDetail(@PathVariable String id) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.put("order", shop.orderDetail(AuthContext.require(), id));
+        return out;
+    }
+
     @PostMapping("/orders/{id}/confirm")
     @RequireRole("merchant")
     public Map<String, Object> confirm(@PathVariable String id) {
         return R.ok("message", shop.confirm(AuthContext.require(), id));
     }
 
-    @PostMapping("/orders/{id}/verify")
+    /** 商家拒绝订单：原因必填；订单不直接关闭，等买家决定 */
+    @PostMapping("/orders/{id}/reject")
     @RequireRole("merchant")
-    public Map<String, Object> verify(@PathVariable String id) {
-        return R.ok("message", shop.verify(AuthContext.require(), id));
+    public Map<String, Object> reject(@PathVariable String id,
+                                      @RequestBody(required = false) Map<String, Object> body) {
+        return R.ok("message", shop.reject(AuthContext.require(), id, body == null ? Map.of() : body));
     }
 
-    /** 取消订单：买家取消自己的、商家拒绝名下的 */
+    /** 买家对商家拒绝的决定：同意关闭 / 不同意进入协商 */
+    @PostMapping("/orders/{id}/buyer-decision")
+    @RequireRole("buyer")
+    public Map<String, Object> buyerDecision(@PathVariable String id,
+                                             @RequestBody(required = false) Map<String, Object> body) {
+        return R.ok("message", shop.buyerDecision(AuthContext.require(), id, body == null ? Map.of() : body));
+    }
+
+    /** 商家发货：快递公司 + 运单号 */
+    @PostMapping("/orders/{id}/ship")
+    @RequireRole("merchant")
+    public Map<String, Object> ship(@PathVariable String id,
+                                    @RequestBody(required = false) Map<String, Object> body) {
+        return R.ok("message", shop.ship(AuthContext.require(), id, body == null ? Map.of() : body));
+    }
+
+    /** 民宿办理入住 */
+    @PostMapping("/orders/{id}/checkin")
+    @RequireRole("merchant")
+    public Map<String, Object> checkIn(@PathVariable String id) {
+        return R.ok("message", shop.checkInStay(AuthContext.require(), id));
+    }
+
+    /** 商家完成订单（体验类 / 民宿 / 已发货实物） */
+    @PostMapping("/orders/{id}/complete")
+    @RequireRole("merchant")
+    public Map<String, Object> complete(@PathVariable String id) {
+        return R.ok("message", shop.complete(AuthContext.require(), id));
+    }
+
+    /** 物流信息（按订单归属校验） */
+    @GetMapping("/orders/{id}/logistics")
+    @RequireRole({"buyer", "merchant", "admin"})
+    public Map<String, Object> logistics(@PathVariable String id) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.putAll(shop.logistics(AuthContext.require(), id));
+        return out;
+    }
+
+    /** 取消订单：买家取消自己的；管理员走 /api/admin/orders/{id}/cancel；商家请用「拒绝」 */
     @PostMapping("/orders/{id}/cancel")
-    @RequireRole({"buyer", "merchant"})
+    @RequireRole("buyer")
     public Map<String, Object> cancel(@PathVariable String id) {
         return R.ok("message", shop.cancel(AuthContext.require(), id));
     }

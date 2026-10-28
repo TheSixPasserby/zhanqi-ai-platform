@@ -56,7 +56,7 @@ public class AuthController {
     public Map<String, Object> options() {
         List<Map<String, Object>> roles = List.of(
                 R.map("key", "buyer", "text", "买家（游客）", "desc", "浏览点位、预约研学民宿、下单购买农产"),
-                R.map("key", "merchant", "text", "商家", "desc", "上架商品、核销订单、查看营收"));
+                R.map("key", "merchant", "text", "商家", "desc", "上架商品、接单发货、查看营收"));
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("ok", true);

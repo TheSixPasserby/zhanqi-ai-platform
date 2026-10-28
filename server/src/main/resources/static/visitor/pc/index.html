@@ -128,6 +128,8 @@
               <svg class="i"><use :href="icon('i-shop')"></use></svg>商城</a>
             <a :class="{ on: view === 'activities' }" @click="go('activities')">
               <svg class="i"><use :href="icon('i-calendar')"></use></svg>活动</a>
+            <a :class="{ on: view === 'orders' }" @click="go('orders')">
+              <svg class="i"><use :href="icon('i-ticket')"></use></svg>我的订单</a>
             <a :class="{ on: view === 'ai' }" @click="go('ai')">
               <svg class="i"><use :href="icon('i-ai')"></use></svg>AI 助手</a>
           </nav>
@@ -137,6 +139,9 @@
               <svg class="i"><use :href="icon('i-search')"></use></svg>
               <input v-model.trim="keyword" placeholder="搜商品" @keyup.enter="go('shop')">
             </div>
+            <button class="icon-btn" title="我的消息" @click="go('chatList')">
+              <svg class="i"><use :href="icon('i-phone')"></use></svg>
+            </button>
             <button class="icon-btn" title="购物车" @click="cartOpen = true">
               <svg class="i"><use :href="icon('i-cart')"></use></svg>
               <span v-if="cartCount" class="badge">{{ cartCount }}</span>
@@ -149,6 +154,8 @@
               <div class="user-menu">
                 <b>{{ me.name }}</b>
                 <a @click="go('orders')">我的订单</a>
+                <a @click="go('chatList')">我的消息</a>
+                <a @click="openReports(null)">举报中心</a>
                 <a @click="go('mine')">个人中心</a>
                 <a @click="openPwd">修改密码</a>
                 <a @click="logout">退出登录</a>
@@ -351,29 +358,49 @@
           </div>
         </template>
 
-        <!-- ---------- 订单 ---------- -->
+        <!-- ---------- 我的订单（状态筛选 + 点击行看详情/物流/协商） ---------- -->
         <template v-else-if="view === 'orders'">
-          <div class="page-head"><div><h1>我的订单</h1><p>共 {{ orders.length }} 笔</p></div></div>
-          <div class="table-card">
+          <div class="page-head">
+            <div><h1>我的订单</h1><p>共 {{ orders.length }} 笔 · 点击订单查看详情、物流与协商记录</p></div>
+          </div>
+
+          <div class="order-tabs">
+            <button v-for="t in orderTabs" :key="t.key" :class="{ on: ordersFilter === t.key }"
+                    @click="ordersFilter = t.key">
+              {{ t.text }}<em v-if="t.key === 'all'">{{ orders.length }}</em>
+            </button>
+          </div>
+
+          <div class="table-card order-table">
             <table>
               <thead><tr><th>商品</th><th>数量</th><th>金额</th><th>状态</th><th>下单时间</th><th></th></tr></thead>
               <tbody>
-                <tr v-for="o in orders" :key="o.id">
+                <tr v-for="o in filteredOrders" :key="o.id" class="order-row" @click="openOrder(o)">
                   <td>
                     <div class="order-item">
                       <img :src="asset(o.cover)" alt="">
-                      <div><b>{{ o.productName }}</b><span>{{ o.type === 'booking' ? '预约单' : '商品单' }}</span></div>
+                      <div>
+                        <b>{{ o.productName }}</b>
+                        <span>{{ o.typeText || (o.type === 'booking' ? '预约单' : '商品单') }}<template v-if="o.merchantName"> · {{ o.merchantName }}</template></span>
+                      </div>
                     </div>
                   </td>
                   <td>{{ o.qty }}</td>
                   <td class="mono">{{ money(o.amount) }}</td>
-                  <td><span class="pill" :class="o.status">{{ o.statusText }}</span></td>
+                  <td>
+                    <span class="pill" :class="o.status">{{ orderStatusText(o) }}</span>
+                    <span v-if="o.rejectStatus === 'waiting_buyer'" class="pill conflict">待你决定</span>
+                  </td>
                   <td class="dim">{{ time(o.createdAt) }}</td>
                   <td class="right">
-                    <button v-if="o.status === 'pending'" class="btn-mini ghost" @click="cancelOrder(o)">取消</button>
+                    <span class="order-go">查看详情</span>
+                    <button v-if="o.canCancel !== false && (o.status === 'pending' || o.status === 'confirmed')"
+                            class="btn-mini ghost" @click.stop="cancelOrder(o)">取消</button>
                   </td>
                 </tr>
-                <tr v-if="!orders.length"><td colspan="6" class="empty-cell">还没有订单，去商城逛逛吧</td></tr>
+                <tr v-if="!filteredOrders.length">
+                  <td colspan="6" class="empty-cell">{{ orders.length ? '该状态下暂无订单' : '还没有订单，去商城逛逛吧' }}</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -406,6 +433,323 @@
           </div>
         </template>
 
+        <!-- ---------- 商家主页（商品详情 / 订单详情点商家进入） ---------- -->
+        <template v-else-if="view === 'merchantHome'">
+          <div v-if="merchantLoading" class="empty"><p>正在打开商家主页…</p></div>
+          <template v-else-if="merchantHome">
+            <div class="merchant-profile">
+              <img class="merchant-avatar lg" :src="merchantAvatar(merchantHome.merchant)"
+                   :alt="merchantHome.merchant.name">
+              <div class="merchant-main">
+                <div class="merchant-title">
+                  <h1>{{ merchantHome.merchant.name }}</h1>
+                  <span class="online-tag" :class="{ off: !merchantHome.merchant.online }">
+                    {{ merchantHome.merchant.online ? '在线' : '离线' }}</span>
+                </div>
+                <p class="merchant-sub">
+                  {{ merchantHome.merchant.type || '村内商户' }}
+                  <template v-if="merchantHome.merchant.since"> · 入驻 {{ merchantHome.merchant.since }}</template>
+                  · {{ (merchantHome.products || []).length }} 件在售
+                </p>
+                <p class="merchant-intro">{{ merchantHome.merchant.intro || '这位商家还没有填写店铺简介。' }}</p>
+                <p class="merchant-phone" v-if="merchantHome.merchant.phone">
+                  <svg class="i"><use :href="icon('i-phone')"></use></svg>{{ merchantHome.merchant.phone }}</p>
+              </div>
+              <div class="merchant-actions">
+                <button class="btn-primary" @click="openChat(merchantHome.merchant)">
+                  <svg class="i"><use :href="icon('i-phone')"></use></svg>客服</button>
+                <button class="btn-ghost dark" @click="go(merchantBackView)">返回</button>
+              </div>
+            </div>
+
+            <section class="block">
+              <div class="block-head">
+                <h2><i></i>在售商品</h2>
+                <span class="dim">共 {{ (merchantHome.products || []).length }} 件</span>
+              </div>
+              <div class="goods-grid" v-if="merchantHome.products && merchantHome.products.length">
+                <article v-for="p in merchantHome.products" :key="p.id" class="goods-card" @click="openProduct(p)">
+                  <div class="goods-cover"><img :src="asset(p.cover)" :alt="p.name"></div>
+                  <div class="goods-body">
+                    <h3>{{ p.name }}</h3>
+                    <p class="goods-desc">{{ p.desc }}</p>
+                    <div class="goods-foot">
+                      <span class="price">¥{{ p.price }}<em>/{{ p.unit }}</em></span>
+                      <button class="mini-cart" @click.stop="addCart(p, 1)">
+                        <svg class="i"><use :href="icon('i-cart')"></use></svg></button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+              <div v-else class="empty">
+                <svg class="i big"><use :href="icon('i-shop')"></use></svg>
+                <p>该商家暂时没有在售商品</p>
+              </div>
+            </section>
+          </template>
+          <div v-else class="empty">
+            <svg class="i big"><use :href="icon('i-shop')"></use></svg>
+            <p>商家不存在或暂不可访问</p>
+            <button class="btn-mini" @click="go('shop')">回商城</button>
+          </div>
+        </template>
+
+        <!-- ---------- 我的消息（聊天会话列表） ---------- -->
+        <template v-else-if="view === 'chatList'">
+          <div class="page-head">
+            <div><h1>我的消息</h1><p>与商家客服的会话，商品与订单都可以直接发过去</p></div>
+            <button class="btn-mini ghost" :disabled="chatThreadsLoading" @click="loadChatThreads">
+              {{ chatThreadsLoading ? '刷新中…' : '刷新' }}</button>
+          </div>
+          <div class="thread-list">
+            <div v-for="t in chatThreads" :key="t.merchantId" class="thread-row" @click="openChat(t)">
+              <span class="thread-avatar">
+                <img :src="threadAvatar(t)" :alt="t.merchantName">
+                <i v-if="t.online" class="online-dot" title="在线"></i>
+              </span>
+              <div class="thread-main">
+                <div class="thread-head">
+                  <b>{{ t.merchantName }}</b>
+                  <span class="dim">{{ time(t.lastAt) }}</span>
+                </div>
+                <p>{{ t.lastText || '还没有消息，去打个招呼吧' }}</p>
+              </div>
+              <span v-if="t.unread" class="thread-unread">{{ t.unread }}</span>
+            </div>
+            <div v-if="!chatThreads.length && !chatThreadsLoading" class="empty">
+              <svg class="i big"><use :href="icon('i-phone')"></use></svg>
+              <p>还没有聊天记录，去商家主页找客服聊聊吧</p>
+              <button class="btn-mini" @click="go('shop')">去商城</button>
+            </div>
+          </div>
+        </template>
+
+        <!-- ---------- 聊天：商家客服（轮询 3 秒） ---------- -->
+        <template v-else-if="view === 'chat'">
+          <div v-if="!chatMerchant" class="empty">
+            <p>会话不存在</p>
+            <button class="btn-mini" @click="go('chatList')">返回消息列表</button>
+          </div>
+          <div v-else class="chat-shell">
+            <header class="chat-head">
+              <img class="chat-avatar" :src="merchantAvatar(chatMerchant)" :alt="chatMerchant.name">
+              <div class="chat-peer">
+                <b>{{ chatMerchant.name }}</b>
+                <span class="chat-state" :class="{ typing: chatPeerTyping, offline: !chatPeerOnline && !chatPeerTyping }">
+                  <i></i>{{ chatStateText }}</span>
+              </div>
+              <div class="chat-head-actions">
+                <button class="btn-mini ghost" @click="openMerchant(chatMerchant)">商家主页</button>
+                <button class="btn-mini ghost" @click="reportFromChat">
+                  <svg class="i"><use :href="icon('i-shield')"></use></svg>举报</button>
+              </div>
+            </header>
+
+            <div ref="chatBody" class="chat-body">
+              <div v-for="m in chatMessages" :key="m.id" class="msg" :class="msgSide(m)">
+                <img class="msg-avatar" :src="msgAvatar(m)" alt="">
+                <div class="msg-main">
+                  <template v-if="m.type === 'image'">
+                    <div class="msg-image" @click="imagePreview = m.media">
+                      <img :src="m.media" alt="聊天图片">
+                    </div>
+                  </template>
+                  <template v-else-if="m.type === 'product'">
+                    <div class="msg-card" @click="openChatMessageProduct(m)">
+                      <img :src="asset(m.product ? m.product.cover : '')" alt="">
+                      <div>
+                        <b>{{ m.product ? m.product.name : (m.text || '商品') }}</b>
+                        <span v-if="m.product && m.product.price !== undefined">¥{{ m.product.price }}/{{ m.product.unit || '份' }}</span>
+                        <span v-else>点击查看商品</span>
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else-if="m.type === 'order'">
+                    <div class="msg-card order" @click="openChatMessageOrder(m)">
+                      <span class="msg-card-icon"><svg class="i"><use :href="icon('i-ticket')"></use></svg></span>
+                      <div>
+                        <b>{{ m.order ? m.order.productName : (m.text || '订单') }}</b>
+                        <span v-if="m.order">¥{{ m.order.amount }} · {{ m.order.statusText }}</span>
+                        <span v-else>点击查看订单</span>
+                      </div>
+                    </div>
+                  </template>
+                  <p v-else class="msg-text">{{ m.text }}</p>
+                  <span class="msg-time">{{ time(m.createdAt) }}</span>
+                </div>
+              </div>
+
+              <div v-if="chatPeerTyping" class="msg peer">
+                <img class="msg-avatar" :src="merchantAvatar(chatMerchant)" alt="">
+                <div class="msg-main"><p class="msg-text msg-typing">对方输入中<i></i><i></i><i></i></p></div>
+              </div>
+
+              <div v-if="!chatMessages.length" class="chat-empty">
+                <img :src="merchantAvatar(chatMerchant)" alt="">
+                <p>和 {{ chatMerchant.name }} 的对话从这里开始</p>
+                <span>可以把商品、订单发给商家，也可以发图片说明问题</span>
+              </div>
+            </div>
+
+            <div class="chat-composer">
+              <div v-if="chatAttachOpen" class="chat-panel">
+                <div class="chat-panel-head">
+                  <button :class="{ on: chatPanelTab === 'product' }" @click="chatPanelTab = 'product'">商品</button>
+                  <button :class="{ on: chatPanelTab === 'order' }" @click="chatPanelTab = 'order'">订单</button>
+                  <button @click="pickChatImage">图片</button>
+                  <button @click="openCamera">拍摄</button>
+                </div>
+                <div v-if="chatPanelTab === 'product'" class="chat-panel-list">
+                  <button v-for="p in chatProductList" :key="p.id" class="chat-panel-item" @click="sendChatProduct(p)">
+                    <img :src="asset(p.cover)" alt="">
+                    <span>{{ p.name }} · ¥{{ p.price }}/{{ p.unit }}</span>
+                  </button>
+                  <p v-if="!chatProductList.length" class="dim">该商家暂无在售商品</p>
+                </div>
+                <div v-else class="chat-panel-list">
+                  <button v-for="o in chatOrderList" :key="o.id" class="chat-panel-item" @click="sendChatOrder(o)">
+                    <img :src="asset(o.cover)" alt="">
+                    <span>{{ o.productName }} · {{ orderStatusText(o) }}</span>
+                  </button>
+                  <p v-if="!chatOrderList.length" class="dim">你在该商家还没有订单</p>
+                </div>
+              </div>
+
+              <div class="chat-input-row">
+                <button class="chat-plus" :class="{ on: chatAttachOpen }" title="发送商品/订单/图片/拍摄"
+                        @click="chatAttachOpen = !chatAttachOpen">
+                  <svg class="i"><use :href="icon('i-plus')"></use></svg></button>
+                <textarea ref="chatInput" v-model="chatText" rows="1" maxlength="2000"
+                          placeholder="输入消息，Enter 发送"
+                          @input="onChatInput"
+                          @compositionstart="chatComposing = true"
+                          @compositionend="chatComposing = false"
+                          @keydown.enter.exact.prevent="sendChatText"></textarea>
+                <button class="btn-primary" :disabled="chatSending || !chatText.trim()" @click="sendChatText">
+                  {{ chatSending ? '发送中…' : '发送' }}</button>
+              </div>
+              <input ref="chatImageInput" type="file" accept="image/*" hidden @change="onChatImagePick">
+              <input ref="chatCameraInput" type="file" accept="image/*" capture="environment" hidden @change="onChatImagePick">
+            </div>
+          </div>
+        </template>
+
+        <!-- ---------- 举报中心：分类举报 + 我的举报 ---------- -->
+        <template v-else-if="view === 'reports'">
+          <div class="page-head">
+            <div><h1>举报中心</h1><p>商家违规行为分类举报，处理进度与结果会在这里同步</p></div>
+            <div class="report-tabs">
+              <button :class="{ on: reportTab === 'form' }" @click="switchReportTab('form')">商家违规行为分类</button>
+              <button :class="{ on: reportTab === 'mine' }" @click="switchReportTab('mine')">我的举报</button>
+            </div>
+          </div>
+
+          <div v-if="reportTab === 'form'" class="report-layout">
+            <section class="report-form-card">
+              <div v-if="reportPresetMerchant" class="report-preset">
+                <img :src="merchantAvatar(reportPresetMerchant)" alt="">
+                <div><b>正在举报：{{ reportPresetMerchant.name }}</b><span>从聊天带入，可在下方更换商家</span></div>
+              </div>
+
+              <label class="field"><span>被举报商家</span>
+                <select v-model="reportForm.merchantId">
+                  <option value="">请选择商家</option>
+                  <option v-for="m in reportMerchantOptions" :key="m.id" :value="m.id">{{ m.name }}</option>
+                </select>
+              </label>
+
+              <div class="report-cats">
+                <button v-for="c in reportCategories" :key="c.key" class="report-cat"
+                        :class="{ on: reportForm.category === c.key }" @click="pickReportCategory(c)">
+                  <b>{{ c.name }}</b>
+                  <span>{{ c.reasons.length }} 个细因由</span>
+                </button>
+              </div>
+
+              <template v-if="currentReportCategory">
+                <label class="field"><span>细因由</span>
+                  <select v-model="reportForm.reason">
+                    <option value="">请选择（选填）</option>
+                    <option v-for="r in currentReportCategory.reasons" :key="r" :value="r">{{ r }}</option>
+                  </select>
+                </label>
+                <label class="field"><span>举报内容</span>
+                  <textarea rows="4" maxlength="1000" v-model.trim="reportForm.content"
+                            placeholder="写清时间、经过和你的诉求，平台会据此核实"></textarea>
+                </label>
+                <div class="field">
+                  <span>上传凭证 <em class="dim">最多 6 张，单张压缩到 400KB 以内</em></span>
+                  <div class="evidence-grid">
+                    <div v-for="(img, i) in reportForm.evidence" :key="i" class="evidence-item">
+                      <img :src="img" alt="举报凭证" @click="imagePreview = img">
+                      <button class="evidence-del" title="移除" @click="removeEvidence(i)">
+                        <svg class="i"><use :href="icon('i-close')"></use></svg></button>
+                    </div>
+                    <button v-if="reportForm.evidence.length < 6" class="evidence-add"
+                            @click="$refs.reportEvidence.click()">
+                      <svg class="i"><use :href="icon('i-plus')"></use></svg><span>添加图片</span></button>
+                  </div>
+                  <input ref="reportEvidence" type="file" accept="image/*" multiple hidden @change="onReportEvidencePick">
+                </div>
+                <button class="btn-primary block" :disabled="reportSubmitting" @click="submitReport">
+                  {{ reportSubmitting ? '提交中…' : '提交举报' }}</button>
+              </template>
+              <p v-else class="report-hint dim">先在上方选择一个违规分类，再填写细因由与内容。</p>
+            </section>
+
+            <aside class="report-side">
+              <h3>举报须知</h3>
+              <p>平台核实后会处理，并可能对商家采取提醒、下架商品、临时或永久停用等措施；处理结果会通知你。</p>
+              <div class="report-flow">
+                <div><b>1</b><span>提交举报</span></div>
+                <div><b>2</b><span>平台核实</span></div>
+                <div><b>3</b><span>处理并通知</span></div>
+                <div><b>4</b><span>商家可上诉</span></div>
+              </div>
+              <p class="dim">虚假举报会影响账号信用，请如实填写。凭证图片只用于平台核实。</p>
+            </aside>
+          </div>
+
+          <div v-else class="report-mine">
+            <div v-if="reportLoading" class="empty"><p>加载中…</p></div>
+            <template v-else>
+              <div v-for="r in reportList" :key="r.id" class="report-item">
+                <div class="report-item-head">
+                  <div>
+                    <b>{{ r.merchantName }}</b>
+                    <span class="pill" :class="'rp-' + r.status">{{ reportStatusText(r) }}</span>
+                  </div>
+                  <span class="dim">{{ time(r.createdAt) }}</span>
+                </div>
+                <p class="report-item-meta">{{ r.categoryText || reportCategoryText(r.category) }}<template v-if="r.reason"> · {{ r.reason }}</template></p>
+                <p class="report-item-content">{{ r.content }}</p>
+                <div v-if="r.evidence && r.evidence.length" class="report-evidence">
+                  <img v-for="(img, i) in r.evidence" :key="i" :src="img" alt="凭证" @click="imagePreview = img">
+                </div>
+                <div class="report-steps">
+                  <div v-for="(s, i) in reportSteps(r)" :key="i" class="report-step" :class="{ done: s.done }">
+                    <i></i><span>{{ s.text }}</span>
+                    <em v-if="s.at">{{ time(s.at) }}</em>
+                  </div>
+                </div>
+                <div v-if="r.result" class="report-result"><b>处理结果</b><p>{{ r.result }}</p></div>
+                <div v-if="r.notice" class="report-notice">
+                  <svg class="i"><use :href="icon('i-info')"></use></svg><span>{{ r.notice }}</span></div>
+                <div v-if="r.appealAt" class="report-appeal">
+                  商家已于 {{ time(r.appealAt) }} 提起上诉
+                  <template v-if="r.appealStatusText"> · {{ r.appealStatusText }}</template>
+                  <p v-if="r.appealResult">复核结果：{{ r.appealResult }}</p>
+                </div>
+              </div>
+              <div v-if="!reportList.length" class="empty">
+                <svg class="i big"><use :href="icon('i-shield')"></use></svg>
+                <p>还没有提交过举报</p>
+                <button class="btn-mini" @click="switchReportTab('form')">去举报</button>
+              </div>
+            </template>
+          </div>
+        </template>
+
         <!-- ---------- AI 助手 ---------- -->
         <template v-else-if="view === 'ai'">
           <div class="page-head"><div><h1>AI 文旅助手</h1><p>只依据村内资料回答，找不到会明确说「资料里没有」</p></div></div>
@@ -419,6 +763,9 @@
               <div v-if="ai.mode === 'plan'" class="ai-params">
                 <label>天数
                   <select v-model="ai.planDays"><option :value="1">1 天</option><option :value="2">2 天</option><option :value="3">3 天</option></select></label>
+                <label>人数
+                  <select v-model.number="ai.planPeople">
+                    <option v-for="n in 10" :key="n" :value="n">{{ n }} 人</option></select></label>
                 <label>偏好
                   <select v-model="ai.planPref"><option>亲子</option><option>非遗</option><option>摄影</option><option>美食</option></select></label>
               </div>
@@ -506,6 +853,10 @@
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
               <a @click="go('ai')"><svg class="i"><use :href="icon('i-ai')"></use></svg>AI 文旅助手
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
+              <a @click="go('chatList')"><svg class="i"><use :href="icon('i-phone')"></use></svg>消息中心
+                <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
+              <a @click="openReports(null)"><svg class="i"><use :href="icon('i-shield')"></use></svg>举报中心
+                <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
               <a @click="logout"><svg class="i"><use :href="icon('i-close')"></use></svg>退出登录
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
             </div>
@@ -540,9 +891,14 @@
         <p class="drawer-intro">{{ currentSpot.intro }}</p>
         <div class="drawer-actions">
           <button class="btn-ghost" @click="speak(currentSpot)">
-            <svg class="i"><use :href="icon('i-mic')"></use></svg>语音讲解</button>
+            <svg class="i"><use :href="icon('i-mic')"></use></svg>{{ speaking ? '停止讲解' : '语音讲解' }}</button>
           <button class="btn-primary" :disabled="isChecked(currentSpot.id)" @click="checkin(currentSpot)">
             <svg class="i"><use :href="icon('i-stamp')"></use></svg>{{ isChecked(currentSpot.id) ? '已打卡' : '打卡集章' }}</button>
+        </div>
+        <p v-if="voiceLabel()" class="drawer-voice" @click="switchVoice" title="点击切换音色">
+          语音包：{{ voicePackLabel() }} · 当前音色：{{ voiceLabel() }}（点击切换）</p>
+        <div v-if="showScript" class="drawer-script">
+          <b>讲解文稿</b><p>{{ currentSpot.tts }}</p>
         </div>
         <div class="drawer-stamp">
           <span class="seal-icon lg"><svg class="i"><use :href="icon(spotIcon(currentSpot))"></use></svg></span>
@@ -608,24 +964,80 @@
     </aside>
   </div>
 
-  <!-- ==================== 商品详情抽屉 ==================== -->
+  <!-- ==================== 商品详情抽屉：商家卡片 + 按分类购买表单 ==================== -->
   <div v-if="currentProduct" class="drawer-mask" @click.self="currentProduct = null">
     <aside class="drawer">
       <button class="drawer-close" @click="currentProduct = null">
         <svg class="i"><use :href="icon('i-close')"></use></svg></button>
       <div class="drawer-cover"><img :src="asset(currentProduct.cover)" :alt="currentProduct.name"></div>
       <div class="drawer-body">
-        <span class="tag">{{ categories[currentProduct.category] || currentProduct.category }}</span>
+        <span class="tag">{{ currentProduct.categoryText || categories[currentProduct.category] || currentProduct.category }}</span>
         <h2>{{ currentProduct.name }}</h2>
         <p class="drawer-price">¥{{ currentProduct.price }}<em>/{{ currentProduct.unit }}</em></p>
         <p class="drawer-intro">{{ currentProduct.desc }}</p>
         <div class="drawer-tags">
-          <span v-for="t in (currentProduct.tags || [])" :key="t" class="chip">{{ t }}</span>
+          <span v-for="t in listOf(currentProduct.tags)" :key="t" class="chip">{{ t }}</span>
         </div>
-        <div class="drawer-actions">
-          <button class="btn-primary block" :disabled="currentProduct.stock <= 0" @click="addCart(currentProduct, 1); currentProduct = null">
-            <svg class="i"><use :href="icon('i-cart')"></use></svg>
-            {{ currentProduct.stock > 0 ? '加入购物车' : '已售罄' }}</button>
+
+        <!-- 商家卡片：点头像/店名进商家主页，右侧「客服」直接开聊 -->
+        <div class="product-merchant" v-if="currentProductMerchant">
+          <img class="merchant-avatar sm" :src="merchantAvatar(currentProductMerchant)"
+               :alt="currentProductMerchant.name" @click="openMerchant(currentProductMerchant)">
+          <div class="product-merchant-main" @click="openMerchant(currentProductMerchant)">
+            <b>{{ currentProductMerchant.name }}</b>
+            <span>{{ currentProductMerchant.type || '村内商户' }}<template v-if="currentProductMerchant.online"> · 在线</template></span>
+            <em>{{ currentProductMerchant.intro || '点这里查看商家主页与全部在售商品' }}</em>
+          </div>
+          <button class="btn-mini" @click="openChat(currentProductMerchant)">
+            <svg class="i"><use :href="icon('i-phone')"></use></svg>客服</button>
+        </div>
+
+        <div class="buy-panel">
+          <div class="buy-head">购买信息</div>
+          <!-- 农产文创：实物，收货地址 + 数量 -->
+          <template v-if="currentProduct.category === 'goods'">
+            <label class="field"><span>收货地址</span>
+              <input v-model.trim="productBuy.address" placeholder="成都市…（快递到家）"></label>
+            <label class="field"><span>数量</span>
+              <input type="number" min="1" :max="currentProduct.stock" v-model.number="productBuy.qty"></label>
+          </template>
+          <!-- 民宿：入住 / 离店 / 房型 / 人数 -->
+          <template v-else-if="currentProduct.category === 'homestay'">
+            <div class="field-row">
+              <label class="field"><span>入住日期</span>
+                <input type="date" :min="today" v-model="productBuy.bookDate"></label>
+              <label class="field"><span>离店日期</span>
+                <input type="date" :min="productBuy.bookDate || today" v-model="productBuy.checkOutDate"></label>
+            </div>
+            <div class="field-row">
+              <label class="field"><span>房型</span>
+                <select v-model="productBuy.roomType">
+                  <option v-for="r in productRoomTypes" :key="r" :value="r">{{ r }}</option></select></label>
+              <label class="field"><span>人数</span>
+                <input type="number" min="1" max="20" v-model.number="productBuy.people"></label>
+            </div>
+          </template>
+          <!-- 研学 / 农事体验：预约日期 + 场次 + 人数 -->
+          <template v-else>
+            <div class="field-row">
+              <label class="field"><span>预约日期</span>
+                <input type="date" :min="today" v-model="productBuy.bookDate"></label>
+              <label class="field"><span>人数</span>
+                <input type="number" min="1" max="20" v-model.number="productBuy.people"></label>
+            </div>
+            <label class="field"><span>场次 / 时段</span>
+              <select v-model="productBuy.bookingSlot">
+                <option v-for="s in productSlots" :key="s" :value="s">{{ s }}</option></select></label>
+          </template>
+          <label class="field"><span>备注</span>
+            <input v-model.trim="productBuy.remark" placeholder="选填，例如需要儿童座椅"></label>
+          <div class="drawer-actions">
+            <button v-if="currentProduct.category === 'goods'" class="btn-ghost dark" :disabled="buying"
+                    @click="addCartFromDetail">
+              <svg class="i"><use :href="icon('i-cart')"></use></svg>加入购物车</button>
+            <button class="btn-primary" :disabled="buying || currentProduct.stock <= 0" @click="buyProduct">
+              {{ currentProduct.stock > 0 ? (buying ? '提交中…' : '立即购买') : '已售罄' }}</button>
+          </div>
         </div>
         <p class="drawer-stock">库存 {{ currentProduct.stock }} · 已售 {{ currentProduct.sold }}</p>
       </div>
@@ -686,6 +1098,164 @@
     </div>
   </div>
 
+  <!-- ==================== 订单详情抽屉：状态 / 物流 / 预约 / 拒绝协商 / 商家 ==================== -->
+  <div v-if="orderDetail" class="drawer-mask" @click.self="closeOrderDetail">
+    <aside class="drawer order-drawer">
+      <button class="drawer-close" @click="closeOrderDetail">
+        <svg class="i"><use :href="icon('i-close')"></use></svg></button>
+      <div class="drawer-body">
+        <div v-if="orderDetailLoading" class="order-loading dim">正在同步订单最新状态…</div>
+        <template v-else>
+          <div class="order-detail-head">
+            <div>
+              <span class="pill" :class="orderDetail.status">{{ orderStatusText(orderDetail) }}</span>
+              <span v-if="orderDetail.rejectStatusText" class="pill conflict">{{ orderDetail.rejectStatusText }}</span>
+            </div>
+            <b class="order-detail-amount">{{ money(orderDetail.amount) }}</b>
+          </div>
+          <p class="order-no dim">订单号 {{ orderDetail.id }} · {{ time(orderDetail.createdAt) }}</p>
+
+          <div class="order-goods">
+            <img :src="asset(orderDetail.cover)" alt="">
+            <div class="order-goods-main">
+              <b>{{ orderDetail.productName }}</b>
+              <span>{{ orderDetail.categoryText }} · {{ orderDetail.typeText || (orderDetail.type === 'booking' ? '预约单' : '商品单') }} · ×{{ orderDetail.qty }}</span>
+            </div>
+            <em>{{ money(orderDetail.amount) }}</em>
+          </div>
+
+          <div class="order-times">
+            <div v-for="t in orderTimeline" :key="t.text"><span>{{ t.text }}</span><b>{{ time(t.at) }}</b></div>
+          </div>
+
+          <!-- 物流：顶部路线 + 小卡车（按 progress 定位），下方节点时间轴 -->
+          <section v-if="orderLogistics && orderLogistics.hasLogistics" class="logistics-box">
+            <div class="logistics-head">
+              <b>物流信息</b>
+              <span>{{ orderLogistics.company }} · {{ orderLogistics.trackingNo }}</span>
+            </div>
+            <div class="logistics-route">
+              <div class="route-track"></div>
+              <span v-for="(n, i) in orderLogistics.nodes" :key="n.status" class="route-stop"
+                    :class="{ done: n.done }" :style="{ left: routeStopLeft(i) }">{{ n.text }}</span>
+              <span class="truck" :style="{ left: logisticsTruckLeft }">
+                <svg class="truck-svg" viewBox="0 0 48 26" aria-hidden="true">
+                  <rect x="1" y="4" width="26" height="15" rx="2" class="truck-body"></rect>
+                  <path d="M27 9h9l7 7v3H27z" class="truck-cabin"></path>
+                  <circle cx="11" cy="21" r="4" class="truck-wheel"></circle>
+                  <circle cx="36" cy="21" r="4" class="truck-wheel"></circle>
+                </svg>
+              </span>
+            </div>
+            <p class="logistics-status"><b>{{ orderLogistics.statusText }}</b>
+              <span class="dim">节点按发货时间模拟推进，同一运单号结果稳定</span></p>
+            <div class="logistics-nodes">
+              <div v-for="n in orderLogistics.nodes" :key="n.status" class="logistics-node"
+                   :class="{ done: n.done, current: n.current }">
+                <i></i>
+                <div><b>{{ n.text }}</b><em>{{ time(n.time) }}</em></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 预约信息（研学 / 民宿 / 农事体验） -->
+          <section v-if="isBookingOrder" class="order-facts">
+            <div><span>预约日期</span><b>{{ orderDetail.bookDate || '—' }}</b></div>
+            <div v-if="orderDetail.bookingSlot"><span>场次 / 时段</span><b>{{ orderDetail.bookingSlot }}</b></div>
+            <div v-if="orderDetail.checkOutDate"><span>离店日期</span><b>{{ orderDetail.checkOutDate }}</b></div>
+            <div v-if="orderDetail.roomType"><span>房型</span><b>{{ orderDetail.roomType }}</b></div>
+            <div v-if="orderDetail.people"><span>人数</span><b>{{ orderDetail.people }} 人</b></div>
+          </section>
+
+          <section v-if="orderDetail.address" class="order-address">
+            <span>收货地址</span><p>{{ orderDetail.address }}</p>
+          </section>
+          <p v-if="orderDetail.remark" class="order-remark"><span>备注</span>{{ orderDetail.remark }}</p>
+
+          <!-- 商家拒绝：待买家决定（同意关闭 / 不同意继续协商） -->
+          <section v-if="orderDetail.rejectStatus === 'waiting_buyer'" class="reject-box">
+            <div class="reject-title">
+              <svg class="i"><use :href="icon('i-info')"></use></svg>商家拒绝了这个订单</div>
+            <p class="reject-reason">{{ orderDetail.rejectReason || '商家未填写原因' }}</p>
+            <p class="dim reject-tip">你可以同意关闭订单，或不同意并继续与商家协商（协商记录双方可见）。</p>
+            <label class="field"><span>你的意见（选填）</span>
+              <textarea rows="2" maxlength="500" v-model.trim="decisionReason"
+                        placeholder="例如：已经付款了，希望按原价履约"></textarea></label>
+            <div class="drawer-actions">
+              <button class="btn-ghost dark" :disabled="deciding" @click="buyerDecision(false)">不同意，继续协商</button>
+              <button class="btn-primary" :disabled="deciding" @click="buyerDecision(true)">同意关闭订单</button>
+            </div>
+          </section>
+          <section v-else-if="orderDetail.rejectStatus === 'buyer_disagreed'" class="reject-box">
+            <div class="reject-title">协商中</div>
+            <p class="reject-reason">商家拒绝原因：{{ orderDetail.rejectReason || '—' }}</p>
+            <p v-if="orderDetail.buyerFeedback" class="dim">你的意见：{{ orderDetail.buyerFeedback }}</p>
+          </section>
+
+          <!-- 商户信息卡：点名称进商家主页，右侧联系客服 -->
+          <div class="order-merchant" v-if="orderDetail.merchantId || orderDetail.merchant">
+            <img :src="merchantAvatar(orderDetail.merchant || { name: orderDetail.merchantName })" alt="">
+            <div class="order-merchant-main" @click="openMerchant(orderDetail.merchant || orderDetail.merchantId)">
+              <b>{{ orderDetail.merchant ? orderDetail.merchant.name : (orderDetail.merchantName || '商家') }}</b>
+              <span>{{ (orderDetail.merchant && orderDetail.merchant.type) || '村内商户' }}<template v-if="orderDetail.merchantPhone"> · {{ orderDetail.merchantPhone }}</template></span>
+            </div>
+            <button class="btn-mini"
+                    @click="openChat(orderDetail.merchant || { id: orderDetail.merchantId, name: orderDetail.merchantName })">联系客服</button>
+          </div>
+
+          <div class="order-actions" v-if="orderDetail.canCancel">
+            <button class="btn-ghost dark block" :disabled="cancelling" @click="cancelOrderDetail">
+              {{ cancelling ? '取消中…' : '取消订单' }}</button>
+          </div>
+
+          <!-- 协商 / 操作留痕（后端 orderLogs 原样渲染） -->
+          <section v-if="orderLogs.length" class="order-logs">
+            <h3>协商 / 操作记录</h3>
+            <div v-for="l in orderLogs" :key="l.id || l.createdAt" class="log-line">
+              <i></i>
+              <div>
+                <b>{{ logRoleText(l.role) }}</b>
+                <p>{{ l.content }}</p>
+                <em>{{ time(l.createdAt) }}</em>
+              </div>
+            </div>
+          </section>
+        </template>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ==================== 拍摄（getUserMedia，失败回退 file capture） ==================== -->
+  <div v-if="cameraOpen" class="drawer-mask" @click.self="closeCamera">
+    <div class="modal-card camera-card">
+      <h2>拍摄照片</h2>
+      <p class="dim">拍下商品/订单的实际情况发给商家；只在本机拍摄，不会自动上传。</p>
+      <div class="camera-stage" v-show="!cameraShot">
+        <video ref="cameraVideo" autoplay playsinline muted class="camera-video"></video>
+        <p v-if="cameraError" class="camera-error">{{ cameraError }}</p>
+      </div>
+      <img v-if="cameraShot" :src="cameraShot" class="camera-shot" alt="拍摄预览">
+      <div class="modal-actions">
+        <button class="btn-ghost dark" @click="closeCamera">取消</button>
+        <template v-if="!cameraShot">
+          <button class="btn-primary" :disabled="!!cameraError" @click="shootPhoto">拍照</button>
+        </template>
+        <template v-else>
+          <button class="btn-ghost dark" @click="retakePhoto">重拍</button>
+          <button class="btn-primary" :disabled="chatSending" @click="sendCameraPhoto">发送</button>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 图片大图预览（聊天图片 / 举报凭证） ==================== -->
+  <div v-if="imagePreview" class="drawer-mask image-mask" @click.self="imagePreview = ''">
+    <div class="image-preview">
+      <img :src="imagePreview" alt="图片预览">
+      <button class="btn-mini" @click="imagePreview = ''">关闭</button>
+    </div>
+  </div>
+
   <div class="toasts">
     <div v-for="t in toastList" :key="t.id" class="toast" :class="t.type">{{ t.text }}</div>
   </div>
@@ -693,6 +1263,7 @@
 
 <script src="../../vendors/vue.min.js"></script>
 <script src="../../assets/js/api.js"></script>
+<script src="../../assets/js/speech.js"></script>
 <script src="../../assets/js/charts.js"></script>
 <script src="../../assets/js/spot-icons.js"></script>
 <script src="../../assets/js/profile.js"></script>
