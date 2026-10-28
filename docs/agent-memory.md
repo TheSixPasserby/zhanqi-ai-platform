@@ -255,3 +255,42 @@
   `git stash` / `git checkout` 会报 `unable to unlink old 'dist/...jar': Invalid argument`，
   并把 stash 弄成半完成状态。先 `stop.bat` 再动 git。
   （2026-10-28，来源：2026-10-28-order-chat-report-booking-overhaul.md）
+
+## 订单结算与权限（2026-10-28 第二轮）
+
+- **买家确认收货是唯一完成入口**：`POST /api/shop/orders/{id}/receive`（仅 buyer），
+  商家 `/complete` 接口已删除（404），商家页面也没有「完成」按钮。
+  订单进入 `completed` 与货款结算发生在同一个动作里，别把「商家完成」加回来。
+  （2026-10-28，来源：订单结算改造）
+- **结算模型**：新表 `settlements`（`(orderId, source)` 唯一，正数入账 / 负数冲减）+
+  `merchants.settledAmount` 汇总列。三个口径必须分开读：
+  `revenue`（已确认及之后）≠ `settledAmount`（买家已确认收货）≠ `pendingSettleAmount`（差额）。
+  退款时若已结算，自动写负数流水并回减，**不删原流水**。
+  （2026-10-28，来源：同上）
+- **管理员不能把订单改成 `completed`**：会绕过买家确认并让结算金额凭空增加，
+  `AdminService.updateOrder` 直接 400；后台处理异常订单只能「强制取消」或「退款」。
+  （2026-10-28，来源：同上）
+- **演示账号主键不能用 `u13`**：`Db.nextId()` 按「当前行数 + 1」取号，
+  用户表 12 条时下一个自增账号正好是 u13，会和演示账号撞车，
+  导致自检脚本注册的测试账号把订单挂到演示账号名下。演示账号用 `u9001` 这种远在顺序号之外的 id。
+  （2026-10-28，来源：同上）
+- **演示数据不进启动链路**：`seed-demo-xiaoshuai.sql` 由 `tools/seed-demo.js` 显式执行，
+  不挂 `DatabaseBootstrap`（否则每次启动都会灌演示订单，且影响正常 reset 语义）。
+  （2026-10-28，来源：同上）
+
+## 前端修复（2026-10-28 第二轮）
+
+- **集章扇形图必须按 id 对齐，不能按下标 `spots[i]`**：接口顺序变化或数组缺项时，
+  会出现「数字对、点亮位置错」；段数取 `min(total, spots.length)`，百分比 clamp 到 [0,100]，
+  `spots` 为空时显示「暂无点位」占位而不是空圆圈。
+  （2026-10-28，来源：同上）
+- **聊天输入框必须自适应高度**：PC 端 textarea 固定 `rows=1` 会把多行内容压成一行靠内部滚动，
+  看起来像「输入框里留了空白」；发送后还要显式复位高度。商户端用 `el-input :autosize`。
+  （2026-10-28，来源：同上）
+- **空消息要在进列表前过滤**：后端已挡纯空白文本，但历史脏数据 / 未知 type 会走模板
+  `v-else` 渲染 `m.text`，`text=null` 时就是一个只有 padding 的空气泡。
+  用 `isRenderable(m)` 在 load 与 append 两处都过滤，并给 `.msg-text:empty` 加 `display:none`。
+  （2026-10-28，来源：同上）
+- **「我的消息」用 `i-mail` 信封图标**（`icons.svg` 新增 symbol），
+  电话图标 `i-phone` 只保留给商家联系电话/客服入口，两者语义不要混用。
+  （2026-10-28，来源：同上）

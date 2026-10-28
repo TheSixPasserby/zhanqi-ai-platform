@@ -10,7 +10,7 @@
 - [一键部署、地址与默认账号](#quick-start)
 - [后端架构、启动顺序与请求链路](#backend-architecture)
 - [目录结构](#project-layout) · [功能清单](#features)
-- [数据库完整参考：17 张表、224 个字段、全部索引与逻辑关系](#database-reference)
+- [数据库完整参考：18 张表、233 个字段、全部索引与逻辑关系](#database-reference)
 - [游客端说明](#visitor-guide) · [AI 能力](#ai-guide)
 - [全部 HTTP 接口：权限、参数、响应与示例](#api-reference)
 - [常见问题](#faq) · [环境要求](#requirements) · [演示顺序](#demo) · [已知边界](#limitations)
@@ -99,7 +99,7 @@
 
 | 命令 | 作用 |
 | --- | --- |
-| `node tools/smoke-test.js` | **接口冒烟测试**：141 项断言，覆盖认证、打卡、四类商品下单、拒绝协商、发货物流、聊天、举报与上诉、退款、AI 问答与防幻觉、权限矩阵、服务器管理，外加一条「图片引用是否都存在」的静态检查 |
+| `node tools/smoke-test.js` | **接口冒烟测试**：158 项断言，覆盖认证、打卡、四类商品下单、拒绝协商、发货物流、聊天、举报与上诉、退款、AI 问答与防幻觉、权限矩阵、服务器管理，外加一条「图片引用是否都存在」的静态检查 |
 | `node tools/browser-check.js` | **前端实机自检**：52 项断言，用本机 Chrome 无头模式把四端页面真的跑一遍，抓未捕获异常、控制台错误、所有 4xx/5xx 请求，并对关键 DOM 做断言（含集章扇形图三条硬断言、语音启停回归）；顺带产出 `docs/screenshots/` 截图 |
 | `node tools/deploy-config-test.js` | **部署配置解析回归测试**：36 项断言。从交付版 `deploy.ps1` / `deploy.sh` 里把读配置的函数**抽出来原样执行**（不是复制一份实现），守住「`app.port` 与 `app.database.port` 同名 `port` 导致配置被写坏」那个老坑 —— 它首次部署不发作、第二次起才发作，Windows 与 macOS 两侧都被独立踩到过 |
 | `node tools/normalize-scripts.js --check` | 脚本编码自检（可挂到提交前钩子） |
@@ -291,7 +291,7 @@ zhanqi-ai-platform/
 │     │  └─ service/       Auth 之外的业务：Tour · Shop · Stat · Ai · Admin · Server · Discovery · Setting
 │     └─ resources/
 │        ├─ application.yml
-│        ├─ db/schema.sql          17 张表建表脚本（幂等）
+│        ├─ db/schema.sql          18 张表建表脚本（幂等）
 │        ├─ db/seed.sql            演示数据（幂等）
 │        └─ static/
 │           ├─ index.html          统一入口页（二维码 + 连接信息）
@@ -314,7 +314,7 @@ zhanqi-ai-platform/
 │  ├─ deploy.ps1 / deploy.sh       双平台部署 / 停止 / 状态 / 重编译 / 重置核心逻辑
 │  ├─ build.ps1                    编译后端并同步到 dist/
 │  ├─ normalize-scripts.js         脚本编码自检（.bat 纯 ASCII、.ps1 带 BOM）
-│  ├─ smoke-test.js                接口冒烟测试（141 项断言）
+│  ├─ smoke-test.js                接口冒烟测试（158 项断言）
 │  ├─ deploy-config-test.js        部署配置解析回归测试（36 项断言）
 │  └─ browser-check.js             前端实机自检（无头 Chrome + CDP，含截图）
 ├─ docs/
@@ -370,7 +370,7 @@ zhanqi-ai-platform/
 | 连接配置 | 三端入口路径、局域网发现开关与端口、**服务器对外地址**（留空 = 自动探测并避开虚拟网卡） |
 | 手机端连接 | 生成手机端访问二维码，供安卓 App 扫码连接 |
 | AI 设置 | 大模型开关、接口地址、API Key、模型名、系统提示词；**一键测试连接** |
-| 数据总览 | 17 张表的记录数一览，哪张表空了立刻看得出来 |
+| 数据总览 | 18 张表的记录数一览，哪张表空了立刻看得出来 |
 | 数据表浏览 | 查看元数据和记录数；通用增删改查只开放 `spots/activities/activityBookings/knowledge/settings`，返回整表而非分页 |
 
 ### 商户工作台（H5）
@@ -390,7 +390,7 @@ zhanqi-ai-platform/
 
 ## 五、数据库完整参考
 
-本平台使用 MySQL，默认数据库名为 `zhanqi_cloud`，共 **17 张表、224 个物理字段**（含每表的 `seq` 与 `id`）。所有表使用 InnoDB 和 `utf8mb4`；自动建库时指定 `utf8mb4_general_ci`。业务数据、登录会话与平台配置均存入数据库。
+本平台使用 MySQL，默认数据库名为 `zhanqi_cloud`，共 **18 张表、233 个物理字段**（含每表的 `seq` 与 `id`）。所有表使用 InnoDB 和 `utf8mb4`；自动建库时指定 `utf8mb4_general_ci`。业务数据、登录会话与平台配置均存入数据库。
 
 本节以 `server/src/main/resources/db/schema.sql` 的新建表结构为基准，以 `db/Tables.java` 核对业务可读写列，以 `DatabaseBootstrap.java` 核对旧库补列及重置行为，以 `common/Dict.java` 核对商品分类、订单状态和营收口径。下述 Java 文件均位于 `server/src/main/java/com/zhanqi/cloud/`。旧库保留已有列定义，具体差异见 5.7。
 
@@ -403,7 +403,7 @@ zhanqi-ai-platform/
 | `id` | 字符串逻辑主键，`NOT NULL`、无 SQL 默认值，使用 `PRIMARY KEY (id)`；接口与表间引用都使用它。各表的具体类型和取号方式见下表。 |
 | `seq` | `BIGINT NOT NULL AUTO_INCREMENT`，由 MySQL 生成，各表均有独立的唯一索引 `uk_<表名>_seq`；用于稳定的写入顺序，不是业务关联键，也不等于 `id` 的数字部分。 |
 
-`Db.all()`、`Db.query()` 等列表查询显式使用 `ORDER BY seq`，业务层可以再按时间等条件排序。数据库没有默认返回顺序，不能省略排序后依赖“碰巧按插入顺序返回”。`Tables.java` 不登记 `seq`，`Db` 的读出整理也不向业务对象暴露它；该元数据共登记 **207 个业务字段**，加上 17 个 `seq` 才是 224 个物理字段。
+`Db.all()`、`Db.query()` 等列表查询显式使用 `ORDER BY seq`，业务层可以再按时间等条件排序。数据库没有默认返回顺序，不能省略排序后依赖“碰巧按插入顺序返回”。`Tables.java` 不登记 `seq`，`Db` 的读出整理也不向业务对象暴露它；该元数据共登记 **215 个业务字段**，加上 18 个 `seq` 才是 233 个物理字段。
 
 `Db.nextId()` 按“当前表记录数 + 1”拼接前缀，并继续向后寻找当前表内的空闲 ID。它不是数据库自增主键，也不保证删除后永不复用。业务可显式提供 `id`；例如运行时下单使用 `o` + 毫秒时间戳 + 三位随机数。`sessions` 和 `settings` 没有自动取号前缀，必须显式提供主键。
 
@@ -416,7 +416,7 @@ zhanqi-ai-platform/
 | 表名 | 字段数 | `id` 的 SQL 类型及来源 | 业务作用 |
 | --- | ---: | --- | --- |
 | [`users`](#db-users) | 14 | `VARCHAR(32)`，前缀 `u`，如 `u1` | 游客／买家账号、头像、快捷登录资料。 |
-| [`merchants`](#db-merchants) | 18 | `VARCHAR(32)`，前缀 `m`，如 `m1` | 商家账号、店铺资料、经营类型与临时停用期限。 |
+| [`merchants`](#db-merchants) | 19 | `VARCHAR(32)`，前缀 `m`，如 `m1` | 商家账号、店铺资料、经营类型与临时停用期限。 |
 | [`admins`](#db-admins) | 13 | `VARCHAR(32)`，前缀 `ad`，如 `ad1` | 平台管理员，系统预置，不开放自助注册。 |
 | [`spots`](#db-spots) | 11 | `VARCHAR(32)`，前缀 `sp`，如 `sp1` | 林盘游览点位、讲解文稿、语音包与印章定义。 |
 | [`stamps`](#db-stamps) | 8 | `VARCHAR(32)`，前缀 `st`，如 `st1` | 游客对点位的打卡集章记录。 |
@@ -432,7 +432,8 @@ zhanqi-ai-platform/
 | [`reports`](#db-reports) | 27 | `VARCHAR(32)`，前缀 `rp` | 用户举报、管理员处理结果、商家上诉与复核。 |
 | [`orderLogs`](#db-orderlogs) | 7 | `VARCHAR(32)`，前缀 `ol` | 订单操作与协商留痕。 |
 | [`notifications`](#db-notifications) | 10 | `VARCHAR(32)`，前缀 `n` | 处理结果通知（买家/商家各自可见）。 |
-| **合计** | **224** | **17 张表** | 含账号、文旅、交易、会话、聊天、举报与配置。 |
+| [`settlements`](#db-settlements) | 8 | `VARCHAR(32)`，前缀 `stl` | 资金结算流水：买家确认收货入账、退款冲减。 |
+| **合计** | **233** | **18 张表** | 含账号、文旅、交易、会话、聊天、举报、结算与配置。 |
 
 ### 5.3 每张表的完整字段与索引
 
@@ -463,7 +464,7 @@ zhanqi-ai-platform/
 
 <a id="db-merchants"></a>
 
-#### 5.3.2 `merchants`：商家账号（18 字段）
+#### 5.3.2 `merchants`：商家账号（19 字段）
 
 | 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
 | --- | --- | --- | --- |
@@ -484,6 +485,7 @@ zhanqi-ai-platform/
 | `status` | `VARCHAR(16)` | 否；`'active'` | `active` 正常、`suspended` 临时停用、`disabled` 永久停用。 |
 | `suspendUntil` | `VARCHAR(32)` | 是；NULL | 临时停用截止时间（ISO 字符串），到期由 `AuthService` 自动恢复为 `active`。 |
 | `suspendReason` | `VARCHAR(255)` | 是；NULL | 停用原因，管理员处理举报时填写。 |
+| `settledAmount` | `DECIMAL(10,2)` | 否；`0` | 已结算金额汇总：买家确认收货时累加，退款时冲减。 |
 | `createdAt` | `VARCHAR(32)` | 是；NULL | 注册日期／时间。 |
 
 索引：主键 `PRIMARY (id)`；唯一 `uk_merchants_seq (seq)`、`uk_merchants_account (account)`；普通 `idx_merchants_status (status)`、`idx_merchants_type (type)`。
@@ -844,6 +846,29 @@ zhanqi-ai-platform/
 
 索引：主键 `PRIMARY (id)`；唯一 `uk_notifications_seq (seq)`；普通 `idx_notifications_user (userId, role)`。
 
+<a id="db-settlements"></a>
+
+#### 5.3.18 `settlements`：资金结算流水（8 字段）
+
+买家确认收货/完成时写一条 `source=order` 的正数流水（`(orderId, source)` 唯一，天然幂等）；
+已结算订单发生退款时追加一条 `source=refund` 的负数流水，并回减 `merchants.settledAmount`。**不删原流水，只追加**，保证账目可追溯。
+
+| 字段 | SQL 类型 | NULL 和默认值 | 中文作用 |
+| --- | --- | --- | --- |
+| `seq` | `BIGINT` | 否；无，`AUTO_INCREMENT` | 写入顺序号。 |
+| `id` | `VARCHAR(32)` | 否；无 | 结算流水主键，前缀 `stl`。 |
+| `orderId` | `VARCHAR(32)` | 否；无 | 订单 `orders.id`。 |
+| `merchantId` | `VARCHAR(32)` | 否；无 | 收款商家 `merchants.id`。 |
+| `amount` | `DECIMAL(10,2)` | 否；`0` | 结算金额：正数入账 / 负数冲减。 |
+| `source` | `VARCHAR(16)` | 否；`'order'` | `order` 确认收货结算 / `refund` 退款冲减。 |
+| `note` | `VARCHAR(255)` | 是；NULL | 说明文案。 |
+| `settledAt` | `VARCHAR(32)` | 是；NULL | 结算/冲减时间（ISO 字符串）。 |
+
+索引：主键 `PRIMARY (id)`；唯一 `uk_settlements_seq (seq)`、`uk_settlements_order_source (orderId, source)`；普通 `idx_settlements_merchant (merchantId)`、`idx_settlements_time (settledAt)`。
+
+> 本项目**没有支付通道**（演示机要求离线可用），所以「资金」是账务口径而非真实转账。
+> 生产接入支付/分账时，只需在 `SettlementService.settle()` 里调起真实转账，表结构与前端展示都不用改。
+
 ### 5.4 表关系、唯一约束与删除语义
 
 **当前数据库没有声明任何 `FOREIGN KEY`，也没有数据库级联删除。** 下表是业务代码使用的逻辑关联；除主键、唯一键及列的 NULL 约束外，MySQL 不会自动验证引用对象是否存在。
@@ -883,19 +908,7 @@ zhanqi-ai-platform/
 
 `Dict.CATEGORY_TEXT` 的正式中文名称为：`goods` 农产文创、`study` 研学课程、`homestay` 民宿住宿、`experience` 农事体验。`Dict.BOOKING_CATEGORIES` 只包含后三类，不能因为活动报名也叫“预约”就写入 `orders.type=booking`。
 
-`Dict.STATUS_TEXT` 的订单中文名称为：`pending` 待确认、`confirmed` 已确认、`shipped` 已发货、`checked_in` 已入住、`completed` 已完成、`used` 已核销（**仅历史数据只读兼容**）、`cancelled` 已取消、`refunded` 已退款。
-
-三条流程：
-
-- **实物（goods）**：`pending` →（商家接单）`confirmed` →（商家发货，填快递公司 + 运单号）`shipped` →（商家完成）`completed`；
-- **民宿（homestay）**：`confirmed` →（办理入住）`checked_in` →（完成）`completed`；
-- **研学 / 农事（study / experience）**：`confirmed` →（完成）`completed`。
-
-**拒绝不是取消**：商家拒绝只写 `rejectReason` 并把 `rejectStatus` 置为 `waiting_buyer`，订单仍停在 `pending`；买家点「同意关闭」才转为 `cancelled` 并回滚库存，点「不同意」则 `buyer_disagreed` 进入协商、订单保留。全过程写 `orderLogs`。
-
-`pending/confirmed` 可取消（买家或管理员），已完成与已退款不可取消。**营收累计 `confirmed/shipped/checked_in/completed/used` 状态订单的 `amount`，`cancelled/refunded` 不计**，不代表已接入支付网关或实际到账。原「商家核销」接口已删除（`POST /api/shop/orders/{id}/verify` 返回 404）。
-
-商家经营类型字典为农产品农户、非遗手艺人、民宿经营者、餐饮农家乐、文创商户、其他，存于 `merchants.type`。三张账号表的 `status` 使用 `active`／`disabled`，不要与商品 `on`／`off`、订单状态混用。
+`Dict.STATUS_TEXT` 的订单中文名称为：`pending` 待确认、`confirmed` 已确认、`shipped` 已发货、`checked_in` 已入住、`completed` 已完成、`used` 已核销（**仅历史数据只读兼容**）、`cancelled` 已取消、`refunded` 已退款。\n\n三条流程：\n\n- **实物（goods）**：`pending` →（商家接单）`confirmed` →（商家发货，填快递公司 + 运单号）`shipped` →（**买家确认收货**）`completed`；\n- **民宿（homestay）**：`confirmed` →（办理入住）`checked_in` →（**买家确认完成**）`completed`；\n- **研学 / 农事（study / experience）**：`confirmed` →（**买家确认完成**）`completed`。\n\n**三条硬规则（2026-10-28 起）：**\n\n1. **商家不能完成订单**：`POST /api/shop/orders/{id}/complete` 已删除（404），商家端也没有「完成」按钮；\n2. **商家不能核销**：`POST /api/shop/orders/{id}/verify` 早已删除（404）；\n3. **只有买家能让订单进入 `completed`**：`POST /api/shop/orders/{id}/receive`（仅 buyer 角色），\n   并且**货款结算恰好发生在这一个动作里** —— 写一条 `settlements` 流水、累加 `merchants.settledAmount`。\n   重复调用返回 400 且不会重复结算。\n\n**拒绝不是取消**：商家拒绝只写 `rejectReason` 并把 `rejectStatus` 置为 `waiting_buyer`，订单仍停在 `pending`；\n买家点「同意关闭」才转为 `cancelled` 并回滚库存，点「不同意」则 `buyer_disagreed` 进入协商、订单保留。全过程写 `orderLogs`。\n\n**结算口径（三者不要混读）**：\n\n| 指标 | 含义 |\n| --- | --- |\n| `revenue` 累计营收 | 已确认及之后的有效订单金额（含买家还没确认收货的） |\n| `settledAmount` 已结算 | 买家已确认收货、真正打进商家账户的金额 |\n| `pendingSettleAmount` 待结算 | 前者减后者（已确认但买家还没确认收货） |\n\n退款时若该订单已结算，会自动追加一条负数 `source=refund` 流水并回减 `settledAmount`，账目可追溯。\n\n商家经营类型字典为农产品农户、非遗手艺人、民宿经营者、餐饮农家乐、文创商户、其他，存于 `merchants.type`。三张账号表的 `status` 使用 `active`／`disabled`，不要与商品 `on`／`off`、订单状态混用。
 
 活动报名的容量口径是“整场活动所有参加日期的有效人数之和”，`pending` 也占名额；正常游客单次报名人数限制为 1–20。游客端逻辑中容量为 NULL 时回落为 30，`capacity <= 0` 视为不限人数；后台活动人员汇总接口对非正容量的展示回落为 30，两处对异常容量的解释存在差异。日常使用正整数容量可避开该差异，生产改造时应统一校验与展示口径。
 
@@ -927,7 +940,7 @@ zhanqi-ai-platform/
 3. 执行 `db/schema.sql`，其中全部使用 `CREATE TABLE IF NOT EXISTS`，只补齐缺失的表，包括后来增加的 `activityBookings`、`chatMessages`、`chatTyping`、`reports`、`orderLogs`、`notifications`。
 4. 查询 `information_schema.COLUMNS`，为旧表补缺失列；**当前显式补下面这批列**（含本轮新增的订单、商品、点位与商家字段）。
 5. `seed-on-start` 开启时执行 `db/seed.sql`，通过 `INSERT IGNORE` 补种子记录；主键或唯一键冲突的现有记录不被覆盖。
-6. 生成启动摘要；摘要只列 `users`、`merchants`、`spots`、`products`、`orders`、`knowledge` 六张表的记录数，不能据此推断库里只有六张表。后台全量表计数清单包含全部 17 张表。
+6. 生成启动摘要；摘要只列 `users`、`merchants`、`spots`、`products`、`orders`、`knowledge` 六张表的记录数，不能据此推断库里只有六张表。后台全量表计数清单包含全部 18 张表。
 
 | 旧库补列目标 | `ensureColumn()` 使用的列定义 | 与新表 DDL 的对应关系 |
 | --- | --- | --- |
@@ -948,7 +961,7 @@ zhanqi-ai-platform/
 
 **reset 是明确的破坏性重置，和普通幂等启动不同。** 正式演示前需恢复种子数据时，在 Windows 使用 `reset.bat`，macOS／Linux 使用 `./reset.sh`，按提示输入 `YES`。部署脚本以一次性重置配置启动，随后将重置开关恢复为 false；不要照旧说明手工修改真实本机配置文件来重置。
 
-`DatabaseBootstrap.dropAll()` 当前按以下顺序执行 `DROP TABLE IF EXISTS`，**17 张表全部在清单中**：
+`DatabaseBootstrap.dropAll()` 当前按以下顺序执行 `DROP TABLE IF EXISTS`，**18 张表全部在清单中**：
 
 ```text
 notifications → orderLogs → reports → chatTyping → chatMessages
@@ -1202,7 +1215,7 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 | POST | `/api/shop/orders/{id}/ship` | merchant，方法注解；手动归属检查 | B `company`,`trackingNo` **均必填** | `message`；仅 confirmed 且 category=goods；写 logisticsCompany/trackingNo/shippedAt/logisticsStatus，状态变 shipped；预约类 400 |
 | GET | `/api/shop/orders/{id}/logistics` | buyer/merchant/admin，方法注解；方法内归属检查 | P `id` | `hasLogistics,company,trackingNo,status,statusText,progress(0-3),nodes[{status,text,time,done,current}],demo`；无运单号时 hasLogistics=false |
 | POST | `/api/shop/orders/{id}/checkin` | merchant，方法注解；手动归属检查 | P `id` | `message`；仅 homestay 且 confirmed → checked_in |
-| POST | `/api/shop/orders/{id}/complete` | merchant，方法注解；手动归属检查 | P `id` | `message`；shipped（实物）/checked_in（民宿）/confirmed（研学·农事）→ completed，写 completedAt |
+| POST | `/api/shop/orders/{id}/receive` | **buyer**，方法注解；手动归属检查 | P `id` | `message,settlement,settledAmount`；**唯一能把订单推进到 completed 的接口**，同时写结算流水并累加商家已结算；重复调用 400 且不重复结算 |
 | POST | `/api/shop/orders/{id}/cancel` | **buyer**，方法注解；手动归属检查 | P `id` | `message`；买家仅本人，越权 403、不存在 404；只允许 pending/confirmed；回滚库存/销量并写 cancelledAt/cancelledBy；**商家不再走此接口（必须用 reject 填原因）**，管理员走后台路径 |
 
 **S1 商家商品体：**
@@ -1313,6 +1326,9 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 | --- | --- | --- | --- | --- |
 | GET | `/api/stat/merchant` | merchant，方法注解；service 再检查角色 | —，不接收 merchantId 或日期范围 | `merchant,kpi,trend[],productRank[],categoryRevenue[],pendingOrders[]`；仅当前 merchantId，近 7 天补零，待办最多 5 笔；只读 |
 | GET | `/api/stat/overview` | 公开，无注解 | —，不接收日期范围 | `kpi,statusDist[],trend[],spotRank[],merchantRank[],recentOrders[]`；全平台聚合，近 7 天补零，最近订单最多 6 笔，**公开返回订单 id、商品名、买家展示名、金额等摘要**；只读 |
+
+`GET /api/stat/settlements`（merchant）返回当前商家的结算流水：`list[]` 含 `orderId/productName/amount/source/sourceText/settledAt/note`，
+以及 `settledAmount/settledOrders/lastSettledAt` 汇总。只返回本人 merchantId 的流水，归属由服务端强约束。
 
 统计口径以 `confirmed/shipped/checked_in/completed/used` 的订单金额计营收，`pending/cancelled/refunded` 不计；订单总数和每日下单数包含取消订单，按 createdAt 前 10 位归日，非按确认/发货时间。
 
