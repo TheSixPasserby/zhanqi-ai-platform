@@ -177,6 +177,31 @@
       </div>
     </div>
 
+    <!-- 结算口径：营收是「已确认及之后」，已结算是「买家确认收货、钱真正到账」的金额 -->
+    <div class="card mb-16">
+      <div class="card-head">
+        <h3>货款结算</h3>
+        <span class="hint">买家确认收货后，货款才进入已结算</span>
+      </div>
+      <div class="card-body settle-grid">
+        <div class="settle-item">
+          <span>已结算（已到账）</span>
+          <b class="ok">{{ fmt.money(kpi.settledAmount) }}</b>
+          <em>{{ kpi.settledOrders || 0 }} 笔订单 · 最近 {{ kpi.lastSettledAt ? fmt.time(kpi.lastSettledAt) : '暂无' }}</em>
+        </div>
+        <div class="settle-item">
+          <span>待结算</span>
+          <b class="warn">{{ fmt.money(kpi.pendingSettleAmount) }}</b>
+          <em>已确认但买家还没确认收货</em>
+        </div>
+        <div class="settle-item">
+          <span>累计营收</span>
+          <b>{{ fmt.money(kpi.revenue) }}</b>
+          <em>已确认及之后的有效订单金额</em>
+        </div>
+      </div>
+    </div>
+
     <div class="grid-2">
       <div class="card">
         <div class="card-head">
@@ -424,7 +449,7 @@
             <el-button v-if="canConfirm(s.row)" type="text" @click="doConfirm(s.row)">{{ confirmLabel(s.row) }}</el-button>
             <el-button v-if="canShip(s.row)" type="text" @click="openShip(s.row)">发货</el-button>
             <el-button v-if="canCheckin(s.row)" type="text" @click="doCheckin(s.row)">办理入住</el-button>
-            <el-button v-if="canComplete(s.row)" type="text" @click="doComplete(s.row)">完成</el-button>
+            <span v-if="waitingBuyerReceive(s.row)" class="dim" style="font-size:12px">等买家确认</span>
             <el-button v-if="canReject(s.row)" type="text" class="danger" @click="openReject(s.row)">拒绝</el-button>
             <el-button type="text" @click="openDetail(s.row)">详情</el-button>
           </template>
@@ -433,7 +458,8 @@
     </div>
 
     <div class="dim mt-12" style="font-size:12.5px">
-      状态流转：待确认 →（接单 / 确认）已确认 →（发货 / 办理入住）→（完成）已完成；
+      状态流转：待确认 →（接单/确认）已确认 →（发货/办理入住）→ <b>买家确认收货</b> → 已完成；
+      <b>商家不能把订单标记为完成</b>：完成意味着买家已确认收货，并同时把货款结算进你的账户；
       拒绝必须填写原因，订单保持「待确认」由买家决定是否关闭；已完成、已取消、已退款订单只读。
     </div>
 
@@ -559,7 +585,8 @@
           <el-button v-if="canConfirm(detail)" type="primary" plain @click="doConfirm(detail)">{{ confirmLabel(detail) }}</el-button>
           <el-button v-if="canShip(detail)" type="primary" plain @click="openShip(detail)">发货</el-button>
           <el-button v-if="canCheckin(detail)" type="primary" plain @click="doCheckin(detail)">办理入住</el-button>
-          <el-button v-if="canComplete(detail)" type="primary" plain @click="doComplete(detail)">完成</el-button>
+          <span v-if="waitingBuyerReceive(detail)" class="dim" style="font-size:12px;margin-right:8px">
+            等买家确认收货后自动完成并结算</span>
           <el-button @click="detailVisible = false">关闭</el-button>
         </div>
       </div>
@@ -623,7 +650,7 @@
           <div v-for="m in messages" :key="m.id" class="chat-msg" :class="{ self: m.self }">
             <img class="avatar sm" :src="m.self ? selfAvatar : peerAvatar" alt="">
             <div class="chat-msg-main">
-              <div class="chat-msg-time">{{ fmt.time(m.createdAt) }}</div>
+              <div v-if="m.createdAt" class="chat-msg-time">{{ fmt.time(m.createdAt) }}</div>
               <div class="chat-bubble" :class="'type-' + m.type">
                 <el-image v-if="m.type === 'image'" :src="m.media" :preview-src-list="imagePreview"
                           fit="cover" class="chat-img"></el-image>
@@ -658,8 +685,9 @@
       </div>
 
       <div class="chat-input">
-        <el-input type="textarea" :rows="3" v-model="draft" resize="none" maxlength="2000"
-                  placeholder="输入回复内容，Enter 发送，Shift+Enter 换行"
+        <!-- autosize：1–5 行自适应。旧版固定 :rows=3，发送清空后仍占三行，看着像留了空白 -->
+        <el-input type="textarea" :autosize="{ minRows: 1, maxRows: 5 }" v-model="draft" resize="none"
+                  maxlength="2000" placeholder="输入回复内容，Enter 发送，Shift+Enter 换行"
                   @input="onDraftInput" @keydown.native.enter.exact.prevent="send"></el-input>
         <div class="chat-tools">
           <el-button size="mini" icon="el-icon-picture-outline" :loading="uploading" :disabled="!buyerId"
@@ -840,10 +868,48 @@
           <el-descriptions-item label="累计营收">{{ fmt.money(kpi.revenue) }}</el-descriptions-item>
           <el-descriptions-item label="订单总数">{{ kpi.orderCount || 0 }}</el-descriptions-item>
           <el-descriptions-item label="已完成">{{ completedCount }}</el-descriptions-item>
+          <el-descriptions-item label="已结算（已到账）">{{ fmt.money(kpi.settledAmount) }}</el-descriptions-item>
+          <el-descriptions-item label="待结算">{{ fmt.money(kpi.pendingSettleAmount) }}</el-descriptions-item>
+          <el-descriptions-item label="最近结算时间">{{ kpi.lastSettledAt ? fmt.time(kpi.lastSettledAt) : '暂无' }}</el-descriptions-item>
           <el-descriptions-item label="计入营收订单">{{ kpi.paidCount || 0 }}</el-descriptions-item>
           <el-descriptions-item label="客单价">{{ fmt.money(kpi.avgPrice) }}</el-descriptions-item>
           <el-descriptions-item label="在售 / 全部商品">{{ kpi.onSaleCount || 0 }} / {{ kpi.productCount || 0 }}</el-descriptions-item>
         </el-descriptions>
+      </div>
+    </div>
+
+    <!-- 结算流水：正数=货款到账，负数=退款冲减；由买家确认收货自动产生 -->
+    <div class="card mt-16">
+      <div class="card-head">
+        <h3>结算流水</h3>
+        <span class="hint">正数 = 货款到账，负数 = 退款冲减</span>
+      </div>
+      <el-table :data="settlements" v-loading="loadingSettle" size="small" stripe style="width:100%">
+        <el-table-column label="订单" min-width="200">
+          <template slot-scope="s">
+            <div class="cell-main">{{ s.row.productName }}</div>
+            <div class="cell-sub mono">#{{ s.row.orderId }}</div>
+          </template>
+        </el-table-column>
+        <el-table-column label="类型" width="120">
+          <template slot-scope="s">
+            <span class="tag" :class="s.row.source === 'refund' ? 'danger' : 'ok'">{{ s.row.sourceText }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="金额" width="130" align="right">
+          <template slot-scope="s">
+            <span class="mono" :class="{ dangerText: s.row.amount < 0 }">{{ fmt.money(s.row.amount) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="时间" width="160">
+          <template slot-scope="s"><span class="dim">{{ fmt.time(s.row.settledAt) }}</span></template>
+        </el-table-column>
+        <el-table-column label="说明" min-width="180">
+          <template slot-scope="s"><span class="dim" style="font-size:12px">{{ s.row.note || '—' }}</span></template>
+        </el-table-column>
+      </el-table>
+      <div v-if="!settlements.length && !loadingSettle" class="dim" style="padding:14px 0;font-size:12.5px">
+        还没有结算记录：买家在订单里点「确认收货 / 确认完成」后，这里会出现第一笔。
       </div>
     </div>
   </div>

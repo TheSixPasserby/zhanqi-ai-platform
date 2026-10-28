@@ -64,10 +64,12 @@ public class ReportService {
 
     private final Db db;
     private final NotificationService notices;
+    private final SettlementService settlement;
 
-    public ReportService(Db db, NotificationService notices) {
+    public ReportService(Db db, NotificationService notices, SettlementService settlement) {
         this.db = db;
         this.notices = notices;
+        this.settlement = settlement;
     }
 
     /* ============================ 字典 ============================ */
@@ -569,7 +571,14 @@ public class ReportService {
         return until;
     }
 
-    /** 写订单退款字段 + 一条 orderLogs 留痕（退款是钱相关操作，必须有可追溯记录）。 */
+    /**
+     * 写订单退款字段 + 一条 orderLogs 留痕（退款是钱相关操作，必须有可追溯记录）。
+     *
+     * <p>同时处理结算冲减：如果这笔订单**已经结算过**（买家确认收货、钱已进商家账户），
+     * 退款时必须追加一条负数结算流水并回减 {@code merchants.settledAmount}，
+     * 否则商家账面上会一直显示一笔已经退掉的钱。
+     * 未结算的订单退款不需要冲减（钱本来就没到商家）。
+     */
     private void applyRefund(SessionUser admin, Map<String, Object> order, double amount, String note) {
         String orderId = trim(order.get("id"));
         String now = Instant.now().toString();
@@ -579,6 +588,18 @@ public class ReportService {
         patch.put("refundedAt", now);
         patch.put("refundNote", note.isEmpty() ? null : clip(note, 255));
         db.update("orders", orderId, patch);
+
+        boolean reversed = settlement.reverse(db.find("orders", orderId),
+                note.isEmpty() ? "管理员退款，冲减已结算金额" : "管理员退款：" + clip(note, 200));
+        if (reversed) {
+            Map<String, Object> log2 = new LinkedHashMap<>();
+            log2.put("orderId", orderId);
+            log2.put("role", "admin");
+            log2.put("action", "settle_reverse");
+            log2.put("content", "已结算订单退款，结算金额同步冲减 " + money(amount));
+            log2.put("createdAt", now);
+            db.insert("orderLogs", log2);
+        }
 
         Map<String, Object> log = new LinkedHashMap<>();
         log.put("orderId", orderId);

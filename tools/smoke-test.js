@@ -362,8 +362,12 @@ function section(title) {
     check('订单详情含商家与物流信息', detail.data.ok && !!detail.data.order.merchant
       && detail.data.order.status === 'shipped' && !!detail.data.order.trackingNo, JSON.stringify(detail.data).slice(0, 240));
 
+    // 商家不再有「完成订单」权限：完成 = 买家确认收货，并同时触发货款结算
     const complete = await req('POST', '/api/shop/orders/' + oid + '/complete', {}, merchantToken);
-    check('商家完成实物订单', complete.data.ok, JSON.stringify(complete.data).slice(0, 160));
+    check('商家完成订单接口已删除（404）', complete.status === 404 || complete.data.ok === false, 'HTTP ' + complete.status);
+
+    const merchantRecv = await req('POST', '/api/shop/orders/' + oid + '/receive', {}, merchantToken);
+    check('商家调用「确认收货」被拒绝（403）', merchantRecv.status === 403, 'HTTP ' + merchantRecv.status);
 
     const cancelDone = await req('POST', '/api/shop/orders/' + oid + '/cancel', {}, buyerToken);
     check('已完成订单不能取消', cancelDone.data.ok === false || cancelDone.status >= 400);
@@ -437,8 +441,12 @@ function section(title) {
       check('研学商家确认', sc.data.ok, JSON.stringify(sc.data).slice(0, 120));
       const ss = await req('POST', '/api/shop/orders/' + studyId + '/ship', { company: '顺丰', trackingNo: 'X1' }, merchantToken);
       check('研学订单禁止走快递', ss.data.ok === false, JSON.stringify(ss.data).slice(0, 120));
-      const sdone = await req('POST', '/api/shop/orders/' + studyId + '/complete', {}, merchantToken);
-      check('研学商家完成（不核销）', sdone.data.ok, JSON.stringify(sdone.data).slice(0, 120));
+      const sdoneMerchant = await req('POST', '/api/shop/orders/' + studyId + '/complete', {}, merchantToken);
+      check('研学订单商家不能直接完成', sdoneMerchant.status === 404 || sdoneMerchant.data.ok === false,
+        'HTTP ' + sdoneMerchant.status);
+      const sRecv = await req('POST', '/api/shop/orders/' + studyId + '/receive', {}, buyerToken);
+      check('研学买家确认完成并结算', sRecv.data.ok === true && !!sRecv.data.settlement,
+        JSON.stringify(sRecv.data).slice(0, 200));
     }
   }
 
@@ -458,8 +466,12 @@ function section(title) {
       check('民宿商家确认', hc.data.ok, JSON.stringify(hc.data).slice(0, 120));
       const hi = await req('POST', '/api/shop/orders/' + stayId + '/checkin', {}, merchantToken);
       check('民宿办理入住', hi.data.ok, JSON.stringify(hi.data).slice(0, 120));
-      const hd = await req('POST', '/api/shop/orders/' + stayId + '/complete', {}, merchantToken);
-      check('民宿完成', hd.data.ok, JSON.stringify(hd.data).slice(0, 120));
+      const hdMerchant = await req('POST', '/api/shop/orders/' + stayId + '/complete', {}, merchantToken);
+      check('民宿订单商家不能直接完成', hdMerchant.status === 404 || hdMerchant.data.ok === false,
+        'HTTP ' + hdMerchant.status);
+      const hRecv = await req('POST', '/api/shop/orders/' + stayId + '/receive', {}, buyerToken);
+      check('民宿买家确认完成并结算', hRecv.data.ok === true && !!hRecv.data.settlement,
+        JSON.stringify(hRecv.data).slice(0, 200));
 
       const refund = await req('POST', '/api/admin/orders/' + stayId + '/refund', { note: '冒烟测试退款' }, adminToken);
       check('管理员直接把钱退给客户', refund.data.ok && refund.data.order.status === 'refunded', JSON.stringify(refund.data).slice(0, 200));
@@ -533,6 +545,75 @@ function section(title) {
     const oldProducts = await req('GET', '/api/shop/products');
     check('下架商品不在公开商城展示', (oldProducts.data.products || []).every((p) => p.id !== testProductId));
     await req('PUT', '/api/admin/products/' + testProductId, { status: 'on' }, adminToken);
+  }
+
+  // 资金结算：只有买家确认收货才结算；商家不能完成；管理员不能改完成
+  {
+    const beforeStat = await req('GET', '/api/stat/merchant', null, merchantToken);
+    check('商家看板返回结算三指标',
+      beforeStat.data.kpi && beforeStat.data.kpi.settledAmount !== undefined
+      && beforeStat.data.kpi.pendingSettleAmount !== undefined
+      && beforeStat.data.kpi.lastSettledAt !== undefined,
+      JSON.stringify(beforeStat.data.kpi || {}).slice(0, 200));
+    const settledBefore = Number((beforeStat.data.kpi || {}).settledAmount || 0);
+
+    const settleProd = await req('POST', '/api/shop/products', {
+      name: '冒烟结算商品' + STAMP, category: 'goods', price: 30, unit: '份', stock: 5,
+    }, merchantToken);
+    const settlePid = settleProd.data.product ? settleProd.data.product.id : '';
+    if (settlePid) {
+      const so = await req('POST', '/api/shop/orders', {
+        items: [{ productId: settlePid, qty: 1 }], address: '成都市战旗村结算测试',
+      }, buyerToken);
+      const soid = so.data.orders && so.data.orders[0] ? so.data.orders[0].id : '';
+      if (soid) {
+        createdOrderIds.push(soid);
+        await req('POST', '/api/shop/orders/' + soid + '/confirm', {}, merchantToken);
+        await req('POST', '/api/shop/orders/' + soid + '/ship', { company: '顺丰速运', trackingNo: 'SFSTL' + STAMP }, merchantToken);
+
+        const mRecv = await req('POST', '/api/shop/orders/' + soid + '/receive', {}, merchantToken);
+        check('商家不能确认收货（403）', mRecv.status === 403, 'HTTP ' + mRecv.status);
+
+        const buyerRecv = await req('POST', '/api/shop/orders/' + soid + '/receive', {}, buyerToken);
+        check('买家确认收货成功并返回结算信息',
+          buyerRecv.data.ok === true && !!buyerRecv.data.settlement,
+          JSON.stringify(buyerRecv.data).slice(0, 200));
+
+        const afterStat = await req('GET', '/api/stat/merchant', null, merchantToken);
+        const settledAfter = Number((afterStat.data.kpi || {}).settledAmount || 0);
+        check('确认收货后商家已结算金额增加', settledAfter > settledBefore, settledBefore + ' -> ' + settledAfter);
+        check('已结算时间已写入', !!afterStat.data.kpi.lastSettledAt, String(afterStat.data.kpi.lastSettledAt));
+
+        const detail = await req('GET', '/api/shop/orders/' + soid, null, buyerToken);
+        check('订单状态变已完成', detail.data.order && detail.data.order.status === 'completed',
+          detail.data.order && detail.data.order.status);
+        check('订单详情带结算摘要', !!(detail.data.order && detail.data.order.settlement
+          && detail.data.order.settlement.settled === true));
+
+        const dupRecv = await req('POST', '/api/shop/orders/' + soid + '/receive', {}, buyerToken);
+        check('重复确认收货被拒绝', dupRecv.data.ok === false, JSON.stringify(dupRecv.data).slice(0, 120));
+        const afterDup = await req('GET', '/api/stat/merchant', null, merchantToken);
+        check('重复确认不会重复结算',
+          Number((afterDup.data.kpi || {}).settledAmount) === settledAfter,
+          settledAfter + ' vs ' + Number((afterDup.data.kpi || {}).settledAmount));
+
+        const adminComplete = await req('PUT', '/api/admin/orders/' + soid, { status: 'completed' }, adminToken);
+        check('管理员不能把订单改成已完成', adminComplete.data.ok === false, JSON.stringify(adminComplete.data).slice(0, 150));
+
+        const refundSettled = await req('POST', '/api/admin/orders/' + soid + '/refund', { note: '冒烟测试退款冲减' }, adminToken);
+        check('已结算订单退款成功', refundSettled.data.ok === true, JSON.stringify(refundSettled.data).slice(0, 150));
+        const afterRefund = await req('GET', '/api/stat/merchant', null, merchantToken);
+        check('退款后已结算金额冲减',
+          Number((afterRefund.data.kpi || {}).settledAmount) < settledAfter,
+          settledAfter + ' -> ' + Number((afterRefund.data.kpi || {}).settledAmount));
+
+        const stl = await req('GET', '/api/stat/settlements', null, merchantToken);
+        check('商家结算流水接口可用', stl.data.ok === true && Array.isArray(stl.data.list),
+          JSON.stringify(stl.data).slice(0, 150));
+        check('结算流水含退款冲减记录',
+          (stl.data.list || []).some(function (r) { return r.source === 'refund'; }));
+      }
+    }
   }
 
   // 停用/恢复商家：临时停用后原会话立即失效，恢复后能重新登录
@@ -637,7 +718,7 @@ function section(title) {
     JSON.stringify(Object.keys(serverStatus.data || {})));
 
   const dataOverview = await req('GET', '/api/admin/data-overview', null, adminToken);
-  check('数据总览可用（17 张表计数）', dataOverview.data.ok, JSON.stringify(dataOverview.data).slice(0, 240));
+  check('数据总览可用（18 张表计数）', dataOverview.data.ok, JSON.stringify(dataOverview.data).slice(0, 240));
 
   const schema = await req('GET', '/api/admin/schema', null, adminToken);
   check('表结构元数据可用', schema.data.ok, JSON.stringify(schema.data).slice(0, 160));

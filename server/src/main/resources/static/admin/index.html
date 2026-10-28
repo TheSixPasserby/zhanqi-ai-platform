@@ -616,8 +616,12 @@
           <el-select v-model="detail.status" style="width:100%"
                      :disabled="detail.status === 'cancelled' || detail.status === 'refunded'">
             <el-option v-for="(text, key) in statusText" :key="key" :label="text" :value="key"
-                       :disabled="key === 'cancelled' || key === 'refunded'"></el-option>
+                       :disabled="key === 'cancelled' || key === 'refunded' || key === 'completed'"></el-option>
           </el-select>
+          <div class="dim" style="font-size:12px;margin-top:6px">
+            「已完成」只能由买家确认收货产生（同时触发货款结算），后台不可直接改；
+            要处理异常订单请用「强制取消」或「退款」。
+          </div>
         </el-form-item>
         <el-form-item label="预约日期">
           <el-date-picker v-model="detail.bookDate" type="date" value-format="yyyy-MM-dd"

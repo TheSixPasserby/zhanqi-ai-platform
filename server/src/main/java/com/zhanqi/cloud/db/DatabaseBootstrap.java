@@ -120,6 +120,8 @@ public class DatabaseBootstrap {
                         "VARCHAR(32) NULL COMMENT '临时停用截止时间'");
                 ensureColumn(conn, "merchants", "suspendReason",
                         "VARCHAR(255) NULL COMMENT '停用原因'");
+                ensureColumn(conn, "merchants", "settledAmount",
+                        "DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '已结算金额汇总'");
 
                 // 订单：拒绝协商 + 物流 + 预约扩展 + 退款（全部幂等补列，老库自动升级）
                 ensureColumn(conn, "orders", "rejectReason", "TEXT NULL COMMENT '商家拒绝原因'");
@@ -242,8 +244,8 @@ public class DatabaseBootstrap {
 
     private void dropAll(Connection conn) throws SQLException {
         // 按依赖倒序删，避免外键类问题（本库没有外键，保留顺序只是为了可读）
-        String[] tables = {"notifications", "orderLogs", "reports", "chatTyping", "chatMessages",
-                "settings", "sessions", "knowledge", "activityBookings", "activities",
+        String[] tables = {"settlements", "notifications", "orderLogs", "reports", "chatTyping",
+                "chatMessages", "settings", "sessions", "knowledge", "activityBookings", "activities",
                 "orders", "products", "stamps", "spots", "admins", "merchants", "users"};
         try (Statement st = conn.createStatement()) {
             st.executeUpdate("SET FOREIGN_KEY_CHECKS = 0");

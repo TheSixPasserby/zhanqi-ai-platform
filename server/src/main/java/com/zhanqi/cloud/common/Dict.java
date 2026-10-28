@@ -64,6 +64,11 @@ public final class Dict {
             Map.entry("appealed", "上诉审核中"),
             Map.entry("appeal_resolved", "上诉已处理"));
 
+    /** 结算流水来源（settlements.source） */
+    public static final Map<String, String> SETTLE_SOURCE_TEXT = ordered(
+            Map.entry("order", "确认收货结算"),
+            Map.entry("refund", "退款冲减"));
+
     /** 消息类型 */
     public static final Map<String, String> CHAT_TYPE_TEXT = ordered(
             Map.entry("text", "文本"),
@@ -103,6 +108,32 @@ public final class Dict {
 
     public static boolean countsAsRevenue(Object status) {
         return REVENUE_STATUS.contains(String.valueOf(status));
+    }
+
+    /**
+     * 买家可「确认收货/确认完成」的状态。
+     *
+     * <p>这是全项目唯一能把订单推进到 completed 的入口（商家没有该权限），
+     * 也是资金结算的唯一触发点，所以状态白名单集中在这里，前后端共用同一份。
+     */
+    public static final List<String> BUYER_RECEIVABLE_STATUS =
+            List.of("shipped", "checked_in", "confirmed");
+
+    public static boolean canBuyerReceive(Object status, Object category) {
+        String st = String.valueOf(status);
+        String cat = String.valueOf(category);
+        // 实物：已发货可确认收货；民宿：已入住可确认完成；
+        // 研学/农事：商家确认后即可确认完成（不走到店打卡，项目无核销码）
+        if ("shipped".equals(st)) {
+            return "goods".equals(cat);
+        }
+        if ("checked_in".equals(st)) {
+            return "homestay".equals(cat);
+        }
+        if ("confirmed".equals(st)) {
+            return "study".equals(cat) || "experience".equals(cat);
+        }
+        return false;
     }
 
     /** 需要「保持声明顺序」的 map，用 LinkedHashMap 手工构造 */

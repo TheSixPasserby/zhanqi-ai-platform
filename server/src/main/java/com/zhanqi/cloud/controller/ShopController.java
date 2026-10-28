@@ -166,11 +166,19 @@ public class ShopController {
         return R.ok("message", shop.checkInStay(AuthContext.require(), id));
     }
 
-    /** 商家完成订单（体验类 / 民宿 / 已发货实物） */
-    @PostMapping("/orders/{id}/complete")
-    @RequireRole("merchant")
-    public Map<String, Object> complete(@PathVariable String id) {
-        return R.ok("message", shop.complete(AuthContext.require(), id));
+    /**
+     * 买家确认收货 / 确认完成。
+     *
+     * <p><b>商家完成订单的接口已删除</b>（原 {@code POST /orders/{id}/complete} 现返回 404）：
+     * 完成意味着服务已交付，且钱款结算发生在这一个动作里，不能由收款方单方面确认。
+     */
+    @PostMapping("/orders/{id}/receive")
+    @RequireRole("buyer")
+    public Map<String, Object> receive(@PathVariable String id) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("ok", true);
+        out.putAll(shop.receive(AuthContext.require(), id));
+        return out;
     }
 
     /** 物流信息（按订单归属校验） */

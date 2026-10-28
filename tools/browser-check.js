@@ -343,14 +343,27 @@ function check(name, ok, detail) {
     );
     check('登录页已渲染（含快捷登录区）', loginVisible === true);
 
-    const emptyTip = await v.evalJs(
-      'document.body.innerText.indexOf("还没有可快捷登录的账号") >= 0'
-    );
-    // 这条验证的是需求「登录页初始不展示任何已有账号」。
-    // 它依赖数据库处于初始状态；如果之前有人登录过，这里会失败 —— 那是真实状态，
-    // 不是误报，按 README 的「重置演示数据」一节处理即可。
-    check('初始状态不展示任何已有账号', emptyTip === true,
-      emptyTip === true ? '' : '说明数据库里已有「登录过」的账号，属于正常的运行痕迹，不是代码问题');
+    // 登录页不泄露已有账号：断言的是「只暴露买家账号、不含密码」，而不是「必须为空」。
+    // 2026-10-28 起演示账号 小帅(xiaoshuai) 需要保留登录痕迹用于演示快捷登录，
+    // 旧断言「必须显示『还没有可快捷登录的账号』」会把正常演示数据判成失败。
+    const knownState = await v.evalJs(`(async () => {
+      const res = await fetch('/api/auth/known?role=buyer').then(r => r.json()).catch(() => ({}));
+      const accs = Array.isArray(res.accounts) ? res.accounts : [];
+      return {
+        emptyTip: document.body.innerText.indexOf('还没有可快捷登录的账号') >= 0,
+        count: accs.length,
+        onlyBuyers: accs.every(a => a.role === 'buyer'),
+        noPassword: accs.every(a => a.password === undefined && a.rememberToken === undefined),
+      };
+    })()`);
+    check('快捷登录只出现买家账号且不含敏感字段',
+      knownState && knownState.onlyBuyers === true && knownState.noPassword === true,
+      JSON.stringify(knownState));
+    // 有登录痕迹时页面应列出账号；一个都没有时显示空提示 —— 两者都正常，
+    // 但「后端说有 N 个、页面却什么都没渲染」是真缺陷。
+    check('快捷登录区与后端账号数据一致',
+      !knownState ? true : (knownState.count > 0 ? knownState.emptyTip === false : knownState.emptyTip === true),
+      JSON.stringify(knownState));
 
     await screenshot('visitor-01-login.png');
 

@@ -102,6 +102,7 @@
         orderLogistics: null,
         decisionReason: '',
         deciding: false,
+        receiving: false,
         cancelling: false,
         stamps: [],
         category: '',
@@ -1006,6 +1007,26 @@
        *   不同意 → 进入协商，订单保留，意见写进 orderLogs。
        * 「不同意」的意见按任务约定为选填，未填时给一句默认意见，避免商家看到空白协商。
        */
+      /**
+       * 买家确认收货 / 确认完成 —— 订单完成与货款结算的唯一入口。
+       * 完成后后端会写结算流水并把金额累加到商家「已结算」，这里刷新详情即可看到结算信息。
+       */
+      receiveOrder: function () {
+        var self = this;
+        var o = this.orderDetail;
+        if (!o || this.receiving) { return; }
+        var tip = o.status === 'shipped' ? '确认已经收到货物？' : '确认这次体验/入住已完成？';
+        if (!window.confirm(tip + ' 确认后订单完成，货款将结算给商家。')) { return; }
+        this.receiving = true;
+        api.post('/api/shop/orders/' + o.id + '/receive', {}).then(function (res) {
+          self.receiving = false;
+          if (!res.ok) { return; }
+          self.toast(res.message || '已确认，订单完成');
+          self.loadOrders();
+          self.refreshOrderDetail();
+        });
+      },
+
       buyerDecision: function (agree) {
         var self = this;
         var o = this.orderDetail;
@@ -1165,7 +1186,7 @@
         if (bid) { params.buyerId = bid; }
         api.get('/api/chat/messages', params, { silent: true }).then(function (res) {
           if (!res || !res.ok) { return; }
-          self.chatMessages = res.messages || res.list || [];
+          self.chatMessages = (res.messages || res.list || []).filter(self.isRenderable);
           // 后端字段：peerOnline / peerTyping；兼容早期写法
           if (typeof res.peerOnline === 'boolean') { self.chatPeerOnline = res.peerOnline; }
           else if (typeof res.online === 'boolean') { self.chatPeerOnline = res.online; }
@@ -1199,6 +1220,7 @@
       },
       /** 输入中状态：每 2.5 秒最多上报一次，避免每个字符都打接口 */
       onChatInput: function () {
+        this.autoGrowChatInput();
         var m = this.chatMerchant;
         if (!m) { return; }
         var now = Date.now();
@@ -1209,13 +1231,49 @@
         if (bid) { body.buyerId = bid; }
         api.post('/api/chat/typing', body, { silent: true });
       },
+
+      /**
+       * 输入框高度自适应（1–5 行）。
+       *
+       * 【为什么必须做】旧实现 textarea 固定 rows=1、CSS 也不放高度，
+       * 用户敲第二行开始文字就被压进 1 行里靠内部滚动，看起来像「输入框里留了一条空白」；
+       * 发送后也不会回落，占着高度让界面显得脏。
+       */
+      autoGrowChatInput: function () {
+        var self = this;
+        this.$nextTick(function () {
+          var el = self.$refs.chatInput;
+          if (!el) { return; }
+          el.style.height = 'auto';
+          // 单行基准 44px，最多 5 行（约 120px），超出后内部滚动
+          var next = Math.min(el.scrollHeight, 120);
+          el.style.height = Math.max(44, next) + 'px';
+          el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden';
+        });
+      },
+
+      /** 发送成功后把输入框复位成单行（内容已清空，高度不能留在多行） */
+      resetChatInput: function () {
+        var self = this;
+        this.$nextTick(function () {
+          var el = self.$refs.chatInput;
+          if (!el) { return; }
+          el.style.height = '44px';
+          el.style.overflowY = 'hidden';
+          el.scrollTop = 0;
+        });
+      },
       sendChatText: function () {
         if (this.chatComposing) { return; }
         var text = String(this.chatText || '').trim();
         if (!text || this.chatSending || !this.chatMerchant) { return; }
         var self = this;
         this.sendChatPayload({ type: 'text', text: text }, function (ok) {
-          if (ok) { self.chatText = ''; self.chatTypingAt = 0; }
+          if (ok) {
+            self.chatText = '';
+            self.chatTypingAt = 0;
+            self.resetChatInput();
+          }
         });
       },
       sendChatPayload: function (extra, done) {
@@ -1233,8 +1291,11 @@
             if (typeof done === 'function') { done(false); }
             return;
           }
-          if (res.message) {
+          if (res.message && self.isRenderable(res.message)) {
             self.chatMessages = self.chatMessages.concat([res.message]);
+          } else if (res.message) {
+            // 后端返回了但内容不可渲染（理论不会发生，防御性跳过）
+            self.loadChatMessages(false);
           } else {
             self.loadChatMessages(false);
           }
@@ -1270,6 +1331,22 @@
         this.chatAttachOpen = false;
         this.sendChatPayload({ type: 'order', orderId: o.id, text: o.productName });
       },
+      /**
+       * 一条消息是否值得渲染。
+       *
+       * 【为什么要有】后端已挡「纯空白文本」，但历史脏数据 / type 未知的消息
+       * 会走到模板的 v-else 分支渲染 m.text —— text 为 null 时就得到一个只有 padding 的空气泡，
+       * 页面看起来像「发了条空白消息」。这里统一在进入列表前过滤掉。
+       */
+      isRenderable: function (m) {
+        if (!m || typeof m !== 'object') { return false; }
+        var type = m.type || 'text';
+        if (type === 'image') { return !!(m.media || m.text); }
+        if (type === 'product') { return !!(m.productId || (m.product && m.product.id) || String(m.text || '').trim()); }
+        if (type === 'order') { return !!(m.orderId || (m.order && m.order.id) || String(m.text || '').trim()); }
+        return !!String(m.text == null ? '' : m.text).trim();
+      },
+
       msgSide: function (m) {
         return (m && m.fromRole === 'buyer') ? 'me' : 'peer';
       },
