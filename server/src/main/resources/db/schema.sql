@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS `merchants` (
   `status`      VARCHAR(16) NOT NULL DEFAULT 'active' COMMENT '账号状态：active 正常 / suspended 临时停用 / disabled 永久停用',
   `suspendUntil` VARCHAR(32) DEFAULT NULL          COMMENT '临时停用截止时间（ISO），到期自动恢复',
   `suspendReason` VARCHAR(255) DEFAULT NULL        COMMENT '停用原因（管理员处理举报时填写）',
+  `settledAmount` DECIMAL(10,2) NOT NULL DEFAULT 0  COMMENT '已结算金额汇总（买家确认收货后累加，退款时冲减）',
   `createdAt`   VARCHAR(32) DEFAULT NULL            COMMENT '注册日期',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_merchants_seq` (`seq`),
@@ -436,4 +437,27 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   UNIQUE KEY `uk_notifications_seq` (`seq`),
   KEY `idx_notifications_user` (`userId`, `role`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='处理结果通知';
+
+-- ---------------------------------------------------------------------------
+-- 18. settlements —— 资金结算流水（买家确认收货/完成后，钱款打进商家账户）
+--     一笔订单只有一条 source=order 的结算流水（orderId + source 唯一）；
+--     已结算订单发生退款时，追加一条 source=refund 的负数流水，并回减 merchants.settledAmount。
+--     设计取舍：不删原流水、只追加负数，账目可完整追溯。
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `settlements` (
+  `seq`        BIGINT      NOT NULL AUTO_INCREMENT COMMENT '写入顺序号',
+  `id`         VARCHAR(32) NOT NULL COMMENT '主键，形如 stl1',
+  `orderId`    VARCHAR(32) NOT NULL COMMENT '订单 id',
+  `merchantId` VARCHAR(32) NOT NULL COMMENT '收款商家 id',
+  `amount`     DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '结算金额（正数入账 / 负数冲减）',
+  `source`     VARCHAR(16) NOT NULL DEFAULT 'order' COMMENT 'order 确认收货结算 / refund 退款冲减',
+  `note`       VARCHAR(255) DEFAULT NULL COMMENT '说明（如「买家确认收货」/「管理员退款冲减」）',
+  `settledAt`  VARCHAR(32) DEFAULT NULL COMMENT '结算/冲减时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_settlements_seq` (`seq`),
+  UNIQUE KEY `uk_settlements_order_source` (`orderId`, `source`),
+  KEY `idx_settlements_merchant` (`merchantId`),
+  KEY `idx_settlements_time` (`settledAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资金结算流水';
+
 

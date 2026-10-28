@@ -38,7 +38,7 @@ public final class Tables {
         put("merchants", "m", List.of(
                 "id", "account", "password", "name", "short", "type", "phone", "intro", "since", "avatar",
                 "loginCount", "lastLoginAt", "rememberToken", "status", "suspendUntil", "suspendReason",
-                "createdAt"), Set.of());
+                "settledAmount", "createdAt"), Set.of());
 
         put("admins", "ad", List.of(
                 "id", "account", "password", "name", "phone", "role", "avatar",
@@ -99,6 +99,9 @@ public final class Tables {
         put("notifications", "n", List.of(
                 "id", "userId", "role", "title", "content", "type", "refId", "readAt", "createdAt"),
                 Set.of());
+
+        put("settlements", "stl", List.of(
+                "id", "orderId", "merchantId", "amount", "source", "note", "settledAt"), Set.of());
     }
 
     private Tables() {
