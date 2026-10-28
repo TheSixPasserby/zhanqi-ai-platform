@@ -85,6 +85,9 @@ function section(title) {
   let merchantToken = '';
   let adminToken = '';
   let testProductId = '';
+  let studyProductId = '';
+  let homestayProductId = '';
+  let merchantAccountId = '';
 
   /* ------------------------------- 1. 基础 ------------------------------- */
   section('1. 基础与静态页面');
@@ -191,6 +194,10 @@ function section(title) {
 
   const loginMerchant = await req('POST', '/api/auth/login', { account: MERCHANT, password: 'test123456', client: 'smoke' });
   check('商家登录成功', loginMerchant.data.ok && !!loginMerchant.data.token, JSON.stringify(loginMerchant.data));
+  if (loginMerchant.data.token) {
+    const merchantMe0 = await req('GET', '/api/auth/me', null, loginMerchant.data.token);
+    merchantAccountId = (merchantMe0.data && merchantMe0.data.merchantId) || '';
+  }
   merchantToken = loginMerchant.data.token || '';
 
   const loginAdmin = await req('POST', '/api/auth/login', { account: 'admin', password: 'admin123', client: 'smoke' });
@@ -293,6 +300,21 @@ function section(title) {
   const toggleBack = await req('POST', '/api/shop/products/' + testProductId + '/toggle', {}, merchantToken);
   check('切换回在售', toggleBack.data.ok);
 
+  // 预约类测试商品：研学 / 民宿各一件，用来覆盖「日期 + 场次/房型 + 人数」的新下单流程
+  const studyCreate = await req('POST', '/api/shop/products', {
+    name: '冒烟测试研学' + STAMP, category: 'study', price: 50, unit: '人', stock: 20,
+    timeSlots: ['上午场 09:00', '下午场 14:00'], desc: '自动化测试创建，脚本结束会删除',
+  }, merchantToken);
+  studyProductId = studyCreate.data.product ? studyCreate.data.product.id : '';
+  check('商家上架研学商品（含场次）', studyCreate.data.ok && (studyCreate.data.product.timeSlots || []).length === 2, JSON.stringify(studyCreate.data).slice(0, 160));
+
+  const homestayCreate = await req('POST', '/api/shop/products', {
+    name: '冒烟测试民宿' + STAMP, category: 'homestay', price: 200, unit: '晚', stock: 5,
+    roomTypes: ['标准间', '大床房'], desc: '自动化测试创建，脚本结束会删除',
+  }, merchantToken);
+  homestayProductId = homestayCreate.data.product ? homestayCreate.data.product.id : '';
+  check('商家上架民宿商品（含房型）', homestayCreate.data.ok && (homestayCreate.data.product.roomTypes || []).length === 2, JSON.stringify(homestayCreate.data).slice(0, 160));
+
   const buyerCantCreate = await req('POST', '/api/shop/products', { name: 'x', category: 'goods', price: 1, stock: 1 }, buyerToken);
   check('游客无权上架商品（403）', buyerCantCreate.status === 403, 'HTTP ' + buyerCantCreate.status);
 
@@ -317,26 +339,214 @@ function section(title) {
   const merchantOrders = await req('GET', '/api/shop/orders', null, merchantToken);
   check('商家能查自己的订单', merchantOrders.data.ok && Array.isArray(merchantOrders.data.orders));
 
+  const buyerMeBlock = await req('GET', '/api/auth/me', null, buyerToken);
+  const smokeBuyerId = (buyerMeBlock.data && buyerMeBlock.data.userId) || '';
+
+  // 实物订单：接单 → 发货 → 查物流 → 完成；核销接口必须已经不存在
   if (createdOrderIds.length) {
     const oid = createdOrderIds[0];
     const confirm = await req('POST', '/api/shop/orders/' + oid + '/confirm', {}, merchantToken);
     check('商家接单（确认）', confirm.data.ok, JSON.stringify(confirm.data));
 
     const verify = await req('POST', '/api/shop/orders/' + oid + '/verify', {}, merchantToken);
-    check('商家核销', verify.data.ok, JSON.stringify(verify.data));
+    check('核销接口已删除（商家核销不再可用）', verify.status === 404 || verify.data.ok === false, 'HTTP ' + verify.status);
 
-    const cancelUsed = await req('POST', '/api/shop/orders/' + oid + '/cancel', { reason: 't' }, buyerToken);
-    check('已核销订单不能取消', cancelUsed.data.ok === false || cancelUsed.status >= 400);
+    const ship = await req('POST', '/api/shop/orders/' + oid + '/ship', { company: '顺丰速运', trackingNo: 'SF' + STAMP }, merchantToken);
+    check('商家发货（快递公司 + 运单号）', ship.data.ok, JSON.stringify(ship.data).slice(0, 160));
+
+    const logistics = await req('GET', '/api/shop/orders/' + oid + '/logistics', null, buyerToken);
+    check('买家可查物流节点', logistics.data.ok && logistics.data.hasLogistics === true && (logistics.data.nodes || []).length === 4,
+      JSON.stringify(logistics.data).slice(0, 200));
+
+    const detail = await req('GET', '/api/shop/orders/' + oid, null, buyerToken);
+    check('订单详情含商家与物流信息', detail.data.ok && !!detail.data.order.merchant
+      && detail.data.order.status === 'shipped' && !!detail.data.order.trackingNo, JSON.stringify(detail.data).slice(0, 240));
+
+    const complete = await req('POST', '/api/shop/orders/' + oid + '/complete', {}, merchantToken);
+    check('商家完成实物订单', complete.data.ok, JSON.stringify(complete.data).slice(0, 160));
+
+    const cancelDone = await req('POST', '/api/shop/orders/' + oid + '/cancel', {}, buyerToken);
+    check('已完成订单不能取消', cancelDone.data.ok === false || cancelDone.status >= 400);
   }
 
-  // 待确认订单可以取消
+  // 拒绝协商：原因必填 → 待买家决定 → 买家不同意进入协商 → 记录保留
   if (testProductId) {
+    const rejOrder = await req('POST', '/api/shop/orders', { items: [{ productId: testProductId, qty: 1 }], address: '成都市战旗村' }, buyerToken);
+    const rejId = rejOrder.data.orders && rejOrder.data.orders[0] ? rejOrder.data.orders[0].id : '';
+    if (rejId) {
+      createdOrderIds.push(rejId);
+      const noReason = await req('POST', '/api/shop/orders/' + rejId + '/reject', { reason: '' }, merchantToken);
+      check('拒绝订单必须填写原因', noReason.data.ok === false, JSON.stringify(noReason.data).slice(0, 120));
+
+      const rej = await req('POST', '/api/shop/orders/' + rejId + '/reject', { reason: '该批次库存有误，无法发货' }, merchantToken);
+      check('商家拒绝并保存原因', rej.data.ok, JSON.stringify(rej.data).slice(0, 160));
+
+      const afterRej = await req('GET', '/api/shop/orders/' + rejId, null, buyerToken);
+      check('拒绝后订单不直接关闭，等待买家决定',
+        afterRej.data.ok && afterRej.data.order.status === 'pending'
+        && afterRej.data.order.rejectStatus === 'waiting_buyer'
+        && afterRej.data.order.rejectReason === '该批次库存有误，无法发货',
+        JSON.stringify(afterRej.data.order || {}).slice(0, 240));
+
+      const disagree = await req('POST', '/api/shop/orders/' + rejId + '/buyer-decision', { agree: false, reason: '仍希望按原价购买' }, buyerToken);
+      check('买家不同意 → 进入协商', disagree.data.ok, JSON.stringify(disagree.data).slice(0, 160));
+
+      const negotiated = await req('GET', '/api/shop/orders/' + rejId, null, buyerToken);
+      check('协商状态保留且双方记录可查',
+        negotiated.data.order.status === 'pending' && negotiated.data.order.rejectStatus === 'buyer_disagreed'
+        && Array.isArray(negotiated.data.order.logs) && negotiated.data.order.logs.length >= 2,
+        JSON.stringify(negotiated.data.order || {}).slice(0, 300));
+    }
+
+    // 买家同意关闭：订单取消 + 库存回滚
+    const agreeOrder = await req('POST', '/api/shop/orders', { items: [{ productId: testProductId, qty: 1 }], address: '成都市战旗村' }, buyerToken);
+    const agreeId = agreeOrder.data.orders && agreeOrder.data.orders[0] ? agreeOrder.data.orders[0].id : '';
+    if (agreeId) {
+      createdOrderIds.push(agreeId);
+      await req('POST', '/api/shop/orders/' + agreeId + '/reject', { reason: '临时缺货' }, merchantToken);
+      const agree = await req('POST', '/api/shop/orders/' + agreeId + '/buyer-decision', { agree: true }, buyerToken);
+      check('买家同意后订单才关闭', agree.data.ok, JSON.stringify(agree.data).slice(0, 160));
+      const closed = await req('GET', '/api/shop/orders/' + agreeId, null, buyerToken);
+      check('同意关闭后状态为已取消', closed.data.ok && closed.data.order.status === 'cancelled'
+        && closed.data.order.rejectStatus === 'buyer_agreed', JSON.stringify(closed.data.order || {}).slice(0, 200));
+    }
+
+    // 待确认订单仍可由买家取消
     const o2 = await req('POST', '/api/shop/orders', { items: [{ productId: testProductId, qty: 1 }], address: 'x' }, buyerToken);
     const id2 = o2.data.orders && o2.data.orders[0] ? o2.data.orders[0].id : '';
     if (id2) {
       const cancel = await req('POST', '/api/shop/orders/' + id2 + '/cancel', { reason: '冒烟测试清理' }, buyerToken);
       check('待确认订单可以取消', cancel.data.ok, JSON.stringify(cancel.data));
       createdOrderIds.push(id2);
+    }
+  }
+
+  // 研学：日期 + 场次 + 人数；商家确认 / 完成；禁止发货
+  if (studyProductId) {
+    const studyOrder = await req('POST', '/api/shop/orders', {
+      items: [{ productId: studyProductId, qty: 2 }], bookDate: '2026-11-10', people: 2,
+      bookingSlot: '上午场 09:00', remark: '冒烟测试研学',
+    }, buyerToken);
+    const studyId = studyOrder.data.orders && studyOrder.data.orders[0] ? studyOrder.data.orders[0].id : '';
+    check('研学下单带日期/场次/人数', studyOrder.data.ok && !!studyId
+      && studyOrder.data.orders[0].bookingSlot === '上午场 09:00'
+      && studyOrder.data.orders[0].people === 2, JSON.stringify(studyOrder.data).slice(0, 240));
+    if (studyId) {
+      createdOrderIds.push(studyId);
+      const sc = await req('POST', '/api/shop/orders/' + studyId + '/confirm', {}, merchantToken);
+      check('研学商家确认', sc.data.ok, JSON.stringify(sc.data).slice(0, 120));
+      const ss = await req('POST', '/api/shop/orders/' + studyId + '/ship', { company: '顺丰', trackingNo: 'X1' }, merchantToken);
+      check('研学订单禁止走快递', ss.data.ok === false, JSON.stringify(ss.data).slice(0, 120));
+      const sdone = await req('POST', '/api/shop/orders/' + studyId + '/complete', {}, merchantToken);
+      check('研学商家完成（不核销）', sdone.data.ok, JSON.stringify(sdone.data).slice(0, 120));
+    }
+  }
+
+  // 民宿：入住/离店/房型/人数；确认 / 办理入住 / 完成
+  if (homestayProductId) {
+    const stayOrder = await req('POST', '/api/shop/orders', {
+      items: [{ productId: homestayProductId, qty: 2 }], bookDate: '2026-11-20', checkOutDate: '2026-11-22',
+      roomType: '标准间', people: 2, remark: '冒烟测试民宿',
+    }, buyerToken);
+    const stayId = stayOrder.data.orders && stayOrder.data.orders[0] ? stayOrder.data.orders[0].id : '';
+    check('民宿下单带入住/离店/房型/人数', stayOrder.data.ok && !!stayId
+      && stayOrder.data.orders[0].checkOutDate === '2026-11-22'
+      && stayOrder.data.orders[0].roomType === '标准间', JSON.stringify(stayOrder.data).slice(0, 240));
+    if (stayId) {
+      createdOrderIds.push(stayId);
+      const hc = await req('POST', '/api/shop/orders/' + stayId + '/confirm', {}, merchantToken);
+      check('民宿商家确认', hc.data.ok, JSON.stringify(hc.data).slice(0, 120));
+      const hi = await req('POST', '/api/shop/orders/' + stayId + '/checkin', {}, merchantToken);
+      check('民宿办理入住', hi.data.ok, JSON.stringify(hi.data).slice(0, 120));
+      const hd = await req('POST', '/api/shop/orders/' + stayId + '/complete', {}, merchantToken);
+      check('民宿完成', hd.data.ok, JSON.stringify(hd.data).slice(0, 120));
+
+      const refund = await req('POST', '/api/admin/orders/' + stayId + '/refund', { note: '冒烟测试退款' }, adminToken);
+      check('管理员直接把钱退给客户', refund.data.ok && refund.data.order.status === 'refunded', JSON.stringify(refund.data).slice(0, 200));
+    }
+  }
+
+  // 聊天：买家发消息 → 商家会话列表/回复 → 输入中 / 权限
+  if (merchantAccountId) {
+    const sendMsg = await req('POST', '/api/chat/messages', { merchantId: merchantAccountId, type: 'text', text: '冒烟测试：请问还有货吗？' }, buyerToken);
+    check('买家发送聊天消息', sendMsg.data.ok && sendMsg.data.message.fromRole === 'buyer', JSON.stringify(sendMsg.data).slice(0, 160));
+
+    const threads = await req('GET', '/api/chat/threads', null, merchantToken);
+    check('商家会话列表出现该买家', threads.data.ok && (threads.data.threads || []).some((t) => t.buyerId === smokeBuyerId),
+      JSON.stringify(threads.data).slice(0, 240));
+
+    if (smokeBuyerId) {
+      const msgs = await req('GET', '/api/chat/messages?merchantId=' + merchantAccountId + '&buyerId=' + smokeBuyerId, null, merchantToken);
+      check('商家可读会话消息', msgs.data.ok && (msgs.data.messages || []).length >= 1, JSON.stringify(msgs.data).slice(0, 160));
+      const reply = await req('POST', '/api/chat/messages', { merchantId: merchantAccountId, buyerId: smokeBuyerId, type: 'text', text: '有的，今天下单明天发货' }, merchantToken);
+      check('商家可回复买家', reply.data.ok && reply.data.message.fromRole === 'merchant', JSON.stringify(reply.data).slice(0, 160));
+      const typing = await req('POST', '/api/chat/typing', { merchantId: merchantAccountId }, buyerToken);
+      check('记录对方输入中', typing.data.ok);
+      const msgs2 = await req('GET', '/api/chat/messages?merchantId=' + merchantAccountId + '&buyerId=' + smokeBuyerId, null, merchantToken);
+      check('商家看到对方输入中', msgs2.data.ok && msgs2.data.peerTyping === true);
+    }
+
+    const buyerReject = await req('POST', '/api/shop/orders/' + (createdOrderIds[0] || 'x') + '/reject', { reason: 'x' }, buyerToken);
+    check('买家不能调用商家拒绝接口（403）', buyerReject.status === 403, 'HTTP ' + buyerReject.status);
+  }
+
+  // 举报：提交 → 管理员处理 → 商家上诉 → 管理员复核 → 通知
+  if (merchantAccountId) {
+    const categories = await req('GET', '/api/reports/categories');
+    check('举报分类至少 5 类', categories.data.ok && (categories.data.categories || []).length >= 5);
+
+    const submit = await req('POST', '/api/reports', {
+      merchantId: merchantAccountId, category: 'service', reason: '不回复消息',
+      content: '冒烟测试举报内容：客服长时间不回复。', evidence: [],
+    }, buyerToken);
+    check('买家提交举报', submit.data.ok && submit.data.report.status === 'pending', JSON.stringify(submit.data).slice(0, 200));
+    const reportId = submit.data.report ? submit.data.report.id : '';
+
+    if (reportId) {
+      const mine = await req('GET', '/api/reports/mine', null, buyerToken);
+      check('我的举报可见', mine.data.ok && (mine.data.reports || []).some((x) => x.id === reportId));
+
+      const merchantReports = await req('GET', '/api/reports/merchant', null, merchantToken);
+      check('商家可看针对自己的举报', merchantReports.data.ok && (merchantReports.data.reports || []).some((x) => x.id === reportId));
+
+      const handle = await req('POST', '/api/admin/reports/' + reportId + '/handle', { action: 'warning', result: '已电话提醒商家改善服务' }, adminToken);
+      check('管理员处理举报并通知用户', handle.data.ok && handle.data.report.status === 'resolved', JSON.stringify(handle.data).slice(0, 200));
+
+      const appeal = await req('POST', '/api/reports/' + reportId + '/appeal', { content: '冒烟测试上诉：当时在忙没有及时回复', evidence: [] }, merchantToken);
+      check('商家可提出上诉', appeal.data.ok, JSON.stringify(appeal.data).slice(0, 160));
+
+      const appealHandle = await req('POST', '/api/admin/reports/' + reportId + '/appeal/handle', { decision: 'upheld', result: '维持原处理' }, adminToken);
+      check('管理员可审核上诉', appealHandle.data.ok && appealHandle.data.report.status === 'appeal_resolved', JSON.stringify(appealHandle.data).slice(0, 200));
+
+      const notices = await req('GET', '/api/notifications', null, buyerToken);
+      check('处理结果通知买家', notices.data.ok && (notices.data.notifications || []).length > 0, JSON.stringify(notices.data).slice(0, 160));
+    }
+  }
+
+  // 商品下架后不可购买；管理员改价/库存/下架立即生效（Bug 修复回归）
+  if (testProductId) {
+    const off = await req('PUT', '/api/admin/products/' + testProductId, { price: 12.5, stock: 3, status: 'off' }, adminToken);
+    check('管理员可改价格/库存并下架', off.data.ok && off.data.product.price === 12.5
+      && off.data.product.stock === 3 && off.data.product.status === 'off', JSON.stringify(off.data).slice(0, 200));
+    const buyOff = await req('POST', '/api/shop/orders', { items: [{ productId: testProductId, qty: 1 }], address: 'x' }, buyerToken);
+    check('下架商品不可购买', buyOff.data.ok === false, JSON.stringify(buyOff.data).slice(0, 120));
+    const oldProducts = await req('GET', '/api/shop/products');
+    check('下架商品不在公开商城展示', (oldProducts.data.products || []).every((p) => p.id !== testProductId));
+    await req('PUT', '/api/admin/products/' + testProductId, { status: 'on' }, adminToken);
+  }
+
+  // 停用/恢复商家：临时停用后原会话立即失效，恢复后能重新登录
+  if (merchantAccountId) {
+    const suspend = await req('POST', '/api/admin/merchants/' + merchantAccountId + '/suspend', { days: 1, reason: '冒烟测试临时停用' }, adminToken);
+    check('管理员临时停用商家', suspend.data.ok, JSON.stringify(suspend.data).slice(0, 160));
+    const blocked = await req('GET', '/api/auth/me', null, merchantToken);
+    check('停用后商家旧会话立即失效', blocked.status === 401 || blocked.data.ok === false, 'HTTP ' + blocked.status);
+    const restore = await req('POST', '/api/admin/merchants/' + merchantAccountId + '/status', { status: 'active' }, adminToken);
+    check('管理员可恢复商家账号', restore.data.ok, JSON.stringify(restore.data).slice(0, 120));
+    const relogin = await req('POST', '/api/auth/login', { account: MERCHANT, password: 'test123456', expect: 'merchant', client: 'merchant' });
+    check('恢复后商家可重新登录', relogin.data.ok && !!relogin.data.token, JSON.stringify(relogin.data).slice(0, 120));
+    if (relogin.data.token) {
+      merchantToken = relogin.data.token;
     }
   }
 
@@ -427,7 +637,7 @@ function section(title) {
     JSON.stringify(Object.keys(serverStatus.data || {})));
 
   const dataOverview = await req('GET', '/api/admin/data-overview', null, adminToken);
-  check('数据总览可用（11 张表计数）', dataOverview.data.ok, JSON.stringify(dataOverview.data).slice(0, 240));
+  check('数据总览可用（17 张表计数）', dataOverview.data.ok, JSON.stringify(dataOverview.data).slice(0, 240));
 
   const schema = await req('GET', '/api/admin/schema', null, adminToken);
   check('表结构元数据可用', schema.data.ok, JSON.stringify(schema.data).slice(0, 160));
