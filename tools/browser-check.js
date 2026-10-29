@@ -694,6 +694,74 @@ function check(name, ok, detail) {
     }
   }
 
+  /* ------------------ 5. 聊天界面样式完整性（哨兵） ------------------ */
+  // 2026-10-29 回归：pc.css 被整块覆盖，丢掉 150 个选择器（.msg / .chat-shell / .msg-avatar /
+  // .chat-composer 等），表现为「消息没有气泡、头像变成大圆、输入框错位」——
+  // 但页面不报错、接口全 200，只看异常与 DOM 存在性抓不到。
+  // 这里直接量渲染后的几何：气泡必须有背景与内边距、头像 34px、输入框高度正常。
+  console.log('');
+  console.log('— 5. 聊天界面样式完整性 ' + '-'.repeat(37));
+  {
+    const v = await visit(BASE + '/visitor/pc/', { viewport: { width: 1280, height: 860 } });
+    // 直接写 localStorage 登录态，再用 CDP 重新导航（页面内 location.href 会被手机端检测改道）
+    await v.evalJs(`(async () => {
+      const login = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: 'xiaoshuai', password: '123456', client: 'visitor' }),
+      }).then(r => r.json()).catch(() => ({}));
+      if (login.ok) {
+        localStorage.setItem('zhanqi.visitor.token', login.token);
+        localStorage.setItem('zhanqi.visitor.user', JSON.stringify({ role: login.role, name: login.name, at: Date.now() }));
+        sessionStorage.setItem('zq.visitor.forceMobile', '0');
+        return 'ok';
+      }
+      return 'no-demo-account';
+    })()`);
+    await setViewport(1280, 860);
+    await cdp.send("Page.navigate", { url: BASE + "/visitor/pc/" });
+    await sleep(3600);
+    const geoms = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#pc') && document.querySelector('#pc').__vue__;
+      if (!vm) { return { skip: 'not mounted (url=' + location.pathname + ')' }; }
+      vm.go('chatList');
+      await new Promise(r => setTimeout(r, 1800));
+      const rows = [...document.querySelectorAll('.thread-row')];
+      if (!rows.length) { return { skip: 'no thread' }; }
+      rows[0].click();
+      await new Promise(r => setTimeout(r, 2800));
+      const shell = document.querySelector('.chat-shell');
+      const avatars = [...document.querySelectorAll('.chat-body .msg-avatar')];
+      const texts = [...document.querySelectorAll('.chat-body .msg-text')];
+      const input = document.querySelector('.chat-input-row textarea');
+      const t0 = texts[0];
+      const cs = t0 ? getComputedStyle(t0) : null;
+      return {
+        hasShell: !!shell,
+        msgCount: document.querySelectorAll('.chat-body .msg').length,
+        avatarW: avatars[0] ? avatars[0].offsetWidth : 0,
+        bubbleBg: cs ? cs.backgroundColor : null,
+        bubblePad: cs ? cs.paddingLeft : null,
+        inputH: input ? input.offsetHeight : 0,
+        emptyBubbles: texts.filter(t => !String(t.textContent || '').trim()).length,
+      };
+    })()`);
+    if (geoms && geoms.skip) {
+      note('聊天样式检查跳过：' + geoms.skip);
+    } else {
+      check('聊天容器与消息都渲染出来', !!(geoms && geoms.hasShell && geoms.msgCount > 0), JSON.stringify(geoms));
+      check('消息气泡有背景与内边距（CSS 未被覆盖）',
+        !!(geoms && geoms.bubbleBg && geoms.bubbleBg !== 'rgba(0, 0, 0, 0)' && parseFloat(geoms.bubblePad) >= 8),
+        JSON.stringify(geoms));
+      check('头像尺寸正常（34px，不是丢失样式后的大图）',
+        !!(geoms && geoms.avatarW > 0 && geoms.avatarW <= 40), String(geoms && geoms.avatarW));
+      check('输入框高度正常（不是 0 或被撑坏）',
+        !!(geoms && geoms.inputH >= 30 && geoms.inputH <= 130), String(geoms && geoms.inputH));
+      check('没有空白气泡', !!(geoms && geoms.emptyBubbles === 0), String(geoms && geoms.emptyBubbles));
+      await screenshot('visitor-16-chat-style.png');
+    }
+    await v.evalJs("localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); 1");
+  }
+
   /* -------------------- 5. 登录态失效后的表现 -------------------- */
 
   // 上一步删掉了测试账号，但浏览器里还留着它的令牌 —— 这正好复现了真实场景中

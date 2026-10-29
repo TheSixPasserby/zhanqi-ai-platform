@@ -984,6 +984,36 @@ body {
 .report-progress { height: 5px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
 .report-progress i {
   display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  transition: width .45s cubic-bezier(.22, 1, .36, 1);
+}
+.report-result {
+  padding: 9px 11px; border-radius: 11px;
+  background: var(--ok-soft); color: var(--ok); font-size: 12px; line-height: 1.7;
+}
+.report-merchant {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; border-radius: 12px; background: var(--brand-soft);
+}
+.report-merchant b { font-size: 13.5px; color: var(--brand); }
+
+/* 凭证上传 */
+.evi-row { display: flex; flex-wrap: wrap; gap: 9px; }
+.evi-item { position: relative; width: 78px; height: 78px; border-radius: 12px; overflow: hidden; background: var(--surface-3); }
+.evi-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evi-del {
+  position: absolute; right: 2px; top: 2px; width: 19px; height: 19px; border-radius: 50%;
+  border: none; background: rgba(31, 42, 38, .62); color: #fff; font-size: 13px;
+  line-height: 1; font-family: inherit; cursor: pointer;
+}
+.evi-add {
+  width: 78px; height: 78px; border-radius: 12px; border: 1.5px dashed var(--line);
+  background: var(--surface-2); color: var(--text-3); font-size: 11px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font-family: inherit; cursor: pointer;
+}
+.evi-add .ico { width: 20px; height: 20px; color: var(--brand); }
+
 /* 扇形图空态：没有点位时不再画一个空圆圈 */
 .ring-empty {
   width: 100%; height: 100%; display: flex; flex-direction: column;

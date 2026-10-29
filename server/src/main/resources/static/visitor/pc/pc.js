@@ -145,6 +145,7 @@
         chatComposing: false,
         chatPollTimer: null,
         chatTypingAt: 0,
+        chatSendSeq: 0,   // 会话代次：切换商家时 +1，作废旧会话尚未返回的异步结果
 
         /* 图片预览与拍摄 */
         imagePreview: '',
@@ -1136,16 +1137,26 @@
         var m = this.normalizeMerchant(merchant);
         if (!this.user) { this.toast('请先登录后再联系商家', 'warn'); this.go('mine'); return; }
         if (!m || !m.id) { this.toast('商家信息不存在', 'warn'); return; }
+
+        // 切到另一个商家时必须先把上一个会话的状态清干净：不清会短暂显示「上一位商家」的
+        // 消息与在线状态（点会话列表时尤其明显），看起来像串台。
+        var switching = !this.chatMerchant || this.chatMerchant.id !== m.id;
+        this.stopChatPoll();
+        if (switching) {
+          this.chatMessages = [];
+          this.chatText = '';
+          this.chatPeerTyping = false;
+          this.chatProducts = [];
+        }
+        this.chatSendSeq++;                 // 作废上一个会话尚未返回的请求
         this.chatMerchant = m;
-        this.chatMessages = [];
-        this.chatText = '';
-        this.chatPeerTyping = false;
         this.chatPeerOnline = !!m.online;
         this.chatAttachOpen = false;
         this.chatPanelTab = 'product';
-        this.chatProducts = [];
         this.view = 'chat';
+        this.resetChatInput();
         window.scrollTo({ top: 0 });
+
         this.loadChatProducts(m.id);
         this.loadOrders();
         this.loadChatPeer(m);
@@ -1154,8 +1165,9 @@
       },
       loadChatProducts: function (merchantId) {
         var self = this;
+        var seq = this.chatSendSeq;
         api.get('/api/shop/merchants/' + merchantId, null, { silent: true }).then(function (res) {
-          if (!res.ok) { return; }
+          if (!res.ok || seq !== self.chatSendSeq) { return; }
           self.chatProducts = res.products || [];
           if (res.merchant) {
             var nm = self.normalizeMerchant(res.merchant);
@@ -1165,8 +1177,9 @@
       },
       loadChatPeer: function (m) {
         var self = this;
+        var seq = this.chatSendSeq;
         api.get('/api/chat/peer', { merchantId: m.id }, { silent: true }).then(function (res) {
-          if (!res.ok) { return; }
+          if (!res.ok || seq !== self.chatSendSeq) { return; }
           if (typeof res.online === 'boolean') { self.chatPeerOnline = res.online; }
           if (res.merchant) {
             var nm = self.normalizeMerchant(res.merchant);
@@ -1178,6 +1191,8 @@
         var self = this;
         var m = this.chatMerchant;
         if (!m || !this.user) { return; }
+        // 记录发起时的会话，回来时如果已经切了商家就丢弃这批数据
+        var seq = this.chatSendSeq;
         var box = this.$refs.chatBody;
         // 用户正在往上翻历史时不打断：只有原本就在底部才自动滚到底
         var atBottom = !box || (box.scrollHeight - box.scrollTop - box.clientHeight < 80);
@@ -1186,6 +1201,7 @@
         if (bid) { params.buyerId = bid; }
         api.get('/api/chat/messages', params, { silent: true }).then(function (res) {
           if (!res || !res.ok) { return; }
+          if (seq !== self.chatSendSeq) { return; }   // 已切到别的商家，丢弃过期响应
           self.chatMessages = (res.messages || res.list || []).filter(self.isRenderable);
           // 后端字段：peerOnline / peerTyping；兼容早期写法
           if (typeof res.peerOnline === 'boolean') { self.chatPeerOnline = res.peerOnline; }
@@ -1280,11 +1296,13 @@
         var self = this;
         var m = this.chatMerchant;
         if (!m || this.chatSending) { return; }
+        var seq = this.chatSendSeq;
         this.chatSending = true;
         var body = Object.assign({ merchantId: m.id }, extra || {});
         var bid = this.buyerId();
         if (bid) { body.buyerId = bid; }
         api.post('/api/chat/messages', body, { silent: true }).then(function (res) {
+          if (seq !== self.chatSendSeq) { self.chatSending = false; return; }
           self.chatSending = false;
           if (!res.ok) {
             self.toast(res.error || '消息发送失败', 'error');
