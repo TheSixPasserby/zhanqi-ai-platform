@@ -323,3 +323,47 @@
   商品列表，并给所有异步回调加会话代次校验（`chatSendSeq`），否则快速连点会话时
   先发的请求后回来会覆盖新会话，表现为「进去看到上一个商家的消息」。
   （2026-10-29，来源：同上）
+
+## 混合结算与购物车准入（2026-10-29 晚）
+
+- **混合结算必须让后端支持 item 级参数**。只改前端没用：老 `createOrders` 只有一组顶层
+  `bookDate`/`people`/`address`，所有商品共用，前端画多少表单都只有一份值落库。
+  item 有值用 item，没有回落顶层（兼容老调用）。
+  （2026-10-29，来源：2026-10-29-mixed-checkout-cart-gating-gallery）
+
+- **购物车准入要双层**：前端拦是体验（提示 + 跳详情，不让用户卡住），后端拦是安全
+  （绕过前端直接调接口仍被拒）。只有一层都不够。
+  只有农产文创（goods）能加购；研学/民宿/农事必须走预约。
+  （2026-10-29，来源：同上）
+
+- **给已有行补内容必须用 UPDATE 脚本，不能改 seed.sql**。seed 是 `INSERT IGNORE`，
+  对已存在的老库完全不生效。`seed-gallery.sql` + `tools/seed-gallery.js` 就是这个用途。
+  （2026-10-29，来源：同上）
+
+- **`syncCart()` 会吃掉用户填的表单**：它用 localStorage 重建 `cart` 对象，
+  而表单存在 `cart[i].form` 上。提交前应「把内存 cart 写回本地」，不要反向同步。
+  （2026-10-29，来源：同上）
+
+- **`go('orders')` 里判断「离开结算态」会误伤 `startCheckout`**：
+  后者设了 `checkoutMode=true` 再调 `go('orders')`，立刻被置回 false，
+  页面显示订单列表，看起来像「结算坏了」。`startCheckout` 应直接切 `view`，不走 `go()`。
+  （2026-10-29，来源：同上）
+
+- **Vue 2 的 computed 不能在模板里带参数调用**：`checkoutLines()` 带括号必须放 `methods`；
+  当属性用的（`spotImages`）必须放 `computed`。放错的表现是 `undefined` / `is not a function`，
+  不是语法错误，很容易误判成数据没回来。
+  （2026-10-29，来源：同上）
+
+- **CSS 特异度覆盖是「样式明明写了却不生效」的首因**：
+  `.day-head span { display:block }`（0,1,1）会盖掉 `.day-badge`（0,1,0）的 `display:flex`。
+  修法是把选择器写具体（`.day-head .day-badge`），不是加 `!important`。
+  （2026-10-29，来源：同上）
+
+- **本机 `mysql.exe` 会挂起**：多次调用后不返回，`seed-gallery.js` 之类的脚本会超时。
+  应急用 jshell + `mysql-connector-j` 走 JDBC 绕开；长期应把脚本改成 JDBC 实现。
+  （2026-10-29，来源：同上）
+
+- **生成 SQL 时注意转义层级**：Node 里 `\\n` 经多次字符串化会变成 4 个反斜杠，
+  MySQL 报 `Unknown command '\'`；拼字符串时也容易把引号插到结尾之外导致提前闭合。
+  改完用「引号奇偶校验」扫一遍能快速定位。
+  （2026-10-29，来源：同上）

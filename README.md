@@ -10,7 +10,7 @@
 - [一键部署、地址与默认账号](#quick-start)
 - [后端架构、启动顺序与请求链路](#backend-architecture)
 - [目录结构](#project-layout) · [功能清单](#features)
-- [数据库完整参考：18 张表、233 个字段、全部索引与逻辑关系](#database-reference)
+- [数据库完整参考：18 张表、235 个字段、全部索引与逻辑关系](#database-reference)
 - [游客端说明](#visitor-guide) · [AI 能力](#ai-guide)
 - [全部 HTTP 接口：权限、参数、响应与示例](#api-reference)
 - [常见问题](#faq) · [环境要求](#requirements) · [演示顺序](#demo) · [已知边界](#limitations)
@@ -99,7 +99,7 @@
 
 | 命令 | 作用 |
 | --- | --- |
-| `node tools/smoke-test.js` | **接口冒烟测试**：158 项断言，覆盖认证、打卡、四类商品下单、拒绝协商、发货物流、聊天、举报与上诉、退款、AI 问答与防幻觉、权限矩阵、服务器管理，外加一条「图片引用是否都存在」的静态检查 |
+| `node tools/smoke-test.js` | **接口冒烟测试**：159 项断言，覆盖认证、打卡、四类商品下单、拒绝协商、发货物流、聊天、举报与上诉、退款、AI 问答与防幻觉、权限矩阵、服务器管理，外加一条「图片引用是否都存在」的静态检查 |
 | `node tools/browser-check.js` | **前端实机自检**：52 项断言，用本机 Chrome 无头模式把四端页面真的跑一遍，抓未捕获异常、控制台错误、所有 4xx/5xx 请求，并对关键 DOM 做断言（含集章扇形图三条硬断言、语音启停回归）；顺带产出 `docs/screenshots/` 截图 |
 | `node tools/deploy-config-test.js` | **部署配置解析回归测试**：36 项断言。从交付版 `deploy.ps1` / `deploy.sh` 里把读配置的函数**抽出来原样执行**（不是复制一份实现），守住「`app.port` 与 `app.database.port` 同名 `port` 导致配置被写坏」那个老坑 —— 它首次部署不发作、第二次起才发作，Windows 与 macOS 两侧都被独立踩到过 |
 | `node tools/normalize-scripts.js --check` | 脚本编码自检（可挂到提交前钩子） |
@@ -314,7 +314,7 @@ zhanqi-ai-platform/
 │  ├─ deploy.ps1 / deploy.sh       双平台部署 / 停止 / 状态 / 重编译 / 重置核心逻辑
 │  ├─ build.ps1                    编译后端并同步到 dist/
 │  ├─ normalize-scripts.js         脚本编码自检（.bat 纯 ASCII、.ps1 带 BOM）
-│  ├─ smoke-test.js                接口冒烟测试（158 项断言）
+│  ├─ smoke-test.js                接口冒烟测试（159 项断言）
 │  ├─ deploy-config-test.js        部署配置解析回归测试（36 项断言）
 │  └─ browser-check.js             前端实机自检（无头 Chrome + CDP，含截图）
 ├─ docs/
@@ -390,7 +390,7 @@ zhanqi-ai-platform/
 
 ## 五、数据库完整参考
 
-本平台使用 MySQL，默认数据库名为 `zhanqi_cloud`，共 **18 张表、233 个物理字段**（含每表的 `seq` 与 `id`）。所有表使用 InnoDB 和 `utf8mb4`；自动建库时指定 `utf8mb4_general_ci`。业务数据、登录会话与平台配置均存入数据库。
+本平台使用 MySQL，默认数据库名为 `zhanqi_cloud`，共 **18 张表、235 个物理字段**（含每表的 `seq` 与 `id`）。所有表使用 InnoDB 和 `utf8mb4`；自动建库时指定 `utf8mb4_general_ci`。业务数据、登录会话与平台配置均存入数据库。
 
 本节以 `server/src/main/resources/db/schema.sql` 的新建表结构为基准，以 `db/Tables.java` 核对业务可读写列，以 `DatabaseBootstrap.java` 核对旧库补列及重置行为，以 `common/Dict.java` 核对商品分类、订单状态和营收口径。下述 Java 文件均位于 `server/src/main/java/com/zhanqi/cloud/`。旧库保留已有列定义，具体差异见 5.7。
 
@@ -403,7 +403,7 @@ zhanqi-ai-platform/
 | `id` | 字符串逻辑主键，`NOT NULL`、无 SQL 默认值，使用 `PRIMARY KEY (id)`；接口与表间引用都使用它。各表的具体类型和取号方式见下表。 |
 | `seq` | `BIGINT NOT NULL AUTO_INCREMENT`，由 MySQL 生成，各表均有独立的唯一索引 `uk_<表名>_seq`；用于稳定的写入顺序，不是业务关联键，也不等于 `id` 的数字部分。 |
 
-`Db.all()`、`Db.query()` 等列表查询显式使用 `ORDER BY seq`，业务层可以再按时间等条件排序。数据库没有默认返回顺序，不能省略排序后依赖“碰巧按插入顺序返回”。`Tables.java` 不登记 `seq`，`Db` 的读出整理也不向业务对象暴露它；该元数据共登记 **215 个业务字段**，加上 18 个 `seq` 才是 233 个物理字段。
+`Db.all()`、`Db.query()` 等列表查询显式使用 `ORDER BY seq`，业务层可以再按时间等条件排序。数据库没有默认返回顺序，不能省略排序后依赖“碰巧按插入顺序返回”。`Tables.java` 不登记 `seq`，`Db` 的读出整理也不向业务对象暴露它；该元数据共登记 **217 个业务字段**，加上 18 个 `seq` 才是 235 个物理字段。
 
 `Db.nextId()` 按“当前表记录数 + 1”拼接前缀，并继续向后寻找当前表内的空闲 ID。它不是数据库自增主键，也不保证删除后永不复用。业务可显式提供 `id`；例如运行时下单使用 `o` + 毫秒时间戳 + 三位随机数。`sessions` 和 `settings` 没有自动取号前缀，必须显式提供主键。
 
@@ -433,7 +433,7 @@ zhanqi-ai-platform/
 | [`orderLogs`](#db-orderlogs) | 7 | `VARCHAR(32)`，前缀 `ol` | 订单操作与协商留痕。 |
 | [`notifications`](#db-notifications) | 10 | `VARCHAR(32)`，前缀 `n` | 处理结果通知（买家/商家各自可见）。 |
 | [`settlements`](#db-settlements) | 8 | `VARCHAR(32)`，前缀 `stl` | 资金结算流水：买家确认收货入账、退款冲减。 |
-| **合计** | **233** | **18 张表** | 含账号、文旅、交易、会话、聊天、举报、结算与配置。 |
+| **合计** | **235** | **18 张表** | 含账号、文旅、交易、会话、聊天、举报、结算与配置。 |
 
 ### 5.3 每张表的完整字段与索引
 

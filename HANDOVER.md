@@ -260,6 +260,30 @@ P0 统一成「按缩进计算块边界」的通用实现（远程那版写死�
 
 ---
 
+## 6.7 2026-10-29 晚：混合结算 / 购物车准入 / 图集
+
+**混合结算**：购物车里农产 + 课程 + 民宿可以一起结，结算页**按商品逐项出表单**，
+互不覆盖。这条要成立必须后端支持 —— `createOrders` 现在读 item 级参数
+（`bookDate`/`people`/`checkOutDate`/`roomType`/`bookingSlot`/`address`），
+item 没有才回落顶层（兼容老调用）。只改前端是不够的。
+
+**购物车准入**：只有农产文创能加购；研学/民宿/农事体验必须走「立即预约」。
+前端 `addCart` 拦截并跳详情（体验层），后端 `createOrders` 分类校验（安全层），两层都在。
+
+**图集**：`spots.images` / `products.images`（JSON 数组，≥3 张），
+由 `node tools/seed-gallery.js` 灌入（幂等）。点位详情 4.2 秒自动轮播，离页自停。
+
+**已知坑**（详见 `docs/agent-memory.md`）：
+
+- `submitCart` / `startCheckout` 里别调 `syncCart()`，它会用 localStorage 重建 cart，把用户填的表单冲掉；
+- `startCheckout` 别走 `go('orders')`，那条路径会立刻关掉 `checkoutMode`；
+- Vue 2 的 `computed` 不能被模板带参数调用（`checkoutLines()` 必须放 `methods`）；
+- 本机 `mysql.exe` 会挂起，优先用 JDBC 方式跑数据脚本。
+
+自检基线：`smoke-test` **159 项**、`browser-check` **61 项**。
+
+---
+
 ## 7. 记忆体系（别重复写、别写错地方）
 
 | 位置 | 性质 | 谁能看到 |
