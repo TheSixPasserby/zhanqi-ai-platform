@@ -249,8 +249,10 @@
                   <h3>{{ p.name }}</h3>
                   <div class="goods-foot">
                     <span class="price">¥{{ p.price }}<em>/{{ p.unit }}</em></span>
-                    <button class="mini-cart" @click.stop="addCart(p, 1)">
+                    <!-- 农产文创可加购；预约类只能去详情预约 -->
+                    <button v-if="!p.isBooking" class="mini-cart" title="加入购物车" @click.stop="addCart(p, 1)">
                       <svg class="i"><use :href="icon('i-cart')"></use></svg></button>
+                    <button v-else class="mini-cart book" title="去预约" @click.stop="openProduct(p)">预约</button>
                   </div>
                 </div>
               </article>
@@ -345,8 +347,9 @@
                   <p class="goods-desc">{{ p.desc }}</p>
                   <div class="goods-foot">
                     <span class="price">¥{{ p.price }}<em>/{{ p.unit }}</em></span>
-                    <button class="mini-cart" @click.stop="addCart(p, 1)">
+                    <button v-if="!p.isBooking" class="mini-cart" title="加入购物车" @click.stop="addCart(p, 1)">
                       <svg class="i"><use :href="icon('i-cart')"></use></svg></button>
+                    <button v-else class="mini-cart book" title="去预约" @click.stop="openProduct(p)">预约</button>
                   </div>
                 </div>
               </article>
@@ -475,8 +478,9 @@
                     <p class="goods-desc">{{ p.desc }}</p>
                     <div class="goods-foot">
                       <span class="price">¥{{ p.price }}<em>/{{ p.unit }}</em></span>
-                      <button class="mini-cart" @click.stop="addCart(p, 1)">
+                      <button class="mini-cart" v-if="p.category === 'goods'" @click.stop="addCart(p, 1)">
                         <svg class="i"><use :href="icon('i-cart')"></use></svg></button>
+                        <button v-else class="mini-cart book" title="去预约" @click.stop="openProduct(p)">预约</button>
                     </div>
                   </div>
                 </article>
@@ -969,7 +973,19 @@
     <aside class="drawer">
       <button class="drawer-close" @click="currentProduct = null">
         <svg class="i"><use :href="icon('i-close')"></use></svg></button>
-      <div class="drawer-cover"><img :src="asset(currentProduct.cover)" :alt="currentProduct.name"></div>
+      <!-- 图集：主图 + 缩略图切换（至少 3 张；只有 1 张时不显示缩略条） -->
+      <div class="drawer-cover gallery">
+        <img :src="asset(currentProductImage)" :alt="currentProduct.name">
+        <button v-if="currentProductImages.length > 1" class="gal-nav prev" @click="stepProductImage(-1)">
+          <svg class="i"><use :href="icon('i-arrow-left')"></use></svg></button>
+        <button v-if="currentProductImages.length > 1" class="gal-nav next" @click="stepProductImage(1)">
+          <svg class="i"><use :href="icon('i-arrow-right')"></use></svg></button>
+        <span v-if="currentProductImages.length > 1" class="gal-count">{{ currentProductImageIndex + 1 }} / {{ currentProductImages.length }}</span>
+      </div>
+      <div v-if="currentProductImages.length > 1" class="gal-thumbs">
+        <img v-for="(img, i) in currentProductImages" :key="i" :src="asset(img)" :alt="'图 ' + (i+1)"
+             :class="{ on: i === currentProductImageIndex }" @click="currentProductImageIndex = i">
+      </div>
       <div class="drawer-body">
         <span class="tag">{{ currentProduct.categoryText || categories[currentProduct.category] || currentProduct.category }}</span>
         <h2>{{ currentProduct.name }}</h2>
@@ -1068,11 +1084,53 @@
           </div>
         </div>
         <template v-if="cart.length">
-          <label class="field mt"><span>收货地址</span>
-            <input v-model.trim="address" placeholder="成都市…（快递到家）"></label>
-          <label class="field"><span>备注</span>
+          <!-- 逐项信息：每件商品各填各的，混合结算不会错配 -->
+          <div class="co-item" v-for="L in checkoutLines()" :key="L.key">
+            <div class="co-head">
+              <img :src="asset(L.cover)" :alt="L.name">
+              <div class="co-head-main">
+                <b>{{ L.name }}</b>
+                <span class="dim tiny">{{ L.categoryText || (L.isBooking ? '预约类' : '农产文创') }} · ¥{{ L.price }}/{{ L.unit }}</span>
+              </div>
+              <div class="co-head-price">¥{{ lineSubtotal(L) }}</div>
+            </div>
+            <template v-if="!L.isBooking">
+              <label class="field"><span>收货地址</span>
+                <input v-model.trim="L.form.address" placeholder="成都市…（快递到家）"></label>
+            </template>
+            <template v-else-if="L.category === 'homestay'">
+              <div class="field-row">
+                <label class="field"><span>入住日期</span>
+                  <input type="date" :min="today" v-model="L.form.bookDate"></label>
+                <label class="field"><span>离店日期</span>
+                  <input type="date" :min="L.form.bookDate || today" v-model="L.form.checkOutDate"></label>
+              </div>
+              <div class="field-row">
+                <label class="field"><span>房型</span>
+                  <select v-model="L.form.roomType">
+                    <option v-for="r in (L.roomTypes.length ? L.roomTypes : ['标准间'])" :key="r" :value="r">{{ r }}</option>
+                  </select></label>
+                <label class="field"><span>人数</span>
+                  <input type="number" min="1" max="20" v-model.number="L.form.people"></label>
+              </div>
+              <p class="dim tiny">共 {{ nightsBetween(L.form.bookDate, L.form.checkOutDate) }} 晚</p>
+            </template>
+            <template v-else>
+              <div class="field-row">
+                <label class="field"><span>预约日期</span>
+                  <input type="date" :min="today" v-model="L.form.bookDate"></label>
+                <label class="field"><span>人数</span>
+                  <input type="number" min="1" max="20" v-model.number="L.form.people"></label>
+              </div>
+              <label class="field"><span>场次 / 时段</span>
+                <select v-model="L.form.bookingSlot">
+                  <option v-for="s in (L.timeSlots.length ? L.timeSlots : ['上午场','下午场'])" :key="s" :value="s">{{ s }}</option>
+                </select></label>
+            </template>
+          </div>
+          <label class="field mt"><span>备注（整单共用）</span>
             <input v-model.trim="remark" placeholder="选填"></label>
-          <div class="cart-total">合计 <b>{{ money(cartTotal) }}</b></div>
+          <div class="cart-total">合计 <b>{{ money(checkoutTotal()) }}</b></div>
           <button class="btn-primary block" :disabled="submitting" @click="checkout">
             {{ submitting ? '提交中…' : '提交订单' }}</button>
         </template>

@@ -251,6 +251,23 @@ public class ShopService {
             String productId = trim(item.get("productId"));
             int qty = Math.max(1, (int) number(item.get("qty"), 1));
 
+            // ---- 逐项参数：混合结算时每件商品各填各的，不能共用顶层的同一个值 ----
+            // 顶层参数作为兜底（老前端、单笔下单仍按原样传），item 里有值就用 item 的。
+            // 这一层是本次「农产+课程+民宿一起结算」修复的关键：
+            // 以前所有商品共用顶层 bookDate/people，民宿和研学只能填一份日期，必然错配。
+            String itemBookDate = trim(item.get("bookDate"));
+            if (itemBookDate.isEmpty()) { itemBookDate = bookDate; }
+            String itemCheckOut = trim(item.get("checkOutDate"));
+            if (itemCheckOut.isEmpty()) { itemCheckOut = checkOutDate; }
+            String itemSlot = trim(item.get("bookingSlot"));
+            if (itemSlot.isEmpty()) { itemSlot = bookingSlot; }
+            String itemRoom = trim(item.get("roomType"));
+            if (itemRoom.isEmpty()) { itemRoom = roomType; }
+            Integer itemPeopleRaw = item.get("people") == null ? null : (int) number(item.get("people"), 0);
+            int itemPeople = (itemPeopleRaw != null && itemPeopleRaw > 0) ? itemPeopleRaw : people;
+            String itemAddress = trim(item.get("address"));
+            if (itemAddress.isEmpty()) { itemAddress = address; }
+
             Map<String, Object> p = db.find("products", productId);
             if (p == null || !"on".equals(p.get("status"))) {
                 errors.add(productId + " 已下架");
@@ -275,68 +292,68 @@ public class ShopService {
 
             if (!isBooking) {
                 // 农产文创：实物商品，必须填收货地址
-                if (address.isEmpty()) {
+                if (itemAddress.isEmpty()) {
                     errors.add("「" + p.get("name") + "」是实物商品，需要填写收货地址");
                     continue;
                 }
                 orderQty = qty;
                 deduct = qty;
                 amount = number(p.get("price"), 0) * qty;
-                orderAddress = address;
+                orderAddress = itemAddress;
             } else if ("homestay".equals(category)) {
                 // 民宿：入住/离店/房型/人数，金额按晚数
-                if (bookDate.isEmpty() || checkOutDate.isEmpty()) {
+                if (itemBookDate.isEmpty() || itemCheckOut.isEmpty()) {
                     errors.add("「" + p.get("name") + "」需要选择入住日期与离店日期");
                     continue;
                 }
-                long nights = nightsBetween(bookDate, checkOutDate);
+                long nights = nightsBetween(itemBookDate, itemCheckOut);
                 if (nights <= 0) {
                     errors.add("「" + p.get("name") + "」的离店日期必须晚于入住日期");
                     continue;
                 }
-                if (people < 1) {
+                if (itemPeople < 1) {
                     errors.add("「" + p.get("name") + "」预约人数至少 1 人");
                     continue;
                 }
                 List<String> rooms = roomTypesOf(p);
-                String room = roomType;
+                String room = itemRoom;
                 if (room.isEmpty()) {
                     room = rooms.isEmpty() ? "标准间" : rooms.get(0);
                 } else if (!rooms.contains(room)) {
                     errors.add("「" + p.get("name") + "」不支持房型：" + room);
                     continue;
                 }
-                orderQty = people;
+                orderQty = itemPeople;
                 deduct = 1;
                 amount = number(p.get("price"), 0) * nights;
-                orderBookDate = bookDate;
-                orderCheckOut = checkOutDate;
+                orderBookDate = itemBookDate;
+                orderCheckOut = itemCheckOut;
                 orderRoom = room;
-                orderPeople = people;
+                orderPeople = itemPeople;
             } else {
                 // 研学 / 农事体验：日期 + 场次 + 人数
-                if (bookDate.isEmpty()) {
+                if (itemBookDate.isEmpty()) {
                     errors.add("「" + p.get("name") + "」需要选择预约日期");
                     continue;
                 }
-                if (people < 1) {
+                if (itemPeople < 1) {
                     errors.add("「" + p.get("name") + "」预约人数至少 1 人");
                     continue;
                 }
                 List<String> slots = timeSlotsOf(p);
-                String slot = bookingSlot;
+                String slot = itemSlot;
                 if (slot.isEmpty()) {
                     slot = slots.isEmpty() ? "上午场" : slots.get(0);
                 } else if (!slots.contains(slot)) {
                     errors.add("「" + p.get("name") + "」不支持场次：" + slot);
                     continue;
                 }
-                orderQty = people;
-                deduct = people;
-                amount = number(p.get("price"), 0) * people;
-                orderBookDate = bookDate;
+                orderQty = itemPeople;
+                deduct = itemPeople;
+                amount = number(p.get("price"), 0) * itemPeople;
+                orderBookDate = itemBookDate;
                 orderSlot = slot;
-                orderPeople = people;
+                orderPeople = itemPeople;
             }
 
             int stock = (int) number(p.get("stock"), 0);
@@ -733,7 +750,32 @@ public class ShopService {
         out.put("merchant", merchantPublic(m));
         out.put("timeSlots", timeSlotsOf(p));
         out.put("roomTypes", roomTypesOf(p));
+        out.put("images", imagesOf(p));
         return out;
+    }
+
+    /**
+     * 商品图集：优先用 products.images，缺失时回落到 cover。
+     *
+     * 为什么兜底：images 是后加的列，老库或后台新上架只填了 cover 的商品不该在详情页
+     * 变成空白图集。兜底只返回 1 张，前端据此隐藏「轮播」而显示单图，不假装有多图。
+     */
+    private List<String> imagesOf(Map<String, Object> row) {
+        List<String> list = new ArrayList<>();
+        Object raw = row.get("images");
+        if (raw instanceof List<?> l) {
+            for (Object o : l) {
+                String s = trim(o);
+                if (!s.isEmpty()) {
+                    list.add(s);
+                }
+            }
+        }
+        String cover = trim(row.get("cover"));
+        if (!cover.isEmpty() && !list.contains(cover)) {
+            list.add(0, cover);
+        }
+        return list;
     }
 
     public Map<String, Object> decorateOrder(Map<String, Object> o) {

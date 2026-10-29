@@ -261,6 +261,9 @@
         pwdSaving: false,
         pwdForm: { old: '', new: '', confirm: '' },
         current: {},
+        spotGalleryIndex: 0,     // 点位图集当前第几张
+        spotGalleryTimer: null,  // 点位图集自动轮播定时器
+        productGalleryIndex: 0,  // 商品图集当前第几张
         speaking: false,
         showScript: false,
         voiceName: '',       // 当前语音音色名（语音讲解卡片右上角展示）
@@ -642,6 +645,33 @@
         var cat = (this.reportCategories || []).filter(function (c) { return c.key === key; })[0];
         return cat ? (cat.reasons || []) : [];
       },
+      /* -------------------- 图集：点位轮播 / 商品翻页（computed） -------------------- */
+      /** 当前点位图集：后端 images 已含 cover 兜底；只有 1 张时不轮播 */
+      spotImages: function () {
+        var c = this.current || {};
+        var list = (c.images || []).filter(function (x) { return !!x; });
+        if (!list.length && c.cover) { list = [c.cover]; }
+        return list;
+      },
+      spotGalleryImage: function () {
+        var list = this.spotImages;
+        if (!list.length) { return ''; }
+        var i = Math.min(Math.max(0, this.spotGalleryIndex || 0), list.length - 1);
+        return list[i];
+      },
+      /** 当前商品图集：同上 */
+      productImages: function () {
+        var pr = this.product || {};
+        var list = (pr.images || []).filter(function (x) { return !!x; });
+        if (!list.length && pr.cover) { list = [pr.cover]; }
+        return list;
+      },
+      productGalleryImage: function () {
+        var list = this.productImages;
+        if (!list.length) { return ''; }
+        var i = Math.min(Math.max(0, this.productGalleryIndex || 0), list.length - 1);
+        return list[i];
+      },
     },
 
     /* 离开点位详情就停朗读。
@@ -662,6 +692,7 @@
           this.startChatPoll();
         }
       },
+
     },
 
     created: function () {
@@ -681,9 +712,128 @@
       this.cart = readCart();
       this.loadServerInfo();
       this.loadKnown();
+
     },
 
     methods: {
+
+      /* ---------------------------- 结算（逐项） ---------------------------- */
+
+      /** 购物车里是否有实物商品（农产文创） */
+      cartHasGoods: function () {
+        return this.cart.some(function (it) { return BOOKING_CATS.indexOf(it.category) < 0; });
+      },
+
+      /**
+       * 结算清单：把购物车按「每个商品各自一份表单」铺开。
+       *
+       * 【为什么必须逐项】混合结算时农产要填地址、研学要填日期+场次+人数、民宿要填
+       * 入住/离店+房型+人数。以前整页只有一组日期/人数输入框，三类商品共用一份值，
+       * 结果民宿和研学只能填到同一份日期，信息必然错配。
+       *
+       * form 存在 cart 项上，改值直接写回 localStorage，刷新不丢。
+       */
+      checkoutLines: function () {
+        var self = this;
+        return this.cart.map(function (it) {
+          var isBooking = BOOKING_CATS.indexOf(it.category) >= 0;
+          if (!it.form) {
+            it.form = {
+              address: '',
+              bookDate: dayAfter(1),
+              checkOutDate: dayAfter(2),
+              roomType: (it.roomTypes && it.roomTypes[0]) || '标准间',
+              bookingSlot: (it.timeSlots && it.timeSlots[0]) || '上午场',
+              people: 2,
+            };
+          }
+          return {
+            key: it.productId, productId: it.productId, category: it.category,
+            isBooking: isBooking, name: it.name, cover: it.cover, price: it.price,
+            qty: it.qty, unit: it.unit, stock: it.stock,
+            timeSlots: it.timeSlots || [], roomTypes: it.roomTypes || [], form: it.form,
+          };
+        });
+      },
+
+      /** 逐项小计：民宿按晚数、预约类按人数、实物按数量 */
+      lineSubtotal: function (L) {
+        var f = L.form || {};
+        if (!L.isBooking) { return Number(L.price) * Number(L.qty || 1); }
+        if (L.category === 'homestay') {
+          return Number(L.price) * Math.max(1, this.nightsBetween(f.bookDate, f.checkOutDate));
+        }
+        return Number(L.price) * Math.max(1, Number(f.people) || 1);
+      },
+
+      /** 结算总价：按逐项小计求和（预约类会与购物车合计不同，这是对的） */
+      checkoutTotal: function () {
+        var self = this;
+        return (this.checkoutLines() || []).reduce(function (sum, L) { return sum + self.lineSubtotal(L); }, 0);
+      },
+
+      /** 两个日期之间的晚数，至少按 1 晚算展示 */
+      nightsBetween: function (a, b) {
+        if (!a || !b) { return 1; }
+        var t1 = new Date(String(a) + 'T00:00:00').getTime();
+        var t2 = new Date(String(b) + 'T00:00:00').getTime();
+        if (!isFinite(t1) || !isFinite(t2) || t2 <= t1) { return 1; }
+        return Math.round((t2 - t1) / 86400000);
+      },
+
+      /** 逐项校验，返回第一条错误（带商品名，用户知道该改哪一行） */
+      validateCheckout: function () {
+        var lines = this.checkoutLines();
+        for (var i = 0; i < lines.length; i++) {
+          var L = lines[i], f = L.form;
+          if (!L.isBooking) {
+            if (!String(f.address || '').trim()) { return '请填写「' + L.name + '」的收货地址'; }
+            continue;
+          }
+          if (!f.bookDate) {
+            return '请选择「' + L.name + '」的' + (L.category === 'homestay' ? '入住日期' : '预约日期');
+          }
+          if (!(Number(f.people) >= 1)) { return '「' + L.name + '」的人数至少 1 人'; }
+          if (L.category === 'homestay') {
+            if (!f.checkOutDate) { return '请选择「' + L.name + '」的离店日期'; }
+            if (String(f.checkOutDate) <= String(f.bookDate)) { return '「' + L.name + '」的离店日期必须晚于入住日期'; }
+            if (!f.roomType) { return '请选择「' + L.name + '」的房型'; }
+          } else if (!f.bookingSlot) {
+            return '请选择「' + L.name + '」的场次 / 时段';
+          }
+        }
+        return '';
+      },
+
+      /**
+       * 离开结算态。
+       * @param clearCart true 表示下单成功要清空；false 只是「先不结了」，购物车与已填内容都保留。
+       */
+      leaveCheckout: function (clearCart) {
+        this.checkoutMode = false;
+        if (clearCart) {
+          writeCart([]);
+          this.syncCart();
+        } else {
+          writeCart(this.cart);
+        }
+      },
+
+      /**
+       * 打开「我的订单」列表。
+       *
+       * 所有入口都走这里，保证：
+       *  ① 一定退出未提交的结算态，看到的是订单列表而不是那屏确认单；
+       *  ② 一定重新拉订单，显示用户已有的其它订单；
+       *  ③ 未提交的购物车不动。
+       */
+      openOrders: function () {
+        if (this.checkoutMode) { this.leaveCheckout(false); }
+        this.view = 'orders';
+        this.viewStack = [];
+        window.scrollTo({ top: 0 });
+        this.loadOrders();
+      },
       /* ---------------------------- 基础工具 ---------------------------- */
 
       /* 统一图标：三端共用 assets/img/icons.svg，用 <use> 引用 symbol。
@@ -870,6 +1020,21 @@
       /* ---------------------------- 导航 ---------------------------- */
 
       go: function (view, isTop) {
+        // 离开点位详情就停图集轮播，别让定时器在后台一直跑
+        if (view !== 'spotDetail') { this.stopSpotGallery(); }
+
+        /**
+         * 退出未提交的结算去「我的订单」时必须同时退出结算模式。
+         *
+         * 【要修的 bug】以前点「我的订单」只是 view='orders'，checkoutMode 还是 true，
+         * 页面渲染的仍是「确认订单」那一屏，而 checkoutLines() 读的是购物车 ——
+         * 看起来就像「跳到了那笔没提交的订单」，用户其他订单完全看不到。
+         * 正确行为：进订单列表 = 退出结算态；未提交购物车原封不动留着。
+         */
+        if (view === 'orders' && this.checkoutMode && !isTop) {
+          this.leaveCheckout(false);
+        }
+
         if (TOP_VIEWS.indexOf(view) >= 0) {
           // 切顶层 Tab：清空返回栈，避免返回时回到已切走的页面
           this.view = view;
@@ -883,11 +1048,27 @@
       },
 
       goBack: function () {
+        // 从结算页返回＝放弃这次提交，但购物车与已填内容保留
+        if (this.checkoutMode) {
+          this.leaveCheckout(false);
+          this.view = 'shop';
+          this.viewStack = [];
+          window.scrollTo({ top: 0 });
+          this.onEnter('shop');
+          return;
+        }
+        // 从订单详情返回时清掉详情数据，避免下次进来先闪一下上一单的内容
+        if (this.view === 'orderDetail') {
+          this.orderDetail = {};
+          this.orderLogs = [];
+          this.logistics = null;
+        }
         this.viewStack.pop();
         var prev = this.viewStack[this.viewStack.length - 1];
         // 返回栈空了就回到对应顶层页
         this.view = prev || (this.user ? 'home' : 'home');
-        window.scrollTo(0, 0);
+        window.scrollTo({ top: 0 });
+        this.onEnter(this.view);
       },
 
       /** 进入页面时按需加载数据，避免首屏一次性请求全部接口 */
@@ -1237,17 +1418,66 @@
         // 已经在这一页就别再压一层返回栈，否则要连点两次返回
         if (this.view !== 'spotDetail') { this.go('spotDetail'); }
         this.current = {};
+        this.spotGalleryIndex = 0;
+        this.stopSpotGallery();
         this.showScript = !!autoSpeak;
         window.scrollTo(0, 0);
         api.get('/api/tour/spots/' + id).then(function (res) {
           if (res && res.ok) {
             self.current = res.spot || {};
+            self.startSpotGallery();
             // 打卡后自动进详情并开讲：等 DOM 渲染完再调，否则按钮状态还没跟上
             if (autoSpeak) {
               self.$nextTick(function () { self.toggleSpeak(); });
             }
           }
         });
+      },
+
+      /* ------------------------ 图集：点位轮播 / 商品翻页 ------------------------ */
+
+      /** 当前点位图集：后端 images 已含 cover 兜底；只有 1 张时不轮播 */
+
+
+      stepSpotImage: function (delta) {
+        var n = this.spotImages.length;
+        if (n <= 1) { return; }
+        this.spotGalleryIndex = ((this.spotGalleryIndex + delta) % n + n) % n;
+        this.startSpotGallery();   // 手动翻页后重新计时，别刚点完就被切走
+      },
+      /**
+       * 定时切下一张。
+       *
+       * 为什么 4.2 秒：语音讲解一句话大约 3–5 秒，图片节奏跟得上听众注意力；
+       * 太快会晕，太慢像卡住。只有一张图时不启动（没意义且白耗 CPU）。
+       */
+      startSpotGallery: function () {
+        var self = this;
+        this.stopSpotGallery();
+        if (this.spotImages.length <= 1) { return; }
+        this.spotGalleryTimer = setInterval(function () {
+          // 已经离开详情页就自己停掉，避免后台空转
+          if (self.view !== 'spotDetail' || self.spotImages.length <= 1) {
+            self.stopSpotGallery();
+            return;
+          }
+          self.spotGalleryIndex = (self.spotGalleryIndex + 1) % self.spotImages.length;
+        }, 4200);
+      },
+      stopSpotGallery: function () {
+        if (this.spotGalleryTimer) {
+          clearInterval(this.spotGalleryTimer);
+          this.spotGalleryTimer = null;
+        }
+      },
+
+      /** 当前商品图集：后端 images 已含 cover 兜底 */
+
+
+      stepProductImage: function (delta) {
+        var n = this.productImages.length;
+        if (n <= 1) { return; }
+        this.productGalleryIndex = ((this.productGalleryIndex + delta) % n + n) % n;
       },
 
       checkin: function (spot) {
@@ -1361,6 +1591,7 @@
         var self = this;
         this.go('productDetail');
         this.product = {};
+        this.productGalleryIndex = 0;   // 换商品时图集回到第一张
         this.productMerchant = {};
         this.productSlots = [];
         this.productRooms = [];
@@ -1892,7 +2123,21 @@
 
       syncCart: function () { this.cart = readCart(); },
 
+      /**
+       * 加入购物车。
+       *
+       * 【准入规则】只有农产文创（实物类）能进购物车。
+       * 研学 / 民宿 / 农事体验必须走「立即预约」—— 它们要选日期、场次、房型、人数，
+       * 这些是逐单逐项的信息，混进购物车一起结算必然错配，所以从入口就拦住。
+       * 后端 createOrders 有同样的分类校验兜底，前端拦截只是体验层。
+       */
       addCart: function (p, qty) {
+        if (!p) { return; }
+        if (BOOKING_CATS.indexOf(p.category) >= 0) {
+          this.toast('「' + p.name + '」需要预约，请到详情页选日期后预约');
+          this.openProduct(p.id);
+          return;
+        }
         if (p.stock <= 0) { return this.toast('该商品已售罄'); }
         var n = Math.max(1, Number(qty) || 1);
         var list = readCart();
@@ -1905,6 +2150,8 @@
             productId: p.id, name: p.name, price: Number(p.price) || 0,
             unit: p.unit || '份', cover: p.cover || '', category: p.category || 'goods',
             stock: Number(p.stock) || 0, qty: Math.min(n, limit),
+            // 场次 / 房型存进购物车，结算页每项都能独立选
+            timeSlots: p.timeSlots || [], roomTypes: p.roomTypes || [],
           });
         }
         writeCart(list);
@@ -1937,44 +2184,77 @@
       },
 
       startCheckout: function () {
+        // 不 syncCart()：它会把用户上次已填的表单冲掉（见 submitCart 里的说明）
         if (!this.cart.length) { return this.toast('购物车是空的'); }
         this.cartOpen = false;
         this.checkoutMode = true;
-        this.bookDate = dayAfter(1);
-        this.people = 2;
-        this.address = '';
         this.remark = '';
-        this.go('orders');
+        // 给每件商品各初始化一份表单（存在 cart 项上，刷新不丢）
+        this.checkoutLines();
+        writeCart(this.cart);
+        // 直接切视图，不走 go()：go('orders') 里有「离开结算态」的判断，
+        // 会把刚设好的 checkoutMode 又关掉，进结算页看到的却是订单列表。
+        this.view = 'orders';
+        this.viewStack = ['orders'];
+        window.scrollTo({ top: 0 });
       },
 
       submitCart: function () {
         var self = this;
-        if (this.cartHasBooking && !this.bookDate) { return this.toast('请选择预约日期'); }
-        if (!this.cartHasBooking && !this.address) { return this.toast('请填写收货地址'); }
+        // 【不能在这里 syncCart()】syncCart 会用 localStorage 里的旧数据重建 cart 对象，
+        // 把用户刚填的表单（每项 form）全部丢掉 —— 日期、人数、房型会悄悄变回默认值。
+        // 这里以内存里的 this.cart 为准，并在提交前把它（含表单）写回本地，保证刷新也不丢。
+        writeCart(this.cart);
+        if (!this.cart.length) { return this.toast('购物车是空的'); }
+
+        // 逐项校验：每件商品各验各的，错误带商品名，用户知道该改哪一行
+        var err = this.validateCheckout();
+        if (err) { return this.toast(err); }
+
+        // 逐项提交：每件商品带自己那份预约参数，后端按 item 上的值校验与落库。
+        // 顶层不再传 bookDate/people，避免「一份值套所有商品」的老问题。
+        var payload = {
+          items: this.checkoutLines().map(function (L) {
+            var f = L.form || {};
+            var one = { productId: L.productId, qty: L.isBooking ? Math.max(1, Number(f.people) || 1) : L.qty };
+            if (!L.isBooking) {
+              one.address = String(f.address || '').trim();
+            } else {
+              one.bookDate = f.bookDate;
+              one.people = Math.max(1, Number(f.people) || 1);
+              if (L.category === 'homestay') {
+                one.checkOutDate = f.checkOutDate;
+                one.roomType = f.roomType;
+              } else {
+                one.bookingSlot = f.bookingSlot;
+              }
+            }
+            return one;
+          }),
+          remark: this.remark,
+        };
 
         this.submitting = true;
-        api.post('/api/shop/orders', {
-          items: this.cart.map(function (it) { return { productId: it.productId, qty: it.qty }; }),
-          bookDate: this.cartHasBooking ? this.bookDate : '',
-          people: this.cartHasBooking ? this.people : 1,
-          address: this.cartHasBooking ? '' : this.address,
-          // 购物车可能混着不同分类，场次/离店/房型在商品详情里单独填，这里留空交给后端按分类校验
-          bookingSlot: '',
-          checkOutDate: '',
-          roomType: '',
-          remark: this.remark,
-        }).then(function (res) {
+        api.post('/api/shop/orders', payload).then(function (res) {
           self.submitting = false;
           if (!res || !res.ok) { return; }
-          writeCart([]);
+          // 只有真正下成的商品才从购物车移除；有失败项时保留，让用户改完重提
+          var failed = {};
+          (res.warnings || []).forEach(function (w) {
+            (self.cart || []).forEach(function (it) {
+              if (w.indexOf(it.name) >= 0) { failed[it.productId] = true; }
+            });
+          });
+          var keep = self.cart.filter(function (it) { return failed[it.productId]; });
+          writeCart(keep);
           self.syncCart();
-          // 部分商品没下成时，把后端给的原因如实告诉用户，不假装全部成功
           if (res.warnings && res.warnings.length) {
             self.toast(res.warnings.join('；'));
           } else {
             self.toast(res.message || '下单成功');
           }
-          self.checkoutMode = false;
+          // 全部成功才退出结算态；有失败项就留在结算页让用户改
+          if (!keep.length) { self.leaveCheckout(false); }
           self.loadOrders();
           self.loadProducts();
         });
@@ -2099,6 +2379,17 @@
           }
         });
       },
+    },
+
+    /**
+     * 页面销毁时清掉定时器。
+     * 不清的话：图集轮播、聊天轮询会继续跑，控制台报「操作已销毁实例」的警告，
+     * 而且用户以为页面关了、实际还在发请求。
+     */
+    destroyed: function () {
+      this.stopSpotGallery();
+      this.stopSpeak();
+      if (this.chatTimer) { clearInterval(this.chatTimer); this.chatTimer = null; }
     },
 
     mounted: function () {

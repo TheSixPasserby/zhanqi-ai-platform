@@ -1266,3 +1266,41 @@ body {
 /* 空文本气泡不占位：历史脏数据或渲染异常时不再留一个只有 padding 的空白块 */
 .chat-body .msg-text:empty { display: none; }
 .chat-body .msg-main:empty { display: none; }
+
+/* --------------------------- 商品图集（详情抽屉） --------------------------- */
+.drawer-cover.gallery { position: relative; overflow: hidden; }
+.gal-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(16, 32, 28, .46); color: #fff; backdrop-filter: blur(4px); transition: .16s;
+}
+.gal-nav:hover { background: rgba(16, 32, 28, .66); }
+.gal-nav.prev { left: 12px; }
+.gal-nav.next { right: 12px; }
+.gal-nav .i { width: 16px; height: 16px; }
+.gal-count {
+  position: absolute; right: 12px; bottom: 12px; padding: 2px 9px; border-radius: 999px;
+  background: rgba(16, 32, 28, .5); color: #fff; font-size: 11.5px; font-family: var(--mono);
+}
+.gal-thumbs { display: flex; gap: 8px; padding: 10px 20px 0; overflow-x: auto; }
+.gal-thumbs img {
+  width: 72px; height: 54px; object-fit: cover; border-radius: 8px; cursor: pointer;
+  border: 2px solid transparent; opacity: .72; transition: .16s; flex: none;
+}
+.gal-thumbs img:hover { opacity: 1; }
+.gal-thumbs img.on { border-color: var(--brand); opacity: 1; }
+
+/* 预约类商品卡片上的「预约」按钮（替代加购的购物车图标） */
+.mini-cart.book { width: auto; padding: 0 10px; font-size: 11.5px; font-weight: 600; border-radius: 999px; }
+
+/* --------------------------- 购物车：逐项信息卡片 --------------------------- */
+.co-item {
+  padding: 14px 0 6px; border-bottom: 1px dashed var(--line);
+}
+.co-head { display: flex; align-items: center; gap: 11px; padding-bottom: 10px; }
+.co-head img { width: 54px; height: 54px; border-radius: 9px; object-fit: cover; flex: none; background: var(--surface-3); }
+.co-head-main { flex: 1; min-width: 0; }
+.co-head-main b { display: block; font-size: 13.5px; line-height: 1.5; }
+.co-head-main span { display: block; margin-top: 2px; }
+.co-head-price { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--brand); flex: none; }

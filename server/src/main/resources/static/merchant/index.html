@@ -24,7 +24,7 @@
         <img class="mark-logo lg" src="../assets/img/logo.svg" alt="">
         <div>
           <h1>{{ site.shortName || '战旗云' }} · 商户工作台</h1>
-          <div class="dim">上架商品、接单发货、回复消息、看营收，一个页面管完</div>
+          <div class="dim">今日订单、消息与营收一览</div>
         </div>
       </div>
 
@@ -143,7 +143,6 @@
 
     <footer class="m-foot">
       <span>{{ site.name || '郫都区战旗村 · 川西林盘农商文旅智慧服务平台' }}</span>
-      <span class="dim">商户工作台 · 商品上架 / 订单管理 / 消息客服 / 营收统计 / AI 文案</span>
     </footer>
   </div>
 </div>
@@ -457,16 +456,10 @@
       </el-table>
     </div>
 
-    <div class="dim mt-12" style="font-size:12.5px">
-      状态流转：待确认 →（接单/确认）已确认 →（发货/办理入住）→ <b>买家确认收货</b> → 已完成；
-      <b>商家不能把订单标记为完成</b>：完成意味着买家已确认收货，并同时把货款结算进你的账户；
-      拒绝必须填写原因，订单保持「待确认」由买家决定是否关闭；已完成、已取消、已退款订单只读。
-    </div>
-
     <!-- 拒绝订单：原因必填，提交后订单仍为待确认，买家决定是否关闭 -->
     <el-dialog title="拒绝订单" :visible.sync="rejectVisible" width="520px">
       <div class="dim mb-8" style="font-size:12.5px">
-        请说明拒绝原因（买家会看到）。提交后订单保持「待确认」，买家可选择同意关闭或继续协商。
+        请说明拒绝原因（买家会看到）。
       </div>
       <el-input type="textarea" :rows="4" v-model="rejectReason" maxlength="200" show-word-limit
                 placeholder="例如：食材已售罄，无法按预约日期备货"></el-input>
@@ -490,7 +483,7 @@
           <el-input v-model="shipForm.trackingNo" maxlength="40" placeholder="请输入快递单号"></el-input>
         </el-form-item>
       </el-form>
-      <div class="dim" style="font-size:12px">发货后订单变为「已发货」，买家可在订单详情查看物流节点。</div>
+      <div class="dim" style="font-size:12px">发货后买家可在订单详情查看物流节点。</div>
       <span slot="footer">
         <el-button @click="shipVisible = false">取消</el-button>
         <el-button type="primary" :loading="shipping" @click="submitShip">确认发货</el-button>
@@ -535,22 +528,26 @@
         <h4 class="od-title">备注</h4>
         <div class="od-block">{{ detail.remark || '无' }}</div>
 
-        <h4 class="od-title">物流信息</h4>
-        <div v-if="detail.logisticsCompany || detail.trackingNo || logisticsNodes.length">
-          <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="快递公司">{{ detail.logisticsCompany || '—' }}</el-descriptions-item>
-            <el-descriptions-item label="运单号"><span class="mono">{{ detail.trackingNo || '—' }}</span></el-descriptions-item>
-            <el-descriptions-item label="物流状态">{{ detail.logisticsText || logisticsStatusText(detail.logisticsStatus) }}</el-descriptions-item>
-            <el-descriptions-item label="发货时间">{{ fmt.time(detail.shippedAt) }}</el-descriptions-item>
-          </el-descriptions>
-          <el-timeline v-if="logisticsNodes.length" class="mt-16">
-            <el-timeline-item v-for="(n, i) in logisticsNodes" :key="i" :timestamp="nodeTime(n)" placement="top"
-                              :color="i === logisticsNodes.length - 1 ? '#146B57' : '#CAD6D1'">
-              {{ nodeText(n) }}
-            </el-timeline-item>
-          </el-timeline>
-        </div>
-        <div v-else class="od-block dim">{{ isGoods(detail) ? '尚未发货' : '预约类订单无需快递物流' }}</div>
+        <!-- 物流信息：只有实物订单才有。预约类（研学/民宿/农事）整块不渲染，
+             也不给「尚未发货」这类占位 —— 预约单本来就没有快递这个环节。 -->
+        <template v-if="isGoods(detail)">
+          <h4 class="od-title">物流信息</h4>
+          <div v-if="detail.logisticsCompany || detail.trackingNo || logisticsNodes.length">
+            <el-descriptions :column="2" border size="small">
+              <el-descriptions-item label="快递公司">{{ detail.logisticsCompany || '—' }}</el-descriptions-item>
+              <el-descriptions-item label="运单号"><span class="mono">{{ detail.trackingNo || '—' }}</span></el-descriptions-item>
+              <el-descriptions-item label="物流状态">{{ detail.logisticsText || logisticsStatusText(detail.logisticsStatus) }}</el-descriptions-item>
+              <el-descriptions-item label="发货时间">{{ fmt.time(detail.shippedAt) }}</el-descriptions-item>
+            </el-descriptions>
+            <el-timeline v-if="logisticsNodes.length" class="mt-16">
+              <el-timeline-item v-for="(n, i) in logisticsNodes" :key="i" :timestamp="nodeTime(n)" placement="top"
+                                :color="i === logisticsNodes.length - 1 ? '#146B57' : '#CAD6D1'">
+                {{ nodeText(n) }}
+              </el-timeline-item>
+            </el-timeline>
+          </div>
+          <div v-else class="od-block dim">尚未发货</div>
+        </template>
 
         <h4 class="od-title">用户信息</h4>
         <div class="od-buyer" @click="contactBuyer">
@@ -558,8 +555,8 @@
           <div class="flex-1">
             <div class="name">{{ detail.buyerName || '买家' }}</div>
             <div class="cell-sub">{{ detail.buyerPhone || '未留手机号' }}</div>
-            <div class="cell-sub">
-              {{ hasBooking(detail) ? '预约订单，无需收货地址' : (detail.buyerAddress || detail.address || '未留收货地址') }}
+            <div v-if="!hasBooking(detail)" class="cell-sub">
+              {{ detail.buyerAddress || detail.address || '未留收货地址' }}
             </div>
           </div>
           <el-button size="mini" type="primary" plain icon="el-icon-chat-dot-round"
@@ -586,7 +583,7 @@
           <el-button v-if="canShip(detail)" type="primary" plain @click="openShip(detail)">发货</el-button>
           <el-button v-if="canCheckin(detail)" type="primary" plain @click="doCheckin(detail)">办理入住</el-button>
           <span v-if="waitingBuyerReceive(detail)" class="dim" style="font-size:12px;margin-right:8px">
-            等买家确认收货后自动完成并结算</span>
+            等待买家确认收货</span>
           <el-button @click="detailVisible = false">关闭</el-button>
         </div>
       </div>

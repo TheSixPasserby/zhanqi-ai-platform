@@ -120,6 +120,7 @@
         buying: false,
         cart: [],
         cartOpen: false,
+        currentProductImageIndex: 0,
         address: '',
         remark: '',
         submitting: false,
@@ -208,6 +209,21 @@
         }
         return out.slice(0, 4);
       },
+      /** 当前商品的图集（后端 images 已含 cover 兜底；为空时退回 cover 单图） */
+      currentProductImages: function () {
+        var p = this.currentProduct;
+        if (!p) { return []; }
+        var list = (p.images || []).filter(function (x) { return !!x; });
+        if (!list.length && p.cover) { list = [p.cover]; }
+        return list;
+      },
+      currentProductImage: function () {
+        var list = this.currentProductImages;
+        if (!list.length) { return ''; }
+        var i = Math.min(Math.max(0, this.currentProductImageIndex || 0), list.length - 1);
+        return list[i];
+      },
+
       cartCount: function () {
         return this.cart.reduce(function (s, x) { return s + x.qty; }, 0);
       },
@@ -767,6 +783,7 @@
         var self = this;
         this.detailLoading = true;
         this.currentProduct = p;
+        this.currentProductImageIndex = 0;   // 换商品时图集回到第一张
         this.resetBuyForm(p);
         api.get('/api/shop/products/' + p.id, null, { silent: true }).then(function (res) {
           self.detailLoading = false;
@@ -802,6 +819,13 @@
           roomType: (this.roomTypesOfProduct(p)[0] || '')
         };
       },
+      /** 商品图集翻页：循环，不因为到头了就卡住 */
+      stepProductImage: function (delta) {
+        var n = this.currentProductImages.length;
+        if (n <= 1) { return; }
+        this.currentProductImageIndex = ((this.currentProductImageIndex + delta) % n + n) % n;
+      },
+
       addCartFromDetail: function () {
         var p = this.currentProduct;
         if (!p) { return; }
@@ -881,12 +905,30 @@
           self.go('orders');
         });
       },
+      /**
+       * 加入购物车。
+       *
+       * 【准入】只有农产文创（goods）能进购物车；研学 / 民宿 / 农事体验必须走「立即预约」。
+       * 原因：预约类要选日期、场次、房型、人数，这些是逐单逐项的信息，
+       * 混进购物车一起结算必然错配。后端 createOrders 有同样的分类校验兜底。
+       */
       addCart: function (p, qty) {
+        if (!p) { return; }
+        if (p.category && p.category !== 'goods') {
+          this.toast('「' + p.name + '」需要预约，请打开详情选择日期后预约', 'warn');
+          this.openProduct(p);
+          return;
+        }
         var n = Number(qty || 1);
         var hit = null;
         this.cart.forEach(function (c) { if (c.id === p.id) { hit = c; } });
         if (hit) { hit.qty += n; } else {
-          this.cart.push({ id: p.id, name: p.name, price: Number(p.price), cover: p.cover, unit: p.unit, qty: n });
+          this.cart.push({
+            id: p.id, name: p.name, price: Number(p.price), cover: p.cover,
+            unit: p.unit, qty: n, category: p.category || 'goods',
+            stock: Number(p.stock) || 0,
+            timeSlots: p.timeSlots || [], roomTypes: p.roomTypes || [],
+          });
         }
         this.toast('已加入购物车');
       },
@@ -896,23 +938,126 @@
           this.cart = this.cart.filter(function (c) { return c !== item; });
         }
       },
+      /**
+       * 结算清单：把购物车按「每个商品各自一份表单」铺开。
+       *
+       * 【为什么逐项】混合结算时农产要地址、研学要日期+场次+人数、民宿要入住/离店+房型。
+       * 以前整抽屉只有一组「收货地址」，预约类根本没法填，或者三类共用一份值导致错配。
+       * form 存在 cart 项上，改值即时生效（cart 本身在 data 里，Vue 会响应）。
+       */
+      checkoutLines: function () {
+        var self = this;
+        return (this.cart || []).map(function (c) {
+          var isBooking = c.category && c.category !== 'goods';
+          if (!c.form) {
+            c.form = {
+              address: self.address || '',
+              bookDate: addDays(localDate(new Date()), 1),
+              checkOutDate: addDays(localDate(new Date()), 2),
+              roomType: (c.roomTypes && c.roomTypes[0]) || '标准间',
+              bookingSlot: (c.timeSlots && c.timeSlots[0]) || '上午场',
+              people: 2,
+            };
+          }
+          return {
+            key: c.id, productId: c.id, category: c.category || 'goods',
+            isBooking: isBooking, name: c.name, cover: c.cover, price: c.price,
+            qty: c.qty, unit: c.unit, stock: c.stock,
+            timeSlots: c.timeSlots || [], roomTypes: c.roomTypes || [], form: c.form,
+          };
+        });
+      },
+
+      /** 逐项小计：民宿按晚数、预约类按人数、实物按数量 */
+      lineSubtotal: function (L) {
+        var f = L.form || {};
+        if (!L.isBooking) { return Number(L.price) * Number(L.qty || 1); }
+        if (L.category === 'homestay') {
+          return Number(L.price) * Math.max(1, this.nightsBetween(f.bookDate, f.checkOutDate));
+        }
+        return Number(L.price) * Math.max(1, Number(f.people) || 1);
+      },
+
+      checkoutTotal: function () {
+        var self = this;
+        return (this.checkoutLines() || []).reduce(function (s, L) { return s + self.lineSubtotal(L); }, 0);
+      },
+
+      nightsBetween: function (a, b) {
+        if (!a || !b) { return 1; }
+        var t1 = new Date(String(a) + 'T00:00:00').getTime();
+        var t2 = new Date(String(b) + 'T00:00:00').getTime();
+        if (!isFinite(t1) || !isFinite(t2) || t2 <= t1) { return 1; }
+        return Math.round((t2 - t1) / 86400000);
+      },
+
+      /** 逐项校验，返回第一条错误（带商品名，用户知道改哪一行） */
+      validateCheckout: function () {
+        var lines = this.checkoutLines();
+        for (var i = 0; i < lines.length; i++) {
+          var L = lines[i], f = L.form;
+          if (!L.isBooking) {
+            if (!String(f.address || '').trim()) { return '请填写「' + L.name + '」的收货地址'; }
+            continue;
+          }
+          if (!f.bookDate) { return '请选择「' + L.name + '」的' + (L.category === 'homestay' ? '入住日期' : '预约日期'); }
+          if (Number(f.people) < 1) { return '「' + L.name + '」的人数至少 1 人'; }
+          if (L.category === 'homestay') {
+            if (!f.checkOutDate) { return '请选择「' + L.name + '」的离店日期'; }
+            if (String(f.checkOutDate) <= String(f.bookDate)) { return '「' + L.name + '」的离店日期必须晚于入住日期'; }
+            if (!f.roomType) { return '请选择「' + L.name + '」的房型'; }
+          } else if (!f.bookingSlot) {
+            return '请选择「' + L.name + '」的场次 / 时段';
+          }
+        }
+        return '';
+      },
+
       checkout: function () {
         var self = this;
         if (!this.user) { this.toast('请先登录再下单', 'warn'); return; }
         if (!this.cart.length) { return; }
-        if (!this.address.trim()) { this.toast('请填写收货地址', 'warn'); return; }
+        var err = this.validateCheckout();
+        if (err) { this.toast(err, 'warn'); return; }
+
+        // 逐项提交：每件商品带自己那份参数，顶层不再传一份值给所有商品
         var payload = {
-          items: this.cart.map(function (c) { return { productId: c.id, qty: c.qty }; }),
-          address: this.address.trim(),
+          items: this.checkoutLines().map(function (L) {
+            var f = L.form || {};
+            var one = { productId: L.productId, qty: L.isBooking ? Math.max(1, Number(f.people) || 1) : L.qty };
+            if (!L.isBooking) {
+              one.address = String(f.address || '').trim();
+            } else {
+              one.bookDate = f.bookDate;
+              one.people = Math.max(1, Number(f.people) || 1);
+              if (L.category === 'homestay') {
+                one.checkOutDate = f.checkOutDate;
+                one.roomType = f.roomType;
+              } else {
+                one.bookingSlot = f.bookingSlot;
+              }
+            }
+            return one;
+          }),
           remark: this.remark
         };
         this.submitting = true;
         api.post('/api/shop/orders', payload).then(function (res) {
           self.submitting = false;
           if (!res.ok) { return; }
-          self.toast(res.message || '下单成功');
-          self.cart = [];
-          self.cartOpen = false;
+          var failed = {};
+          (res.warnings || []).forEach(function (w) {
+            (self.cart || []).forEach(function (c) {
+              if (w.indexOf(c.name) >= 0) { failed[c.id] = true; }
+            });
+          });
+          self.cart = self.cart.filter(function (c) { return failed[c.id]; });
+          if (res.warnings && res.warnings.length) {
+            self.toast('部分商品未下单：' + res.warnings[0], 'warn');
+          } else {
+            self.toast(res.message || '下单成功');
+          }
+          if (!self.cart.length) { self.cartOpen = false; }
           self.loadOrders();
           self.loadProducts();
           self.go('orders');

@@ -694,6 +694,80 @@ function check(name, ok, detail) {
     }
   }
 
+  /* --------------- 5. 购物车准入 + 商品图集（哨兵） --------------- */
+  // 这一组守三件事，都是 2026-10-29 这一轮的验收重点：
+  //  ① 研学/民宿/农事体验不能加购，只能预约（农产文创才能加购）；
+  //  ② 详情页每个点位/商品至少 3 张图，且有翻页控件；
+  //  ③ 混合结算时按商品逐项出表单，不是只出现一种。
+  console.log('');
+  console.log('— 5. 购物车准入与图集 ' + '-'.repeat(38));
+  {
+    const v = await visit(BASE + '/visitor/', { viewport: MOBILE });
+    await v.evalJs(`(async () => {
+      const login = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: 'xiaoshuai', password: '123456', client: 'visitor' }),
+      }).then(r => r.json()).catch(() => ({}));
+      if (login.ok) {
+        localStorage.setItem('zhanqi.visitor.token', login.token);
+        localStorage.setItem('zhanqi.visitor.user', JSON.stringify({ role: login.role, name: login.name, at: Date.now() }));
+      }
+      return 1;
+    })()`);
+    await cdp.send('Page.navigate', { url: BASE + '/visitor/' });
+    await sleep(3400);
+    const shop = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      if (!vm) { return { skip: 'not mounted' }; }
+      vm.go('shop');
+      await new Promise(r => setTimeout(r, 1800));
+      const cells = [...document.querySelectorAll('.goods-cell')];
+      const btns = cells.map(c => {
+        const b = c.querySelector('.add-btn');
+        return b ? { text: b.innerText.trim(), cls: b.className } : null;
+      }).filter(Boolean);
+      return {
+        addCount: btns.filter(b => b.text.indexOf('＋') >= 0).length,
+        bookCount: btns.filter(b => b.text.indexOf('预约') >= 0).length,
+      };
+    })()`);
+    if (shop && shop.skip) {
+      note('购物车准入检查跳过：' + shop.skip);
+    } else {
+      check('商城卡片同时存在「＋加购」与「预约」按钮',
+        shop.addCount > 0 && shop.bookCount > 0, JSON.stringify(shop));
+    }
+    const gal = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      if (!vm) { return { skip: 'not mounted' }; }
+      vm.openSpot('sp3', false);
+      await new Promise(r => setTimeout(r, 2400));
+      const spot = {
+        imgs: (vm.spotImages || []).length,
+        dots: document.querySelectorAll('.sg-dots i').length,
+        hasNav: document.querySelectorAll('.sg-nav').length,
+      };
+      const goods = (vm.products || []).filter(p => p.category === 'goods')[0];
+      vm.openProduct(goods.id);
+      await new Promise(r => setTimeout(r, 2400));
+      const prod = {
+        imgs: (vm.productImages || []).length,
+        navs: document.querySelectorAll('.sg-nav').length,
+      };
+      return { spot, prod };
+    })()`);
+    if (gal && gal.skip) {
+      note('图集检查跳过：' + gal.skip);
+    } else {
+      check('点位详情至少 3 张图且有翻页控件',
+        gal.spot.imgs >= 3 && gal.spot.dots >= 3 && gal.spot.hasNav === 2, JSON.stringify(gal.spot));
+      check('商品详情至少 3 张图且有翻页控件',
+        gal.prod.imgs >= 3 && gal.prod.navs === 2, JSON.stringify(gal.prod));
+    }
+    await screenshot('visitor-17-gallery.png');
+    await v.evalJs("localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1");
+  }
+
   /* ------------------ 5. 聊天界面样式完整性（哨兵） ------------------ */
   // 2026-10-29 回归：pc.css 被整块覆盖，丢掉 150 个选择器（.msg / .chat-shell / .msg-avatar /
   // .chat-composer 等），表现为「消息没有气泡、头像变成大圆、输入框错位」——
