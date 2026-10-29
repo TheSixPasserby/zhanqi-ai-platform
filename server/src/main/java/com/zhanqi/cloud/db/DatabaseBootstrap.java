@@ -110,7 +110,10 @@ public class DatabaseBootstrap {
                 ensureColumn(conn, "merchants", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
                 ensureColumn(conn, "admins", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
                 ensureColumn(conn, "activities", "capacity", "INT NULL DEFAULT 30 COMMENT '可预约人数上限'");
-                ensureColumn(conn, "spots", "voice",
+                // 多图：详情页图集与点位轮播都读这一列。老库自动补列，内容为空时前端回落到 cover。
+        ensureColumn(conn, "spots", "images", "JSON NULL COMMENT '多图数组'");
+        ensureColumn(conn, "products", "images", "JSON NULL COMMENT '多图数组'");
+        ensureColumn(conn, "spots", "voice",
                         "VARCHAR(16) NULL DEFAULT 'auto' COMMENT '讲解语音包：auto/male/female'");
                 ensureColumn(conn, "products", "timeSlots",
                         "JSON NULL COMMENT '可预约场次/时段数组'");

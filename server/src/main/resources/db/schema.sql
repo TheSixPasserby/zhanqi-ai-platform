@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS `spots` (
   `stamp`     VARCHAR(32)  DEFAULT NULL       COMMENT '对应印章名称',
   `stampIcon` VARCHAR(32)  DEFAULT NULL       COMMENT '印章图标：icons.svg 的图标 key（如 i-rice）；兼容旧版单字',
   `voice`     VARCHAR(16)  DEFAULT 'auto'      COMMENT '讲解语音包：auto 自动 / male 男声 / female 女声',
+  `images`    JSON         DEFAULT NULL        COMMENT '多图数组：详情页轮播与图集，至少 3 张；首张可与 cover 相同',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_spots_seq` (`seq`),
   KEY `idx_spots_type` (`type`)
@@ -164,6 +165,7 @@ CREATE TABLE IF NOT EXISTS `products` (
   `timeSlots`   JSON                             COMMENT '可预约场次/时段数组，如 ["上午场 09:00","下午场 14:00"]',
   `roomTypes`   JSON                             COMMENT '民宿房型数组，如 ["标准间","大床房"]',
   `intro`       TEXT                             COMMENT '补充说明',
+  `images`      JSON          DEFAULT NULL        COMMENT '多图数组：详情页轮播与图集，至少 3 张',
   `createdAt`   VARCHAR(32)   DEFAULT NULL       COMMENT '创建日期',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_products_seq` (`seq`),

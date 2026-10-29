@@ -48,6 +48,7 @@ public class TourService {
             String spotId = String.valueOf(s.get("id"));
             item.put("checked", stampMap.containsKey(spotId));
             item.put("checkedAt", stampMap.get(spotId));
+            item.put("images", imagesOf(s));
             spots.add(item);
         }
         long collected = spots.stream().filter(s -> Boolean.TRUE.equals(s.get("checked"))).count();
@@ -76,7 +77,33 @@ public class TourService {
         }
         out.put("checked", checked);
         out.put("checkedAt", checkedAt);
+        out.put("images", imagesOf(spot));
         return out;
+    }
+
+    /**
+     * 点位图集：优先用 spots.images，缺失时回落到 cover。
+     *
+     * 为什么兜底：images 是后加的列，老库或后台只填了 cover 的点位不该在详情页变成空白，
+     * 也不能假装有多张图 —— 兜底只返回 1 张，前端据此不显示轮播。
+     */
+    private List<String> imagesOf(Map<String, Object> row) {
+        List<String> list = new ArrayList<>();
+        Object raw = row.get("images");
+        if (raw instanceof List<?> l) {
+            for (Object o : l) {
+                String s = o == null ? "" : String.valueOf(o).trim();
+                if (!s.isEmpty()) {
+                    list.add(s);
+                }
+            }
+        }
+        Object cover = row.get("cover");
+        String c = cover == null ? "" : String.valueOf(cover).trim();
+        if (!c.isEmpty() && !list.contains(c)) {
+            list.add(0, c);
+        }
+        return list;
     }
 
     /** 打卡。重复打卡不报错，返回「已打过」提示，前端体验更顺 */

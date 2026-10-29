@@ -45,15 +45,16 @@ public final class Tables {
                 "loginCount", "lastLoginAt", "rememberToken", "status", "createdAt"), Set.of());
 
         put("spots", "sp", List.of(
-                "id", "name", "type", "cover", "location", "intro", "tts", "stamp", "stampIcon", "voice"), Set.of());
+                "id", "name", "type", "cover", "location", "intro", "tts", "stamp", "stampIcon", "voice",
+                "images"), Set.of("images"));
 
         put("stamps", "st", List.of(
                 "id", "userId", "spotId", "spotName", "stamp", "stampIcon", "at"), Set.of());
 
         put("products", "p", List.of(
                 "id", "merchantId", "name", "category", "price", "unit", "stock", "sold",
-                "cover", "status", "tags", "timeSlots", "roomTypes", "desc", "intro", "createdAt"),
-                Set.of("tags", "timeSlots", "roomTypes"));
+                "cover", "status", "tags", "timeSlots", "roomTypes", "desc", "intro", "images", "createdAt"),
+                Set.of("tags", "timeSlots", "roomTypes", "images"));
 
         put("orders", "o", List.of(
                 "id", "buyerId", "buyerName", "merchantId", "type", "category", "productId",
