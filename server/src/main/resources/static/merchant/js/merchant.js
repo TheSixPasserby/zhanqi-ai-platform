@@ -1057,7 +1057,22 @@
       kpi: { type: Object, default: function () { return {}; } }
     },
     data: function () {
-      return { saving: false, pwdForm: { old: '', new: '', confirm: '' } };
+      return {
+        saving: false,
+        pwdForm: { old: '', new: '', confirm: '' },
+        // 主题：初值由 ZQTheme 决定（head 里已应用过一次）
+        themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light')
+      };
+    },
+    created: function () {
+      var self = this;
+      if (window.ZQTheme) {
+        this.themeMode = window.ZQTheme.get();
+        this._themeOff = window.ZQTheme.onChange(function (mode) { self.themeMode = mode; });
+      }
+    },
+    beforeDestroy: function () {
+      if (this._themeOff) { this._themeOff(); this._themeOff = null; }
     },
     computed: {
       avatar: function () {
@@ -1071,6 +1086,11 @@
       }
     },
     methods: {
+      /** 切换主题：样式应用在 ZQTheme，这里只同步选中态 */
+      setTheme: function (mode) {
+        if (!window.ZQTheme) { return; }
+        this.themeMode = window.ZQTheme.set(mode);
+      },
       pickAvatar: function () { this.$refs.avatarInput.click(); },
       onAvatarPick: function (e) {
         var self = this;

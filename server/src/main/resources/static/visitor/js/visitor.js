@@ -261,6 +261,8 @@
         pwdSaving: false,
         pwdForm: { old: '', new: '', confirm: '' },
         current: {},
+        // 主题：'light' | 'dark'（初值由 ZQTheme 决定，head 里已应用过一次）
+        themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light'),
         spotGalleryIndex: 0,     // 点位图集当前第几张
         spotGalleryTimer: null,  // 点位图集自动轮播定时器
         productGalleryIndex: 0,  // 商品图集当前第几张
@@ -708,6 +710,12 @@
         self.viewStack = [];
         self.toast(msg || '登录已过期，请重新登录');
       };
+
+      // 订阅主题变化：其它标签页/其它端改了主题，本页选中态跟着更新
+      if (window.ZQTheme) {
+        this.themeMode = window.ZQTheme.get();
+        this._themeOff = window.ZQTheme.onChange(function (mode) { self.themeMode = mode; });
+      }
 
       this.cart = readCart();
       this.loadServerInfo();
@@ -1705,6 +1713,13 @@
         });
       },
 
+      /* ---------------------------- 主题 ---------------------------- */
+      /** 切换主题：真正的样式应用在 assets/js/theme.js，这里只同步选中态 */
+      setTheme: function (mode) {
+        if (!window.ZQTheme) { return; }
+        this.themeMode = window.ZQTheme.set(mode);
+      },
+
       /* ---------------------------- 订单详情 / 物流 / 拒绝协商 ---------------------------- */
 
       openOrder: function (id) {
@@ -2390,6 +2405,7 @@
       this.stopSpotGallery();
       this.stopSpeak();
       if (this.chatTimer) { clearInterval(this.chatTimer); this.chatTimer = null; }
+      if (this._themeOff) { this._themeOff(); this._themeOff = null; }
     },
 
     mounted: function () {

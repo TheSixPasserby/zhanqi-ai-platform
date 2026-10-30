@@ -425,3 +425,17 @@ h1, h2, h3, h4 { margin: 0; font-weight: 600; line-height: 1.35; }
 ::-webkit-scrollbar-thumb { background: #CFC9BC; border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: #B8B1A2; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+
+/* ============================ 个性化设置卡片（三端共用） ============================ */
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.settings-row > div:first-child b { display: block; font-size: 13.5px; }
+.theme-switch { display: flex; gap: 8px; flex: none; }
+.theme-opt {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
+  color: var(--text-2); font-size: 13px; font-family: inherit; cursor: pointer; transition: .16s;
+}
+.theme-opt:hover { border-color: var(--brand-line); color: var(--text); }
+.theme-opt.on { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand); font-weight: 600; }
+.theme-opt .i { width: 15px; height: 15px; }

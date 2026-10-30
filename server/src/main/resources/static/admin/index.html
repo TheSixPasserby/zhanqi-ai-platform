@@ -7,7 +7,9 @@
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
   <link rel="stylesheet" href="../vendors/element-ui.css">
   <link rel="stylesheet" href="../assets/css/app.css">
+  <link rel="stylesheet" href="../assets/css/theme-dark.css">
   <link rel="stylesheet" href="./css/admin.css">
+  <script src="../assets/js/theme.js"></script>
 </head>
 <body>
 <div id="app" v-cloak>
@@ -1237,7 +1239,24 @@
           <el-tab-pane label="AI 设置" name="ai"></el-tab-pane>
           <el-tab-pane label="在线会话" name="sessions"></el-tab-pane>
           <el-tab-pane label="数据库" name="schema"></el-tab-pane>
+          <el-tab-pane label="个性化设置" name="theme"></el-tab-pane>
         </el-tabs>
+
+        <!-- 个性化设置：主题切换（浅色 / 深色）。只覆盖设计令牌，整站跟随 -->
+        <div v-if="tab === 'theme'" class="card mt-16" style="padding:20px">
+          <div class="settings-row">
+            <div>
+              <b>界面主题</b>
+              <div class="cell-sub" style="margin-top:4px">浅色为默认宣纸白；深色为墨绿夜色，卡片、表格、弹窗一起切换</div>
+            </div>
+            <div class="theme-switch">
+              <button class="theme-opt" :class="{ on: themeMode === 'light' }" @click="setTheme('light')">
+                <i class="el-icon-sunny"></i> 浅色</button>
+              <button class="theme-opt" :class="{ on: themeMode === 'dark' }" @click="setTheme('dark')">
+                <i class="el-icon-moon"></i> 深色</button>
+            </div>
+          </div>
+        </div>
 
         <!-- 服务器状态 -->
         <div v-if="tab === 'status'">

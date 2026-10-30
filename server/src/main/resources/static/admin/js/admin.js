@@ -1050,6 +1050,8 @@
         },
         loginLoading: false,
         knownAll: [],
+        // 主题：初值由 ZQTheme 决定（head 里已应用过一次）
+        themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light'),
         fmt: fmt,
         menus: [
           { key: 'summary', name: '运营概览', icon: 'el-icon-data-line', desc: '平台整体经营数据' },
@@ -1107,9 +1109,22 @@
         self.user = null;
         self.$message.error(message);
       };
+      // 订阅主题变化：其它标签页/其它端改了主题，本页选中态跟着更新
+      if (window.ZQTheme) {
+        this.themeMode = window.ZQTheme.get();
+        this._themeOff = window.ZQTheme.onChange(function (mode) { self.themeMode = mode; });
+      }
       this.bootstrap();
     },
+    beforeDestroy: function () {
+      if (this._themeOff) { this._themeOff(); this._themeOff = null; }
+    },
     methods: {
+      /** 切换主题：样式应用在 ZQTheme，这里只同步选中态 */
+      setTheme: function (mode) {
+        if (!window.ZQTheme) { return; }
+        this.themeMode = window.ZQTheme.set(mode);
+      },
       /** 登录页「登录过的账号」卡片头像 */
       knownAvatar: function (a) {
         return window.ZQProfile.src(a, 'admin');
