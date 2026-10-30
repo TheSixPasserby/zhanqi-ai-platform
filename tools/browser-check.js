@@ -836,6 +836,81 @@ function check(name, ok, detail) {
     await v.evalJs("localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); 1");
   }
 
+  /* ------------- 5. 多行正文、主题、游客端入口与头像菜单（哨兵） ------------- */
+  // 这一组守 2026-10-30 这一轮的四件事，都是「能通过肉眼验收、但容易悄悄回归」的点：
+  //  ① 点位/商品正文里不能出现字面反斜杠 n（SQL 转义写错就会漏出来）；
+  //  ② 深色主题必须真的换掉设计令牌（只改局部背景的话这里会失败）；
+  //  ③ 游客端不能再出现商户工作台 / 管理后台入口；
+  //  ④ 头像悬浮窗不能有「修改密码」，且每项都有图标。
+  console.log('');
+  console.log('— 5. 多行正文 / 主题 / 入口 / 头像菜单 ' + '-'.repeat(34));
+  {
+    const v = await visit(BASE + '/visitor/pc/', { viewport: { width: 1440, height: 900 } });
+    await v.evalJs(`(async () => {
+      const login = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: 'xiaoshuai', password: '123456', client: 'visitor' }),
+      }).then(r => r.json()).catch(() => ({}));
+      if (login.ok) {
+        localStorage.setItem('zhanqi.visitor.token', login.token);
+        localStorage.setItem('zhanqi.visitor.user', JSON.stringify({ role: login.role, name: login.name, at: Date.now() }));
+        sessionStorage.setItem('zq.visitor.forceMobile', '0');
+      }
+      return 1;
+    })()`);
+    await cdp.send('Page.navigate', { url: BASE + '/visitor/pc/' });
+    await sleep(3400);
+    const state = await v.evalJs(`(() => {
+      const vm = document.querySelector('#pc') && document.querySelector('#pc').__vue__;
+      const spot = vm && (vm.spots || [])[0];
+      const txt = spot ? String(spot.intro || '') : '';
+      const bodyText = document.body.textContent || '';
+      const menu = document.querySelector('.user-menu');
+      const items = menu ? [...menu.querySelectorAll('a')] : [];
+      const cs = getComputedStyle(document.documentElement);
+      return {
+        mounted: !!vm,
+        literalN: txt.indexOf(String.fromCharCode(92) + 'n') >= 0,
+        paragraphs: txt.split(String.fromCharCode(10)).length,
+        hasMerchantEntry: /商户工作台/.test(bodyText),
+        hasAdminEntry: /管理后台/.test(bodyText),
+        menuItems: items.length,
+        menuAllIcons: items.every(a => !!a.querySelector('.i')),
+        menuHasPwd: menu ? /修改密码/.test(menu.textContent) : false,
+        themeMode: window.ZQTheme ? window.ZQTheme.get() : 'none',
+      };
+    })()`);
+    if (!state || !state.mounted) {
+      note('多行正文与主题检查跳过：未挂载');
+    } else {
+      check('点位正文无字面反斜杠 n', state.literalN === false, 'literalN=' + state.literalN);
+      check('点位正文按段落分行', state.paragraphs >= 3, 'paragraphs=' + state.paragraphs);
+      check('游客端无「商户工作台」入口', state.hasMerchantEntry === false);
+      check('游客端无「管理后台」入口', state.hasAdminEntry === false);
+      check('头像悬浮窗无「修改密码」', state.menuHasPwd === false);
+      check('头像悬浮窗每项都有图标', state.menuAllIcons === true, 'items=' + state.menuItems);
+
+      // 切到深色，确认令牌真的变了（不是只改局部背景）
+      const dark = await v.evalJs(`(() => {
+        window.ZQTheme.set('dark');
+        const cs = getComputedStyle(document.documentElement);
+        const card = document.querySelector('.card') || document.querySelector('.profile-card');
+        return {
+          attr: document.documentElement.getAttribute('data-theme'),
+          bg: cs.getPropertyValue('--bg').trim(),
+          text: cs.getPropertyValue('--text').trim(),
+          cardBg: card ? getComputedStyle(card).backgroundColor : null,
+        };
+      })()`);
+      check('切换后 data-theme=dark', dark.attr === 'dark', String(dark.attr));
+      check('深色令牌生效（--bg 变深）', dark.bg === '#151A18', String(dark.bg));
+      check('深色下卡片背景跟随', dark.cardBg !== 'rgb(255, 255, 255)', String(dark.cardBg));
+      await screenshot('visitor-18-dark-theme.png');
+      await v.evalJs("window.ZQTheme.set('light'); localStorage.removeItem('zhanqi.theme'); 1");
+    }
+    await v.evalJs("localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1");
+  }
+
   /* -------------------- 5. 登录态失效后的表现 -------------------- */
 
   // 上一步删掉了测试账号，但浏览器里还留着它的令牌 —— 这正好复现了真实场景中

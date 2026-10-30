@@ -25,7 +25,9 @@
   </script>
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
   <link rel="stylesheet" href="../assets/css/app.css">
+  <link rel="stylesheet" href="../assets/css/theme-dark.css">
   <link rel="stylesheet" href="./css/visitor.css">
+  <script src="../assets/js/theme.js"></script>
 </head>
 <body>
 <div id="app" v-cloak>
@@ -425,6 +427,23 @@
               </div>
               <div class="menu-body"><b>修改密码</b><span>定期更换，账号更安全</span></div>
               <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
+            </div>
+          </div>
+
+          <!-- 个性化设置：主题切换（浅色 / 深色），整站跟随 -->
+          <div class="card">
+            <div class="card-title"><i></i>个性化设置</div>
+            <div class="settings-row">
+              <div>
+                <b>界面主题</b>
+                <span class="dim tiny">深色适合夜间，卡片与弹窗整体跟随</span>
+              </div>
+              <div class="theme-switch">
+                <button class="theme-opt" :class="{ on: themeMode === 'light' }" @click="setTheme('light')">
+                  <svg class="ico"><use :href="iconHref('i-sun')"></use></svg>浅色</button>
+                <button class="theme-opt" :class="{ on: themeMode === 'dark' }" @click="setTheme('dark')">
+                  <svg class="ico"><use :href="iconHref('i-moon')"></use></svg>深色</button>
+              </div>
             </div>
           </div>
 

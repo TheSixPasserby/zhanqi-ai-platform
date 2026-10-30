@@ -206,8 +206,19 @@ body {
 }
 .nav-user:hover .user-menu { opacity: 1; visibility: visible; transform: none; }
 .user-menu b { display: block; padding: 6px 10px 8px; font-size: 13px; border-bottom: 1px solid var(--line); }
-.user-menu a { display: block; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
+/* 菜单项：与商户端/管理端的 el-dropdown 一致 —— 图标 + 文字、左对齐、等间距。
+   inline-flex + gap 保证图标与文字不会贴在一起，图标用固定宽高避免大小跳动。 */
+.user-menu a {
+  display: flex; align-items: center; gap: 9px;
+  padding: 9px 11px; border-radius: 8px;
+  font-size: 13px; line-height: 1.4; color: var(--text-2); cursor: pointer;
+  transition: background .14s, color .14s;
+}
+.user-menu a .i { width: 15px; height: 15px; flex: none; opacity: .85; }
+/* 「退出登录」与上面几项分开一档，和商户端 divided 分组一致 */
+.user-menu a:last-child { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 11px; border-radius: 0 0 8px 8px; }
 .user-menu a:hover { background: var(--surface-3); color: var(--brand); }
+.user-menu a:hover .i { opacity: 1; }
 
 /* ------------------------------ 页面容器 ------------------------------ */
 .page { max-width: 1280px; margin: 0 auto; padding: 26px 28px 60px; }
@@ -1304,3 +1315,84 @@ body {
 .co-head-main b { display: block; font-size: 13.5px; line-height: 1.5; }
 .co-head-main span { display: block; margin-top: 2px; }
 .co-head-price { font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--brand); flex: none; }
+
+/* ============================================================================
+   多行正文：点位介绍 / 商品介绍 / 讲解文稿都是多段文本（库里存真换行 \n）。
+   不加 pre-wrap 的话，HTML 会把连续换行折叠成一个空格，长文案挤成一整块 ——
+   这是「商品介绍 / 点位文案残留 \n 字面量」问题在渲染侧的配套修复。
+   ========================================================================= */
+.drawer-intro, .goods-desc, .drawer-script p, .whatever-para,
+.spot-gallery + .drawer-body .drawer-intro { white-space: pre-wrap; }
+/* 段落之间再给一点呼吸，避免 1.85 行高下多段挤在一起 */
+.drawer-intro { white-space: pre-wrap; }
+.drawer-script p { white-space: pre-wrap; }
+
+
+/* ==================== 点位图集轮播（PC，与手机端一致） ====================
+   抽屉顶部主图 + 左右翻页 + 圆点 + 页码；停留时 4.2 秒自动切下一张。 */
+.drawer-cover.spot-gallery { position: relative; overflow: hidden; }
+.sg-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(16, 32, 28, .46); color: #fff; backdrop-filter: blur(4px); transition: .16s;
+}
+.sg-nav:hover { background: rgba(16, 32, 28, .68); }
+.sg-nav.prev { left: 12px; }
+.sg-nav.next { right: 12px; }
+.sg-nav .i { width: 16px; height: 16px; }
+.sg-count {
+  position: absolute; right: 12px; bottom: 12px; padding: 2px 9px; border-radius: 999px;
+  background: rgba(16, 32, 28, .5); color: #fff; font-size: 11.5px; font-family: var(--mono);
+}
+.sg-dots {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
+  display: flex; gap: 6px;
+}
+.sg-dots i {
+  width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, .5);
+  cursor: pointer; transition: .18s;
+}
+.sg-dots i.on { background: #fff; width: 16px; border-radius: 999px; }
+
+
+/* ============================================================================
+   聊天空白修复（根因，不是清输入框）
+   ---------------------------------------------------------------------------
+   问题：.chat-body 是 display:flex + flex-direction:column，消息从顶部开始堆叠，
+         消息少的时候下面留出一大片空白 —— 用户说的「发送消息后聊天框出现空白」。
+   为什么不能靠清输入框解决：空白在消息列表末尾，跟输入框无关。
+   正确做法：给第一行加 margin-top:auto，把消息组整体压到底部，
+             空白集中到顶部（这是聊天界面的常规形态，最后一条消息紧贴输入框）。
+   ========================================================================= */
+.chat-body > .msg:first-child { margin-top: auto; }
+/* 兜底：任何意外的空消息不再占位（历史脏数据 / 未知 type） */
+.chat-body .msg:empty { display: none; }
+.chat-body .msg-main:empty { display: none; }
+.chat-body .msg-text:empty { display: none; }
+
+
+/* ==================== 个性化设置（主题切换） ==================== */
+.settings-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow-sm); }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.settings-label b { display: block; font-size: 13.5px; }
+.settings-label span { display: block; margin-top: 3px; }
+.theme-switch { display: flex; gap: 8px; flex: none; }
+.theme-opt {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
+  color: var(--text-2); font-size: 13px; font-family: inherit; cursor: pointer; transition: .16s;
+}
+.theme-opt:hover { border-color: var(--brand-line); color: var(--text); }
+.theme-opt.on { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand); font-weight: 600; }
+.theme-opt .i { width: 15px; height: 15px; }
+
+
+/* 个人中心头像：可点击更换，与 H5「点击头像」一致 */
+.profile-card .avatar { position: relative; width: 72px; height: 72px; border-radius: 18px; overflow: visible; flex: none; display: block; cursor: pointer; }
+.profile-card .avatar .profile-avatar { width: 72px; height: 72px; border-radius: 18px; object-fit: cover; display: block; background: var(--brand-soft); }
+.profile-card .avatar-edit {
+  position: absolute; right: -4px; bottom: -4px; width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--brand); color: #fff; box-shadow: var(--shadow-sm);
+}
+.profile-card .avatar-edit .i { width: 13px; height: 13px; }

@@ -601,3 +601,16 @@
 /* 空消息不占位：历史脏数据或类型异常时不再留一个只有 padding 的空白气泡 */
 .chat-bubble .chat-text:empty { display: none; }
 .chat-bubble:empty { display: none; }
+
+
+/* ============================================================================
+   商户端聊天空白修复（用户反馈这里最严重）
+   ---------------------------------------------------------------------------
+   同一个根因：.chat-body 是 flex column，消息从顶部堆叠，消息少时底部一大片空白。
+   商户端看起来更明显，是因为它的聊天区高度是 calc(100vh - 178px)（比游客端高很多），
+   而演示会话往往只有十来条消息 —— 底部空白能占到整个面板的三分之二。
+   修法一致：首条消息 margin-top:auto 把消息组压到底部。
+   ========================================================================= */
+.chat-body > .chat-messages { margin-top: auto; }   /* 消息组贴底，空白留在上方 */
+.chat-body .chat-msg:empty { display: none; }
+.chat-body .chat-messages { display: flex; flex-direction: column; gap: 16px; }

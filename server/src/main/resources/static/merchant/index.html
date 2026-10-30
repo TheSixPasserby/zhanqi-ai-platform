@@ -7,7 +7,9 @@
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
   <link rel="stylesheet" href="../vendors/element-ui.css">
   <link rel="stylesheet" href="../assets/css/app.css">
+  <link rel="stylesheet" href="../assets/css/theme-dark.css">
   <link rel="stylesheet" href="./css/merchant.css">
+  <script src="../assets/js/theme.js"></script>
 </head>
 <body>
 <div id="app" v-cloak>
@@ -928,6 +930,25 @@
           <p class="dim">{{ me.profile.account || '' }} · 入驻 {{ me.profile.since || '—' }}</p>
         </div>
         <el-tag size="small" type="success" effect="plain">商家账号</el-tag>
+      </div>
+    </div>
+
+    <!-- 个性化设置：主题切换（浅色 / 深色），只覆盖设计令牌，整站跟随 -->
+    <div class="card mt-16">
+      <div class="card-head"><h3>个性化设置</h3><span class="hint">深色模式适合夜间，卡片与弹窗会整体跟随</span></div>
+      <div class="card-body">
+        <div class="settings-row">
+          <div>
+            <b>界面主题</b>
+            <div class="cell-sub">浅色为默认宣纸白；深色为墨绿夜色</div>
+          </div>
+          <div class="theme-switch">
+            <button class="theme-opt" :class="{ on: themeMode === 'light' }" @click="setTheme('light')">
+              <i class="el-icon-sunny"></i> 浅色</button>
+            <button class="theme-opt" :class="{ on: themeMode === 'dark' }" @click="setTheme('dark')">
+              <i class="el-icon-moon"></i> 深色</button>
+          </div>
+        </div>
       </div>
     </div>
 
