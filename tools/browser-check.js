@@ -536,16 +536,29 @@ function check(name, ok, detail) {
     await screenshot('visitor-05-shop.png');
 
     // 结算下单
+    // 2026-10-30 起结算改成「按商品逐项填表单」：收货地址存在 cart[i].form.address 上，
+    // 不再有全局 vm.address。这里按逐项表单填，否则校验会拦下、订单下不成。
     const orderOk = await v.evalJs(`(async () => {
       const vm = document.querySelector('#app').__vue__;
       vm.startCheckout();
-      await new Promise(r => setTimeout(r, 800));
-      vm.address = '四川省成都市郫都区战旗村 1 号';
+      await new Promise(r => setTimeout(r, 900));
+      const lines = vm.checkoutLines ? vm.checkoutLines() : [];
+      lines.forEach(function (L) {
+        if (!L.isBooking) { L.form.address = '四川省成都市郫都区战旗村 1 号'; }
+      });
       vm.submitCart();
-      await new Promise(r => setTimeout(r, 2200));
-      return { view: vm.view, orders: (vm.orders || []).length, checkout: vm.checkoutMode };
+      await new Promise(r => setTimeout(r, 2600));
+      return {
+        view: vm.view,
+        orders: (vm.orders || []).length,
+        checkout: vm.checkoutMode,
+        lines: lines.length,
+        err: vm.validateCheckout ? vm.validateCheckout() : '',
+      };
     })()`);
-    check('提交订单成功并回到订单列表', orderOk && orderOk.view === 'orders' && orderOk.orders > 0, JSON.stringify(orderOk));
+    check('提交订单成功并回到订单列表',
+      orderOk && orderOk.view === 'orders' && orderOk.orders > 0 && orderOk.checkout === false,
+      JSON.stringify(orderOk));
     await screenshot('visitor-06-orders.png');
 
     // 商品详情 + 预约表单
@@ -909,6 +922,72 @@ function check(name, ok, detail) {
       await v.evalJs("window.ZQTheme.set('light'); localStorage.removeItem('zhanqi.theme'); 1");
     }
     await v.evalJs("localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1");
+  }
+
+  /* ------------------ 5. 商户端聊天消息区布局（哨兵） ------------------ */
+  // 2026-10-30 回归：商家端 .chat-body 漏了 display:flex，
+  // 导致「消息组贴底」的 margin-top:auto 变成无效声明，消息全堆在顶部、底部留一大片空白。
+  // 这里直接量计算样式与几何，只要 flex 或贴底失效就会立刻失败。
+  console.log('');
+  console.log('— 5. 商户端聊天消息区布局 ' + '-'.repeat(34));
+  {
+    const v = await visit(BASE + '/merchant/', { viewport: { width: 1440, height: 900 } });
+    await v.evalJs(`(async () => {
+      const login = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: 'zhangmm', password: '123456', client: 'merchant' }),
+      }).then(r => r.json()).catch(() => ({}));
+      if (login.ok) {
+        localStorage.setItem('zhanqi.merchant.token', login.token);
+        localStorage.setItem('zhanqi.merchant.user', JSON.stringify({ role: login.role, name: login.name, at: Date.now() }));
+      }
+      return 1;
+    })()`);
+    await cdp.send('Page.navigate', { url: BASE + '/merchant/' });
+    await sleep(3400);
+    const chat = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      if (!vm) { return { skip: 'not mounted' }; }
+      vm.tab = 'chat';
+      await new Promise(r => setTimeout(r, 2200));
+      const t = (vm.$children || []).find(c => c.$options.name === 'tab-chat');
+      if (!t || !t.$el) { return { skip: 'tab-chat not mounted' }; }
+      if (!t.threads || !t.threads.length) { return { skip: 'no thread' }; }
+      t.pickThread(t.threads[0]);
+      await new Promise(r => setTimeout(r, 2400));
+      const sec = t.$el;
+      const body = sec.querySelector('.chat-body');
+      const wrap = sec.querySelector('.chat-messages');
+      const msgs = [...sec.querySelectorAll('.chat-msg')];
+      if (!body) { return { skip: 'no chat-body' }; }
+      const bodyR = body.getBoundingClientRect();
+      const last = msgs[msgs.length - 1];
+      const cs = getComputedStyle(body);
+      const wrapCs = wrap ? getComputedStyle(wrap) : null;
+      return {
+        display: cs.display,
+        flexDir: cs.flexDirection,
+        msgCount: msgs.length,
+        overflow: body.scrollHeight > body.clientHeight + 2,
+        wrapMarginTop: wrapCs ? wrapCs.marginTop : null,
+        lastBottomGap: last ? Math.round(bodyR.bottom - last.getBoundingClientRect().bottom) : null,
+      };
+    })()`);
+    if (chat && chat.skip) {
+      note('商户端聊天布局检查跳过：' + chat.skip);
+    } else {
+      check('商户端 chat-body 是 flex 容器', chat.display === 'flex', 'display=' + chat.display);
+      check('商户端 chat-body 为纵向排列', chat.flexDir === 'column', 'flexDirection=' + chat.flexDir);
+      check('最后一条消息紧贴输入区（无异常空白）',
+        chat.lastBottomGap !== null && chat.lastBottomGap <= 26, 'gap=' + chat.lastBottomGap);
+      // 消息少时（内容不溢出）必须靠 margin-top:auto 贴底；溢出时 auto 归零属规范行为
+      if (!chat.overflow) {
+        check('消息少时消息组贴底（margin-top:auto 生效）',
+          chat.wrapMarginTop !== '0px', 'marginTop=' + chat.wrapMarginTop);
+      }
+    }
+    await screenshot('merchant-05-chat-layout.png');
+    await v.evalJs("localStorage.removeItem('zhanqi.merchant.token'); localStorage.removeItem('zhanqi.merchant.user'); 1");
   }
 
   /* -------------------- 5. 登录态失效后的表现 -------------------- */
