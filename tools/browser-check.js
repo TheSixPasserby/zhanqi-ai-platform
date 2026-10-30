@@ -1033,6 +1033,11 @@ function check(name, ok, detail) {
   // 无头浏览器不一定立刻退出，这里给一小段时间再强制结束
   setTimeout(() => {
     try { child.kill('SIGKILL'); } catch (e) { }
+    // 结束后顺手清掉本次的浏览器资料目录：里面是 Chrome 自动下载的扩展、
+    // 优化模型（单个 profile 就有 30–75 MB）和磁盘缓存，留着只占地方。
+    // 删不掉也不影响结论（下次运行开头本来就会先删一遍），失败仅提示。
+    try { fs.rmSync(profileDir, { recursive: true, force: true }); }
+    catch (e) { console.log('提示：浏览器资料目录暂未清理（可能有文件锁），下次运行会自动重试。'); }
     process.exit(fail > 0 ? 1 : 0);
   }, 800);
 })();

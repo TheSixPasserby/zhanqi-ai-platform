@@ -408,6 +408,32 @@
   验收聊天前先查 `(merchantId, buyerId)` 分布，挑当前账号真有会话的组合。
   （2026-10-30，来源：同上）
 
+## 磁盘占用与 logs 卫生（2026-10-30）
+
+- **logs/ 会无声膨胀：一次性调试脚本各自建 Chrome `--user-data-dir`，单个 profile 就有
+  30–75 MB**（Chrome 自动下载优化模型 `model.tflite` 36 MB + 扩展多语言 mp4 + 词典）。
+  2026-10-30 实测堆积 68 个 profile 共 1.9 GB，占仓库 2.33 GB 的八成。
+  `tools/browser-check.js` 已改为退出时自清理固定名 profile；手工调试脚本用完必须删掉
+  自己建的 profile 目录，别给它起一次性名字就不管了。
+  （2026-10-30，来源：2026-10-30-disk-cleanup.md）
+
+- **清理 logs/ 时顶层白名单不能碰**：`server.port`（`Get-ServicePort` 要读，删了 reset
+  会找错端口）、`server.log` / `server.err.log` / `deploy-console.log`（脚本活动文件）、
+  `orders-backup-*.json` / `cleanup-preview-*.sql`（订单数据凭证）。
+  历史日志、自检截图、调试脚本可删；完整清单存档在 `logs/cleanup-manifest-20261030.txt`。
+  本轮清源后仓库 2.33 GB → 117 MB（含 `git gc --prune=now` 压缩 315 MB 松散对象）。
+  （2026-10-30，来源：同上）
+
+- **无人值守环境跑 `tools/deploy.ps1 start` 会在「正在打开浏览器…」步阻塞假死**
+  （`Start-Process` 默认浏览器不返回），但服务早已 detached 存活。判断部署成败看
+  java 进程与 `/api/health`，别看外层退出码；另外本机可能残留多日前的旧 java 实例
+  占着非 8080 端口，自检前先 `netstat` 确认打的是哪个实例。
+  （2026-10-30，来源：同上）
+
+- **PowerShell 5.1 的 `>` 重定向默认写 UTF-16LE**，落盘日志会被 read 工具当二进制。
+  要落盘可读日志用 `Out-File -Encoding utf8`，或读的时候用 `Get-Content`（它认 BOM）。
+  （2026-10-30，来源：同上）
+
 ## 聊天布局与自检方法（2026-10-30 补充）
 
 - **`margin-top: auto` 只在 flex 容器里生效**。父容器若是 `display:block`，
