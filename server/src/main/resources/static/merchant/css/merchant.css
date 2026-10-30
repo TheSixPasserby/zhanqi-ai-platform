@@ -453,11 +453,16 @@
   color: var(--text-3);
 }
 .chat-peer-status.online { color: var(--ok); }
+/* 消息区：必须是 flex 容器，否则下面「消息组贴底」的 margin-top:auto 是无效声明。
+   这一条是 2026-10-30 商家端聊天空白的根因 —— PC 端一直有 display:flex，
+   商户端漏了，所以同样的 margin-top:auto 在商户端不起作用，消息全堆在顶部、底部留白。 */
 .chat-body {
   flex: 1;
   overflow-y: auto;
   padding: 18px;
-  background: linear-gradient(180deg, #FBFAF7, #FFFFFF);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--surface-2), var(--surface) 180px);
 }
 .chat-empty { padding: 56px 20px; text-align: center; color: var(--text-3); }
 .chat-empty img { width: 110px; opacity: .8; margin-bottom: 10px; }
@@ -611,6 +616,12 @@
    而演示会话往往只有十来条消息 —— 底部空白能占到整个面板的三分之二。
    修法一致：首条消息 margin-top:auto 把消息组压到底部。
    ========================================================================= */
-.chat-body > .chat-messages { margin-top: auto; }   /* 消息组贴底，空白留在上方 */
+.chat-body > .chat-messages {
+  margin-top: auto;   /* 消息组贴底，空白留在上方（需 .chat-body 是 flex column 才生效） */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
 .chat-body .chat-msg:empty { display: none; }
 .chat-body .chat-messages { display: flex; flex-direction: column; gap: 16px; }
