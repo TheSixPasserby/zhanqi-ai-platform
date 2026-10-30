@@ -108,6 +108,8 @@
         category: '',
         keyword: '',
         currentSpot: null,
+        spotGalleryIndex: 0,     // 点位图集当前第几张
+        spotGalleryTimer: null,  // 点位图集自动轮播定时器（4.2 秒一张）
         speaking: false,
         showScript: false,
         voiceName: '',
@@ -120,6 +122,8 @@
         buying: false,
         cart: [],
         cartOpen: false,
+        // 主题：'light' | 'dark'。初值由 ZQTheme 决定（脚本在 head 里已应用过一次）
+        themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light'),
         currentProductImageIndex: 0,
         address: '',
         remark: '',
@@ -210,6 +214,21 @@
         return out.slice(0, 4);
       },
       /** 当前商品的图集（后端 images 已含 cover 兜底；为空时退回 cover 单图） */
+      /** 当前点位图集：后端 images 已含 cover 兜底；只有 1 张时不轮播 */
+      spotImages: function () {
+        var s = this.currentSpot;
+        if (!s) { return []; }
+        var list = (s.images || []).filter(function (x) { return !!x; });
+        if (!list.length && s.cover) { list = [s.cover]; }
+        return list;
+      },
+      spotGalleryImage: function () {
+        var list = this.spotImages;
+        if (!list.length) { return ''; }
+        var i = Math.min(Math.max(0, this.spotGalleryIndex || 0), list.length - 1);
+        return list[i];
+      },
+
       currentProductImages: function () {
         var p = this.currentProduct;
         if (!p) { return []; }
@@ -369,16 +388,25 @@
         window.ZQSpeech.bind(function (speaking) { self.speaking = speaking; });
         this.voiceName = window.ZQSpeech.voiceLabel();
       }
+      // 订阅主题变化：其它标签页/其它端改了主题，这里按钮选中态跟着更新
+      if (window.ZQTheme) {
+        this.themeMode = window.ZQTheme.get();
+        this._themeOff = window.ZQTheme.onChange(function (mode) { self.themeMode = mode; });
+      }
       this.bootstrap();
     },
     /* 抽屉一关（点遮罩、点叉、切换点位）就停朗读；
        切到别的视图同理 —— 这是「退出后还在念」的根治点。 */
     watch: {
       currentSpot: function (now) {
-        if (!now) { this.stopSpeak(); }
+        if (!now) {
+          this.stopSpeak();
+          this.stopSpotGallery();   // 抽屉关了，轮播也停
+        }
       },
       view: function () {
         this.stopSpeak();
+        this.stopSpotGallery();
       },
     },
     beforeDestroy: function () {
@@ -386,6 +414,8 @@
       this.stopChatPoll();
       this.closeCamera();
       this.stopSpeak();
+      this.stopSpotGallery();
+      if (this._themeOff) { this._themeOff(); this._themeOff = null; }
     },
     methods: {
       /* ---------------------------- 基础 ---------------------------- */
@@ -689,6 +719,38 @@
         });
       },
 
+      /* ------------------------ 点位图集轮播 ------------------------ */
+      stepSpotImage: function (delta) {
+        var n = this.spotImages.length;
+        if (n <= 1) { return; }
+        this.spotGalleryIndex = ((this.spotGalleryIndex + delta) % n + n) % n;
+        this.startSpotGallery();   // 手动翻页后重新计时，别刚点完就被切走
+      },
+      /**
+       * 定时切下一张。
+       * 4.2 秒的理由与手机端一致：语音讲解一句话约 3–5 秒，图片节奏跟得上听众注意力。
+       * 只有 1 张图时不启动（没意义且白耗 CPU）。
+       */
+      startSpotGallery: function () {
+        var self = this;
+        this.stopSpotGallery();
+        if (this.spotImages.length <= 1) { return; }
+        this.spotGalleryTimer = setInterval(function () {
+          // 抽屉关了 / 换点位了 就自己停，避免后台空转
+          if (!self.currentSpot || self.spotImages.length <= 1) {
+            self.stopSpotGallery();
+            return;
+          }
+          self.spotGalleryIndex = (self.spotGalleryIndex + 1) % self.spotImages.length;
+        }, 4200);
+      },
+      stopSpotGallery: function () {
+        if (this.spotGalleryTimer) {
+          clearInterval(this.spotGalleryTimer);
+          this.spotGalleryTimer = null;
+        }
+      },
+
       /* ---------------------------- 点位 ---------------------------- */
       openSpot: function (spot, autoSpeak) {
         var self = this;
@@ -698,9 +760,15 @@
         if (window.ZQSpeech) { this.voiceName = window.ZQSpeech.voiceLabel(); }
         this.detailLoading = true;
         this.currentSpot = spot;
+        this.spotGalleryIndex = 0;
+        this.startSpotGallery();
         api.get('/api/tour/spots/' + spot.id, null, { silent: true }).then(function (res) {
           self.detailLoading = false;
-          if (res.ok && res.spot) { self.currentSpot = res.spot; }
+          if (res.ok && res.spot) {
+            self.currentSpot = res.spot;
+            self.spotGalleryIndex = 0;
+            self.startSpotGallery();
+          }
           // 打卡后自动进详情并开讲：抽屉已经在眼前，直接起播
           if (autoSpeak) {
             setTimeout(function () { self.speak(self.currentSpot); }, 260);
@@ -1197,6 +1265,11 @@
 
       /* ---------------------------- 个人资料 ---------------------------- */
 
+      /** 头像更换入口（现在只在个人中心提供，顶部悬浮窗不再放这个动作） */
+      pickAvatar: function () {
+        if (this.$refs.pcAvatar) { this.$refs.pcAvatar.click(); }
+      },
+
       onAvatarPick: function (e) {
         var self = this;
         var file = (e.target.files || [])[0];
@@ -1272,6 +1345,16 @@
       },
       threadAvatar: function (t) {
         return window.ZQProfile.src({ avatar: (t && t.merchantAvatar) || '' }, 'merchant');
+      },
+
+      /* ---------------------------- 主题 ---------------------------- */
+      /**
+       * 切换主题。真正的样式应用在 assets/js/theme.js 里（覆盖设计令牌），
+       * 这里只负责落库 + 同步按钮选中态，避免各端各写一套。
+       */
+      setTheme: function (mode) {
+        if (!window.ZQTheme) { return; }
+        this.themeMode = window.ZQTheme.set(mode);
       },
 
       /* ---------------------------- 聊天 ---------------------------- */

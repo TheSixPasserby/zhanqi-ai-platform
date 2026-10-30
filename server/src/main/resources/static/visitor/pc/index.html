@@ -7,6 +7,7 @@
   <title>战旗云 · 游客端（电脑版）</title>
   <link rel="icon" type="image/svg+xml" href="../../assets/img/favicon.svg">
   <link rel="stylesheet" href="../../assets/css/app.css">
+  <link rel="stylesheet" href="../../assets/css/theme-dark.css">
   <link rel="stylesheet" href="./pc.css">
   <script>
     /* 设备检测：电脑版被手机打开时自动回到手机版。
@@ -21,6 +22,7 @@
       if (isMobile || narrow) { location.replace('../' + q); }
     })();
   </script>
+  <script src="../../assets/js/theme.js"></script>
 </head>
 <body>
 <div id="pc" v-cloak>
@@ -147,18 +149,18 @@
               <span v-if="cartCount" class="badge">{{ cartCount }}</span>
             </button>
             <div class="nav-user">
-              <span class="avatar" title="点击更换头像" @click.stop="$refs.pcAvatar.click()">
+              <!-- 点头像统一跳个人中心（换头像、改密码都在个人中心做），
+                   与商户端 / 管理端的悬浮窗口径一致，不在这里开快捷入口。 -->
+              <span class="avatar" title="个人中心" @click.stop="go('mine')">
                 <img :src="avatarSrc" alt="头像">
               </span>
-              <input ref="pcAvatar" type="file" accept="image/*" hidden @change="onAvatarPick">
               <div class="user-menu">
                 <b>{{ me.name }}</b>
-                <a @click="go('orders')">我的订单</a>
+                <a @click="go('mine')"><svg class="i"><use :href="icon('i-user')"></use></svg>个人中心</a>
+                <a @click="go('orders')"><svg class="i"><use :href="icon('i-ticket')"></use></svg>我的订单</a>
                 <a @click="go('chatList')"><svg class="i"><use :href="icon('i-mail')"></use></svg>我的消息</a>
-                <a @click="openReports(null)">举报中心</a>
-                <a @click="go('mine')">个人中心</a>
-                <a @click="openPwd">修改密码</a>
-                <a @click="logout">退出登录</a>
+                <a @click="openReports(null)"><svg class="i"><use :href="icon('i-shield')"></use></svg>举报中心</a>
+                <a @click="logout"><svg class="i"><use :href="icon('i-close')"></use></svg>退出登录</a>
               </div>
             </div>
           </div>
@@ -823,7 +825,12 @@
         <!-- ---------- 我的 ---------- -->
         <template v-else-if="view === 'mine'">
           <div class="profile-card">
-            <img class="profile-avatar" :src="avatarSrc" alt="头像">
+            <!-- 头像点击即可更换：头像编辑入口只在个人中心，不在顶部悬浮窗 -->
+            <span class="avatar" title="点击更换头像" @click="pickAvatar">
+              <img class="profile-avatar" :src="avatarSrc" alt="头像">
+              <span class="avatar-edit"><svg class="i"><use :href="icon('i-camera')"></use></svg></span>
+            </span>
+            <input ref="pcAvatar" type="file" accept="image/*" hidden @change="onAvatarPick">
             <div class="profile-main">
               <h2>{{ me.name }}</h2>
               <p>{{ me.profile.account || '' }} · 注册于 {{ me.profile.createdAt || '—' }}</p>
@@ -861,8 +868,31 @@
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
               <a @click="openReports(null)"><svg class="i"><use :href="icon('i-shield')"></use></svg>举报中心
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
+              <!-- 修改密码只在个人中心提供（顶部头像悬浮窗不再放这个入口） -->
+              <a @click="openPwd"><svg class="i"><use :href="icon('i-lock')"></use></svg>修改密码
+                <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
               <a @click="logout"><svg class="i"><use :href="icon('i-close')"></use></svg>退出登录
                 <svg class="i arrow"><use :href="icon('i-arrow-right')"></use></svg></a>
+            </div>
+          </section>
+
+          <!-- 个性化设置：主题切换（浅色 / 深色）。
+               主题只覆盖设计令牌，卡片、弹窗、表格、输入框会整体跟随，不是只改背景。 -->
+          <section class="block">
+            <div class="block-head"><h2><i></i>个性化设置</h2></div>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div class="settings-label">
+                  <b>界面主题</b>
+                  <span class="dim tiny">深色模式适合夜间浏览，浅色模式为默认宣纸白</span>
+                </div>
+                <div class="theme-switch">
+                  <button class="theme-opt" :class="{ on: themeMode === 'light' }" @click="setTheme('light')">
+                    <svg class="i"><use :href="icon('i-sun')"></use></svg>浅色</button>
+                  <button class="theme-opt" :class="{ on: themeMode === 'dark' }" @click="setTheme('dark')">
+                    <svg class="i"><use :href="icon('i-moon')"></use></svg>深色</button>
+                </div>
+              </div>
             </div>
           </section>
         </template>
@@ -873,10 +903,10 @@
           <b>{{ site.shortName || '战旗云' }}</b>
           <span>{{ site.name || '郫都区战旗村 · 川西林盘农商文旅智慧服务平台' }}</span>
         </div>
+        <!-- 游客端只暴露游客自己的能力：这里不再挂「商户工作台 / 管理后台」入口，
+             避免普通游客误点进管理侧页面（账号本就无权，但暴露入口本身就是误导）。 -->
         <div class="foot-links">
           <a href="../?pc=0">手机版</a>
-          <a :href="links.merchantUrl || '/merchant/'">商户工作台</a>
-          <a :href="links.adminUrl || '/admin/'">管理后台</a>
         </div>
       </footer>
     </template>
@@ -887,7 +917,19 @@
     <aside class="drawer">
       <button class="drawer-close" @click="currentSpot = null">
         <svg class="i"><use :href="icon('i-close')"></use></svg></button>
-      <div class="drawer-cover"><img :src="asset(currentSpot.cover)" :alt="currentSpot.name"></div>
+      <!-- 点位图集：与手机端一致，停留时定时自动轮播下一张（4.2 秒） -->
+      <div class="drawer-cover spot-gallery">
+        <img :src="asset(spotGalleryImage)" :alt="currentSpot.name">
+        <button v-if="spotImages.length > 1" class="sg-nav prev" @click="stepSpotImage(-1)">
+          <svg class="i"><use :href="icon('i-arrow-left')"></use></svg></button>
+        <button v-if="spotImages.length > 1" class="sg-nav next" @click="stepSpotImage(1)">
+          <svg class="i"><use :href="icon('i-arrow-right')"></use></svg></button>
+        <span v-if="spotImages.length > 1" class="sg-count">{{ spotGalleryIndex + 1 }} / {{ spotImages.length }}</span>
+        <div v-if="spotImages.length > 1" class="sg-dots">
+          <i v-for="(img, i) in spotImages" :key="i" :class="{ on: i === spotGalleryIndex }"
+             @click="spotGalleryIndex = i"></i>
+        </div>
+      </div>
       <div class="drawer-body">
         <span class="tag">{{ currentSpot.type }}</span>
         <h2>{{ currentSpot.name }}</h2>
