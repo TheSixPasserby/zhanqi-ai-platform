@@ -1592,6 +1592,30 @@ curl -X POST 'http://localhost:8080/api/ai/ask' \
 
 <a id="faq"></a>
 
+## 8.14 深色 / 浅色主题
+
+三端（管理后台 / 商户工作台 / 游客端）都支持**浅色（默认宣纸白）与深色**两种主题，
+入口在**个人中心 → 个性化设置**；管理端在「服务器管理 → 个性化设置」标签页。
+
+**实现方式：只覆盖设计令牌，不改组件样式。**
+
+三端的卡片、弹窗、表格、输入框底色全部引用 `assets/css/app.css` 里的 CSS 变量，
+所以深色主题只在 `html[data-theme="dark"]` 上重定义这批令牌（见 `assets/css/theme-dark.css`），
+整站就一起变深。这是唯一能保证「弹窗、表格、Element UI 组件一起适配」的做法 ——
+逐个组件写深色样式必然出现「卡片黑了、弹窗还是白」的割裂。
+
+```text
+assets/js/theme.js         主题读写与应用（<head> 同步引入，防首屏白闪）
+assets/css/theme-dark.css  深色令牌 + 写死浅色处的覆盖
+```
+
+**偏好持久化**：`localStorage.zhanqi.theme`，全局共享（不按端隔离）——
+用户在哪端选了深色，换端也是深色。
+
+**新增组件时注意**：如果新样式把颜色**写死**（不引用 `var(--...)`），深色下会露白。
+自查：`grep -n "background:\s*#FFF\|background:\s*white" <你的css>`，
+并参考 `theme-dark.css` 末尾的分类补一条覆盖。
+
 ## 九、常见问题
 
 **双击 `一键部署.bat` 后黑框一闪而过？**
