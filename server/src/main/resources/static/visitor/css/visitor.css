@@ -1077,3 +1077,24 @@ body {
   cursor: pointer; transition: .18s;
 }
 .sg-dots i.on { background: #fff; width: 16px; border-radius: 999px; }
+
+/* ============================================================================
+   多行正文（点位介绍 / 商品详情 / 讲解文稿 / 报举报内容）
+   库里存的是真换行，必须 pre-wrap 才会按段显示；否则折叠成一整块。
+   ========================================================================= */
+.para, .sub-para, .script, .detail-body, .report-item-content, .report-result p,
+.spot-intro, .goods-intro, .order-tip { white-space: pre-wrap; }
+
+
+/* ---------------------------- 个性化设置（主题切换） ---------------------------- */
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 2px; }
+.settings-row > div:first-child b { display: block; font-size: 14px; }
+.settings-row > div:first-child span { display: block; margin-top: 3px; }
+.theme-switch { display: flex; gap: 7px; flex: none; }
+.theme-opt {
+  display: inline-flex; align-items: center; gap: 5px; padding: 7px 13px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
+  color: var(--text-2); font-size: 12.5px; font-family: inherit; cursor: pointer; transition: .16s;
+}
+.theme-opt .ico { width: 14px; height: 14px; }
+.theme-opt.on { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand); font-weight: 600; }
