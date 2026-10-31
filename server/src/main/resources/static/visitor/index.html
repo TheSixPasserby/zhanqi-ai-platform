@@ -189,9 +189,11 @@
               <i v-if="cartCount" class="badge">{{ cartCount }}</i>
             </button>
             <div class="nav-user">
-              <span class="avatar" @click="go('mine', true)">
-                <img v-if="avatarUrl" :src="avatarUrl" alt="">
-                <template v-else>{{ (user.name || '游').slice(0, 1) }}</template>
+              <!-- 头像按钮：始终显示图片。没上传过照片时用 ZQProfile 的默认艺术头像兜底，
+                   不再退化成「姓名首字」文字 —— 文字在 34px 的圆角方块里既不像头像，
+                   和左边两个图标按钮也不是一套视觉语言。 -->
+              <span class="avatar" @click="go('mine', true)" :title="user.name">
+                <img :src="avatarSrc" :alt="user.name" @error="imgFail">
               </span>
               <!-- 头像悬浮菜单：与商户端/管理端保持同一套结构（图标 + 文字），
                    改密码只在「个人中心」里，不再放进悬浮菜单。 -->
@@ -430,16 +432,6 @@
             </div>
             <button class="btn-ghost-light" @click="doLogout">退出</button>
           </div>
-        </div>
-
-        <div class="stats card">
-          <div class="stat" @click="go('spots', true); spotTab='wall'">
-            <b>{{ collected }}</b><span>枚印章</span>
-          </div>
-          <i class="stat-sep"></i>
-          <div class="stat" @click="openOrders()"><b>{{ orderCount }}</b><span>笔订单</span></div>
-          <i class="stat-sep"></i>
-          <div class="stat"><b>{{ money(spent) }}</b><span>累计消费</span></div>
         </div>
 
         <div class="pad-x">
@@ -1302,7 +1294,9 @@
       <section v-if="view === 'map'" class="page-body subpage">
         <div class="topbar">
           <button class="topbar-back" @click="go('home')"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
-          <b class="topbar-title">战旗村地图</b>
+          <!-- 标题用统一的 div>h1+p 结构（这里原来是一个裸 <b>，电脑端「页面标题区」的字号/颜色规则
+               是按 .topbar-title h1 写的，裸 <b> 会漏掉，导致地图页标题比别的页小一号） -->
+          <div class="topbar-title"><h1>战旗村地图</h1><p>14 个点位 · 研学 · 民宿 · 农事 · 活动</p></div>
         </div>
         <div class="pad-x map-page" style="padding-top:12px">
           <div class="map-filter">

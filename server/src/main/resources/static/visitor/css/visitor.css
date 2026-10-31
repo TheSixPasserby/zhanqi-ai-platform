@@ -307,7 +307,11 @@ body {
   background: linear-gradient(135deg, #146B57 0%, #1D9E75 58%, #22B183 100%);
   border-bottom-left-radius: 26px; border-bottom-right-radius: 26px;
 }
-.hero-mine { padding: 18px 16px 40px; }
+/* 下内边距原为 40px，是留给「印章/订单/消费」卡片用负上边距压住 hero 下沿的；
+   那张卡片已删，40px 会变成 hero 底部一块空绿，收回 22px 与首页 hero 一致。
+   卡片不再压住 hero 之后，需要自己让出一点间距，否则印章墙卡片会贴在 hero 下沿。 */
+.hero-mine { padding: 18px 16px 22px; }
+.hero-mine + .pad-x { padding-top: 14px; }
 .hero-inner { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .hero-left { flex: 1; min-width: 0; }
 .hero-hello { color: rgba(255, 255, 255, .85); font-size: 12.5px; }
@@ -692,12 +696,9 @@ body {
 
 /* --------------------------- 我的 --------------------------- */
 
-.stats { display: flex; align-items: center; margin: -24px 14px 12px; padding: 15px 0; }
-.stat { flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
-.stat b { font-size: 17px; color: var(--brand); }
-.stat span { font-size: 10.5px; color: var(--text-3); margin-top: 4px; }
-.stat-sep { width: 1px; height: 26px; background: var(--surface-3); }
-
+/* 「印章 / 订单 / 消费」三格已经被移除（个人中心里与下方菜单重复，且首页 hero 里已有集章进度）。
+   这里曾经是 .stats / .stat / .stat-sep 五条规则，其中 .stats 用 margin-top:-24px 压在 hero 下沿；
+   删掉卡片后 .hero-mine 的下内边距也同步从 40px 收到 22px，否则 hero 底部会留一块空。 */
 .menu { padding: 4px 14px; }
 .menu-item { display: flex; align-items: center; gap: 12px; padding: 13px 0; cursor: pointer; }
 .menu-line { border-bottom: 1px solid var(--surface-3); }
@@ -1307,8 +1308,88 @@ body {
   .page-body { max-width: 1180px; margin: 0 auto; padding-bottom: 40px; }
   .pad-x { padding: 0 26px; }
 
-  /* 顶部绿色条在电脑上不需要：那本是手机端用来替代标题栏的 */
-  .topbar { max-width: 1180px; margin: 0 auto; }
+  /* 顶部总览区：手机上的深绿渐变条是「替代标题栏」的省空间做法，
+     放到 1180px 宽的电脑页面上就成了一整条突兀的色带，和下面浅色卡片区割裂。
+     电脑上把它降级成与正文同层的「页面标题区」：透明底、深色字、无分隔线，
+     只靠字号层级区分，视觉上和下面的卡片是一整块。
+     注意：这里只改「页面级」顶栏；聊天 / AI 助手页的顶栏是沉浸式的，
+     下面有 .im-page > .topbar / .chat-page > .topbar 的单独覆盖，仍保持深绿。 */
+  .topbar {
+    max-width: 1180px; margin: 0 auto;
+    padding: 26px 26px 12px;
+    background: none;
+    border-bottom: 0;
+    color: var(--text);
+    gap: 12px;
+  }
+  .topbar-back {
+    width: 34px; height: 34px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    box-shadow: var(--shadow-sm);
+    color: var(--text-2);
+  }
+  .topbar-back .ico { width: 17px; height: 17px; color: var(--text-2); }
+  .topbar-title h1 { font-size: 21px; font-weight: 700; color: var(--text); letter-spacing: .2px; }
+  .topbar-title p { font-size: 12.5px; color: var(--text-3); margin-top: 5px; }
+  /* 主题包里给 .topbar 写了「深色/暖阳/青墨下换成 --surface 底色」的规则
+     （html[data-theme="dark"] .topbar，特异度 0,2,1），比上面这条 0,1,0 高，
+     所以换主题后标题区又会变成一块硬边的实色方块。这里同特异度、文件更靠后，覆盖回透明；
+     聊天 / 助手页的沉浸式顶栏仍是渐变底，单独放行。 */
+  html[data-theme="dark"] .topbar,
+  html[data-theme="warm"] .topbar,
+  html[data-theme="ink"] .topbar { background: none; border-bottom: 0; }
+  html[data-theme="dark"] .im-page > .topbar,
+  html[data-theme="dark"] .chat-page > .topbar,
+  html[data-theme="warm"] .im-page > .topbar,
+  html[data-theme="warm"] .chat-page > .topbar,
+  html[data-theme="ink"] .im-page > .topbar,
+  html[data-theme="ink"] .chat-page > .topbar {
+    background: linear-gradient(135deg, #0E4C3E 0%, #146B57 100%);
+  }
+
+  /* 商城把搜索框塞在标题下面（列向），电脑上空间够，改回「标题左、搜索右」一行 */
+  .topbar-shop {
+    flex-direction: row; align-items: center; justify-content: space-between;
+    gap: 20px; padding-bottom: 16px;
+  }
+  .topbar-shop .topbar-title { flex: none; }
+  .topbar-shop .search { width: 360px; max-width: 42%; }
+  .search-input { background: var(--surface); border-color: var(--line); }
+
+  /* 选项条（全部点位 / 我的印章墙、商城分类）：手机上是贴边的白底工具条，
+     电脑上白底通栏同样割裂，改成直接铺在页面底色上的一排胶囊 */
+  .tabs-pad {
+    max-width: 1180px; margin: 0 auto;
+    padding: 4px 26px 16px;
+    background: transparent;
+    border-bottom: 0;
+  }
+  .tabs-pad + .pad-x { padding-top: 0; }
+  /* 打卡进度条：并进上面的标题区，做成一条细进度 + 一行说明 */
+  .progress-wrap { max-width: 1180px; margin: 0 auto; padding: 0 26px 18px; }
+  .progress { max-width: 560px; height: 10px; }
+  .progress-tip { font-size: 12.5px; margin-top: 9px; }
+
+  /* 聊天 / AI 助手：这两页顶栏是沉浸式对话的一部分，电脑上仍保留深绿渐变，
+     只把返回键与标题字号恢复成对话页该有的规格 */
+  .im-page > .topbar,
+  .chat-page > .topbar {
+    padding: 13px 18px;
+    background: linear-gradient(135deg, #0E4C3E 0%, #146B57 100%);
+    border-bottom: 0;
+    color: #fff;
+  }
+  .im-page > .topbar .topbar-back,
+  .chat-page > .topbar .topbar-back {
+    background: rgba(255, 255, 255, .2); border-color: transparent; box-shadow: none; color: #fff;
+  }
+  .im-page > .topbar .topbar-back .ico,
+  .chat-page > .topbar .topbar-back .ico { color: #fff; }
+  .im-page > .topbar .topbar-title h1,
+  .chat-page > .topbar .topbar-title h1 { font-size: 16.5px; color: #fff; }
+  .im-page > .topbar .topbar-title p,
+  .chat-page > .topbar .topbar-title p { color: rgba(255, 255, 255, .78); }
 
   /* 底部操作条（商品详情「立即预约」、结算「提交订单」等）：
      手机上是贴屏幕底边的通栏，电脑上屏幕太宽，通栏会把「合计 ¥256」甩到最左边、

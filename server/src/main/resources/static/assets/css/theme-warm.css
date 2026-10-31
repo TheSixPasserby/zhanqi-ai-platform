@@ -59,11 +59,10 @@ html[data-theme="warm"] { color-scheme: dark; }
 html[data-theme="warm"] body,
 html[data-theme="warm"] .screen { background: var(--bg); }
 
-/* H5 宽屏时手机模拟外框 */
-html[data-theme="warm"] .screen { box-shadow: 0 0 0 1px var(--line); }
-@media (min-width: 620px) {
-  html[data-theme="warm"] body { background: #0E1211; }
-}
+/* 游客端已经是一套自适应页面（不再是「手机壳 + 深色外框」），
+   宽屏时 body 直接铺满，不再需要给屏幕外的区域刷一圈近黑色。
+   之前这里写着 @media (min-width: 620px) { body { background: #0E1211 } }，
+   合并游客端后会让「暖阳」这种浅色主题在桌面端四周露出深色，故删除。 */
 
 /* 卡片、抽屉、底部栏、Tab 栏：默认白底的地方统一走 surface */
 html[data-theme="warm"] .card,
