@@ -486,3 +486,18 @@
 
 - **Element UI `el-dialog` 打开后 DOM 非立刻可用**：`$nextTick` 常拿不到 `$refs`，加 ~80ms 延迟稳定。
   （2026-10-31，来源：同上）
+
+## 虚拟地图视觉重做（2026-10-31 第二轮）
+
+- **地图标记与标签放 HTML 层，底图放 SVG**。SVG 里量不到文字实际宽高（`getBBox` 随缩放变化），
+  标签碰撞检测只有 HTML 的 `offsetWidth/offsetHeight` 可靠。
+  对齐靠 `preserveAspectRatio=xMidYMid meet` + `side=min(clientW,clientH)` 两层同时居中。
+  （2026-10-31，来源：2026-10-31-virtual-map-redesign）
+
+- **地图标记的唯一键不能只认 `m.id`**。游客端传的是 `{key,kind,refId,name,x,y}` 没有 id，
+  43 个标记会全部 `data-id=undefined`，去重后只剩 1 个。取键顺序：`id → key → refId → 下标`。
+  （2026-10-31，来源：同上）
+
+- **标签避让要「先截断再隐藏」，不要直接隐藏**：直接隐藏会让密集区显得空。
+  截断（去地名前缀 + 超 5 字加省略号）比隐藏多留一倍信息量，hover 时恢复全名即可。
+  （2026-10-31，来源：同上）

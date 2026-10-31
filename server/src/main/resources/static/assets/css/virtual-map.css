@@ -1,7 +1,19 @@
 /* ============================================================================
  *  战旗村虚拟地图样式（三端共用）
- *  底图由 virtual-map.js 用 SVG 绘制，这里只管容器、工具栏、图例、提示。
- *  颜色全部走设计令牌，保证深色/其它主题下跟着变。
+ *
+ *  结构（见 virtual-map.js）：
+ *    .vmap
+ *      .vmap-toolbar     缩放 / 复位
+ *      .vmap-stage       position:relative 的正方形舞台
+ *        svg.vmap-svg    纯矢量底图，随缩放平移
+ *        .vmap-pins      与舞台等大的 HTML 图层（标记点 + 文字标签）
+ *      .vmap-legend      图例
+ *      .vmap-tip         选点/悬停提示
+ *
+ *  为什么标记点和文字标签放在 HTML 层而不是画进 SVG：
+ *  SVG 里的 <text> 会跟着地图一起缩放 —— 缩小后字挤成一团互相压盖，
+ *  放大后字大得离谱，而且没法做碰撞检测换位置。放到 HTML 层后字号恒定，
+ *  标签的定位由 virtual-map.js 做矩形碰撞后逐个挑选空位，压盖从根上消失。
  * ========================================================================== */
 
 .vmap {
@@ -13,7 +25,7 @@
   box-shadow: var(--shadow-sm);
 }
 
-/* 舞台：正方形优先（viewBox 是正方形），窄屏时给一个合理的固定高度 */
+/* 舞台：正方形优先（底图 viewBox 是 100×100），窄屏给一个合理的最小高度 */
 .vmap-stage {
   position: relative;
   width: 100%;
@@ -21,7 +33,7 @@
   min-height: 260px;
   max-height: 78vh;
   overflow: hidden;
-  touch-action: none;   /* 允许自己处理拖拽，不让浏览器抢走手势 */
+  touch-action: none;   /* 自己处理拖拽，不让浏览器抢走手势 */
 }
 
 .vmap-svg {
@@ -32,12 +44,134 @@
   -webkit-user-select: none;
 }
 
-/* 工具栏：右上角浮层，不遮挡地图主体 */
+/* ------------------------------ 标记点图层 ------------------------------ */
+
+.vmap-pins {
+  position: absolute;
+  pointer-events: none;   /* 图层本身不挡事件，只有里面的标记点可点 */
+  z-index: 2;
+}
+
+.vmap-pin {
+  position: absolute;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity .18s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 标记点主体：圆形徽章，白色描边保证压在深色底图上也能看清 */
+.vmap-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--pin-bg, #E6F2ED);
+  border: 1.5px solid var(--pin-fg, #146B57);
+  box-shadow: 0 1px 3px rgba(24, 40, 34, .22), 0 0 0 2px rgba(255, 255, 255, .72);
+  transition: transform .16s, box-shadow .16s;
+}
+.vmap-glyph {
+  width: 13px;
+  height: 13px;
+  display: block;
+  pointer-events: none;
+}
+
+/* 五类要素各自的颜色。加 .vmap-pin[data-kind=...] 前缀是为了压过兜底值 */
+.vmap-pin[data-kind="spot"]       .vmap-dot { --pin-fg: #146B57; --pin-bg: #E6F2ED; }
+.vmap-pin[data-kind="study"]      .vmap-dot { --pin-fg: #2F6BA8; --pin-bg: #EAF1F9; }
+.vmap-pin[data-kind="homestay"]   .vmap-dot { --pin-fg: #7A4FA3; --pin-bg: #F1EAF7; }
+.vmap-pin[data-kind="experience"] .vmap-dot { --pin-fg: #B07A18; --pin-bg: #FCF4E2; }
+.vmap-pin[data-kind="activity"]   .vmap-dot { --pin-fg: #BE5230; --pin-bg: #FBEDE7; }
+
+.vmap-pin:hover .vmap-dot,
+.vmap-pin:focus-visible .vmap-dot,
+.vmap-pin.is-hover .vmap-dot {
+  transform: scale(1.18);
+  box-shadow: 0 2px 8px rgba(24, 40, 34, .3), 0 0 0 2px rgba(255, 255, 255, .92);
+  outline: none;
+}
+.vmap-pin:focus-visible .vmap-dot { box-shadow: 0 0 0 3px var(--brand-soft), 0 0 0 2px #fff; }
+
+/* 文字标签：HTML 定位，字号恒定。位置由 JS 算出后写成 transform 偏移 */
+.vmap-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .93);
+  border: 1px solid rgba(24, 40, 34, .1);
+  box-shadow: 0 1px 3px rgba(24, 40, 34, .1);
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 500;
+  color: #33443D;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity .18s;
+  backdrop-filter: blur(2px);
+}
+.vmap-label.is-hidden { opacity: 0; }   /* 放不下就藏起来，绝不压盖 */
+
+/* 拖到画布外的点淡出，避免在边缘堆成一排 */
+.vmap-pin.is-out { opacity: 0; pointer-events: none; }
+
+/* 选点模式的落点标记 */
+.vmap-picked {
+  position: absolute;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.vmap-picked::before {
+  content: "";
+  position: absolute;
+  left: -13px;
+  top: -13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(190, 82, 48, .75);
+  background: rgba(190, 82, 48, .14);
+  animation: vmap-pick-pulse 2.4s ease-out infinite;
+}
+.vmap-picked::after {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #BE5230;
+  box-shadow: 0 0 0 2.5px #fff;
+}
+@keyframes vmap-pick-pulse {
+  0%   { transform: scale(.82); opacity: .95; }
+  70%  { transform: scale(1.14); opacity: .35; }
+  100% { transform: scale(.82); opacity: .95; }
+}
+
+/* ------------------------------ 工具栏 ------------------------------ */
+
 .vmap-toolbar {
   position: absolute;
   top: 10px;
   left: 10px;
-  z-index: 3;
+  z-index: 4;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -61,6 +195,7 @@
   place-items: center;
   transition: .16s;
   font-family: inherit;
+  padding: 0;
 }
 .vmap-btn:hover { background: var(--brand-soft); color: var(--brand); }
 .vmap-zoom {
@@ -71,12 +206,13 @@
   color: var(--text-3);
 }
 
-/* 图例：左下角，说明五类标记的颜色 */
+/* ------------------------------ 图例 ------------------------------ */
+
 .vmap-legend {
   position: absolute;
   left: 10px;
   bottom: 10px;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 10px;
@@ -101,16 +237,17 @@
   flex: none;
 }
 
-/* 选点提示：底部中间浮层 */
+/* ------------------------------ 提示气泡 ------------------------------ */
+
 .vmap-tip {
   position: absolute;
   left: 50%;
   bottom: 14px;
   transform: translate(-50%, 8px);
-  z-index: 4;
+  z-index: 5;
   padding: 7px 13px;
   border-radius: 999px;
-  background: rgba(20, 32, 28, .88);
+  background: rgba(20, 32, 28, .9);
   color: #fff;
   font-size: 12px;
   line-height: 1.5;
@@ -122,23 +259,37 @@
 .vmap-tip.on { opacity: 1; transform: translate(-50%, 0); }
 .vmap-tip b { font-weight: 600; }
 .vmap-tip span { display: block; margin-top: 1px; color: rgba(255, 255, 255, .78); font-size: 11px; }
+.vmap-tip .vmap-tip-kind { display: inline; margin: 0 0 0 6px; font-size: 11px; }
 
-/* 标记文字：缩放后仍要保持可读，所以用反向缩放抵消 —— 见 virtual-map.js 的说明 */
-.vmap-label { pointer-events: none; }
-.vmap-marker { transition: filter .16s; }
-.vmap-marker:hover { filter: brightness(1.08) drop-shadow(0 1px 2px rgba(0,0,0,.18)); }
+/* ==================== 深色 / 青墨主题 ==================== */
+/* 底图是浅色系（农田/水渠/纸底），深色下整体降亮度；标签反过来用深底浅字 */
+html[data-theme="dark"] .vmap-svg,
+html[data-theme="ink"] .vmap-svg { filter: brightness(.82) saturate(.9); }
 
-/* 深色主题：底图是浅色系（农田/水渠），深色下整体降低亮度，避免刺眼 */
-html[data-theme="dark"] .vmap { background: var(--surface-2); }
-html[data-theme="dark"] .vmap-svg { filter: brightness(.86) saturate(.92); }
-html[data-theme="dark"] .vmap-label { fill: #D6DEDA !important; }
+html[data-theme="dark"] .vmap-label,
+html[data-theme="ink"] .vmap-label {
+  background: rgba(32, 42, 38, .92);
+  border-color: rgba(255, 255, 255, .12);
+  color: #DDE6E1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+}
+html[data-theme="dark"] .vmap-dot,
+html[data-theme="ink"] .vmap-dot {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .45), 0 0 0 2px rgba(20, 26, 24, .7);
+}
+html[data-theme="warm"] .vmap-svg { filter: sepia(.14) saturate(1.04); }
 
-/* 窄屏：图例换行更紧凑 */
+/* ------------------------------ 窄屏 ------------------------------ */
+
 @media (max-width: 520px) {
   .vmap-legend { max-width: 70%; gap: 6px 8px; padding: 5px 7px; }
   .vmap-legend-item { font-size: 10px; }
   .vmap-toolbar { padding: 4px 6px; gap: 4px; }
   .vmap-btn { width: 24px; height: 24px; font-size: 13px; }
+  .vmap-zoom { min-width: 34px; font-size: 10.5px; }
+  .vmap-dot { width: 20px; height: 20px; margin: -10px 0 0 -10px; }
+  .vmap-glyph { width: 12px; height: 12px; }
+  .vmap-label { font-size: 10px; padding: 1px 6px; }
 }
 
 /* ==================== 表单内「选点」模式 ==================== */
