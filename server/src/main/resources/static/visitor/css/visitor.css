@@ -1098,3 +1098,19 @@ body {
 }
 .theme-opt .ico { width: 14px; height: 14px; }
 .theme-opt.on { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand); font-weight: 600; }
+
+/* ==================== 村内地图（H5） ==================== */
+.map-filter { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 10px; }
+.map-box { margin-bottom: 12px; }
+.map-list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.map-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-bottom: 1px dashed var(--line);
+}
+.map-row:last-child { border-bottom: 0; }
+.map-row img { width: 42px; height: 42px; border-radius: 9px; object-fit: cover; flex: none; background: var(--surface-3); }
+.map-row-main { flex: 1; min-width: 0; }
+.map-row-main b { display: block; font-size: 13.5px; }
+.map-row-main span { display: block; margin-top: 2px; }
+.map-row .arrow { width: 14px; height: 14px; opacity: .5; flex: none; }
+.map-row:active { background: var(--surface-2); }

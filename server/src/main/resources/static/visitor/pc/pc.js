@@ -108,6 +108,23 @@
         category: '',
         keyword: '',
         currentSpot: null,
+        // ---- 村内地图 ----
+        mapKind: 'all',            // all / spot / study / homestay / experience / activity
+        mapInstance: null,         // ZQMap 控件实例
+        mapFilters: [
+          { key: 'all', text: '全部' },
+          { key: 'spot', text: '点位' },
+          { key: 'study', text: '研学' },
+          { key: 'homestay', text: '民宿' },
+          { key: 'experience', text: '农事' },
+          { key: 'activity', text: '活动' },
+        ],
+        // ---- 行程规划（独立于 AI 助手，两套状态互不影响）----
+        plan: {
+          days: 2, people: 2, prefs: ['亲子'], note: '',
+          loading: false, result: null,
+        },
+        planPrefOptions: ['亲子', '非遗', '手工', '农事', '美食', '摄影', '历史', '休闲'],
         spotGalleryIndex: 0,     // 点位图集当前第几张
         spotGalleryTimer: null,  // 点位图集自动轮播定时器（4.2 秒一张）
         speaking: false,
@@ -124,6 +141,7 @@
         cartOpen: false,
         // 主题：'light' | 'dark'。初值由 ZQTheme 决定（脚本在 head 里已应用过一次）
         themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light'),
+        themeOptions: (window.ZQTheme ? window.ZQTheme.options : []),
         currentProductImageIndex: 0,
         address: '',
         remark: '',
@@ -168,7 +186,8 @@
         reportLoading: false,
         reportPresetMerchant: null,
         toastList: [],
-        ai: { question: '', answer: '', shown: '', streaming: false, sources: [], loading: false, mode: 'ask', planDays: 2, planPeople: 2, planPref: '亲子' },
+        // AI 助手只做问答；行程参数移到独立的 plan 状态（两页互不混用）
+        ai: { question: '', answer: '', shown: '', streaming: false, sources: [], loading: false, mode: 'ask' },
         categories: CATEGORY_TEXT
       };
     },
@@ -227,6 +246,52 @@
         if (!list.length) { return ''; }
         var i = Math.min(Math.max(0, this.spotGalleryIndex || 0), list.length - 1);
         return list[i];
+      },
+
+      /* -------------------- 村内地图：标记集合 -------------------- */
+      /**
+       * 地图标记：点位 + 预约类商品 + 活动，按 mapKind 过滤。
+       *
+       * 只收集**有坐标**的对象（mapX/mapY 非空）。后端对未标点的对象返回 null，
+       * 这里过滤掉而不是画到 (0,0)，避免地图左上角堆一堆点。
+       */
+      mapAllMarkers: function () {
+        var list = [];
+        (this.spots || []).forEach(function (s) {
+          if (s.mapX == null || s.mapY == null) { return; }
+          list.push({
+            key: 'spot-' + s.id, kind: 'spot', refId: s.id,
+            name: s.name, subtitle: (s.type || '点位') + ' · ' + (s.location || ''),
+            cover: s.cover, x: Number(s.mapX), y: Number(s.mapY), raw: s,
+          });
+        });
+        (this.products || []).forEach(function (p) {
+          if (p.mapX == null || p.mapY == null) { return; }
+          if (p.category === 'goods') { return; }   // 实物商品不占地图位置
+          list.push({
+            key: p.category + '-' + p.id, kind: p.category, refId: p.id,
+            name: p.name, subtitle: (p.categoryText || '') + ' · ¥' + p.price + '/' + (p.unit || '份'),
+            cover: p.cover, x: Number(p.mapX), y: Number(p.mapY), raw: p,
+          });
+        });
+        (this.activities || []).forEach(function (a) {
+          if (a.mapX == null || a.mapY == null) { return; }
+          list.push({
+            key: 'act-' + a.id, kind: 'activity', refId: a.id,
+            name: a.title, subtitle: (a.tag || '活动') + ' · ' + (a.date || ''),
+            cover: a.cover, x: Number(a.mapX), y: Number(a.mapY), raw: a,
+          });
+        });
+        return list;
+      },
+      mapMarkers: function () {
+        var kind = this.mapKind;
+        var all = this.mapAllMarkers;
+        return kind === 'all' ? all : all.filter(function (m) { return m.kind === kind; });
+      },
+      mapKindText: function () {
+        var f = (this.mapFilters || []).filter(function (x) { return x.key === this.mapKind; }.bind(this))[0];
+        return f ? f.text : '全部';
       },
 
       currentProductImages: function () {
@@ -398,6 +463,8 @@
     /* 抽屉一关（点遮罩、点叉、切换点位）就停朗读；
        切到别的视图同理 —— 这是「退出后还在念」的根治点。 */
     watch: {
+      // 分类切换后只换标记集合，保留当前缩放/平移
+      mapKind: function () { this.refreshMapMarkers(); },
       currentSpot: function (now) {
         if (!now) {
           this.stopSpeak();
@@ -415,6 +482,7 @@
       this.closeCamera();
       this.stopSpeak();
       this.stopSpotGallery();
+      if (this.mapInstance) { this.mapInstance.destroy(); this.mapInstance = null; }
       if (this._themeOff) { this._themeOff(); this._themeOff = null; }
     },
     methods: {
@@ -473,6 +541,9 @@
         }
         this.view = view;
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        // 地图页：进入时创建控件（DOM 就绪后才能挂）；离开时销毁避免内存泄漏
+        if (view === 'map') { this.initMap(); }
+        else if (this.mapInstance) { this.mapInstance.destroy(); this.mapInstance = null; }
         if (view === 'orders' && this.user) { this.loadOrders(); }
         if (view === 'spots' && this.user) { this.loadStamps(); }
         if (view === 'mine' && this.user) { this.loadOrders(); this.loadStamps(); }
@@ -716,6 +787,80 @@
           self.merchantHome = null;
           self.orderDetail = null;
           self.view = 'home';
+        });
+      },
+
+      /* ------------------------ 村内地图 ------------------------ */
+      /**
+       * 进入地图页：创建控件。
+       *
+       * 为什么要多等一帧再建：go('map') 只是把 view 改成 'map'，
+       * 此时 v-else-if 对应的模板还没渲染，$refs.mapBox 是 undefined。
+       * 单靠 $nextTick 有时仍拿不到（模板分支较多，同一次 tick 内不一定完成），
+       * 所以再套一个 setTimeout(0)，确保 DOM 已存在。
+       */
+      initMap: function () {
+        var self = this;
+        this.$nextTick(function () {
+          setTimeout(function () {
+            var box = self.$refs.mapBox;
+            if (!box || !window.ZQMap) { return; }
+            if (self.mapInstance) { self.mapInstance.destroy(); self.mapInstance = null; }
+            self.mapInstance = window.ZQMap.create({
+              el: box,
+              markers: self.mapMarkers,
+              showLegend: true,
+              onMarkerClick: function (m) { self.openMapMarker(m); },
+            });
+          }, 0);
+        });
+      },
+      /** 分类切换时重建标记（不重建控件，保留当前缩放） */
+      refreshMapMarkers: function () {
+        if (this.mapInstance) { this.mapInstance.setMarkers(this.mapMarkers); }
+      },
+      /** 点地图标记 / 侧栏条目：点位进详情、商品进详情、活动进活动 */
+      openMapMarker: function (m) {
+        if (!m) { return; }
+        if (m.kind === 'spot') { this.openSpot({ id: m.refId, name: m.name }, false); return; }
+        if (m.kind === 'activity') {
+          var act = (this.activities || []).filter(function (a) { return a.id === m.refId; })[0];
+          if (act) { this.openActivity(act); } else { this.toast('活动信息不存在', 'warn'); }
+          return;
+        }
+        var prod = (this.products || []).filter(function (p) { return p.id === m.refId; })[0];
+        if (prod) { this.openProduct(prod); } else { this.toast('商品信息不存在', 'warn'); }
+      },
+      focusMapMarker: function (m) { this.openMapMarker(m); },
+
+      /* ------------------------ 行程规划（独立页） ------------------------ */
+      togglePlanPref: function (p) {
+        var i = this.plan.prefs.indexOf(p);
+        if (i >= 0) { this.plan.prefs.splice(i, 1); } else { this.plan.prefs.push(p); }
+      },
+      /**
+       * 生成行程。
+       * 与 AI 助手完全独立：用的是 plan 自己的状态，不会污染 ai.answer/ai.question，
+       * 也不会受 ai.mode 影响（需求要求两个功能互不混用）。
+       */
+      generatePlanPage: function () {
+        var self = this;
+        if (this.plan.loading) { return; }
+        this.plan.loading = true;
+        var body = {
+          days: Math.max(1, Math.min(3, Number(this.plan.days) || 2)),
+          people: Math.max(1, Math.min(10, Number(this.plan.people) || 2)),
+          preferences: this.plan.prefs.slice(),
+          question: String(this.plan.note || '').trim(),
+        };
+        api.post('/api/ai/plan', body).then(function (res) {
+          self.plan.loading = false;
+          if (!res || !res.ok) {
+            self.toast((res && res.error) || '生成失败，请稍后再试', 'warn');
+            return;
+          }
+          self.plan.result = res;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         });
       },
 
@@ -1923,31 +2068,24 @@
       },
 
       /* ---------------------------- AI ---------------------------- */
+      /**
+       * AI 助手：只做「问村内的事」。
+       *
+       * 行程规划已拆成独立页面（go('plan') → generatePlanPage），
+       * 这里不再有 plan 分支 —— 两个功能各自一套状态，互不混用。
+       */
       askAi: function () {
         var self = this;
         if (this.ai.loading) { return; }
-        var mode = this.ai.mode;
         var q = (this.ai.question || '').trim();
-        // 问答模式必须有具体问题；排行程模式允许空着，直接按天数/人数/偏好生成
-        if (mode !== 'plan' && !q) { this.toast('先输入一个问题', 'warn'); return; }
-        var days = Math.max(1, Number(this.ai.planDays) || 2);
-        var people = Math.max(1, Math.min(10, Number(this.ai.planPeople) || 2));
-        var pref = this.ai.planPref || '亲子';
-        if (mode === 'plan' && !q) {
-          q = '帮我安排 ' + days + ' 天行程，' + people + ' 人出行，偏好' + pref;
-          this.ai.question = q;
-        }
+        if (!q) { this.toast('先输入一个问题', 'warn'); return; }
         this.stopTyping();
         this.ai.loading = true;
         this.ai.answer = '';
         this.ai.shown = '';
         this.ai.streaming = false;
         this.ai.sources = [];
-        var url = mode === 'plan' ? '/api/ai/plan' : '/api/ai/ask';
-        var body = mode === 'plan'
-          ? { days: days, people: people, preferences: [pref], question: q }
-          : { question: q };
-        api.post(url, body).then(function (res) {
+        api.post('/api/ai/ask', { question: q }).then(function (res) {
           self.ai.loading = false;
           if (!res || !res.ok) {
             var err = (res && res.error) || 'AI 服务暂时不可用，请稍后再试。';
@@ -1955,30 +2093,15 @@
             self.typeOut(err);
             return;
           }
-          var text = self.composeAnswer(res, mode);
+          var text = res.answer || '（没有返回内容）';
           self.ai.answer = text;
           self.typeOut(text);
         });
       },
 
-      /** 把后端返回拼成一段可直接逐字念出来的纯文本 */
-      composeAnswer: function (res, mode) {
-        if (mode !== 'plan') {
-          return res.answer || '（没有返回内容）';
-        }
-        var plan = res.plan || res;
-        var lines = [];
-        var summary = res.summary || plan.summary || '';
-        if (summary) { lines.push(summary, ''); }
-        (plan.days || []).forEach(function (d) {
-          lines.push('第 ' + d.day + ' 天 · ' + (d.date || ''));
-          (d.items || []).forEach(function (it) {
-            lines.push('  ' + (it.time ? it.time + '  ' : '') + it.title);
-          });
-          lines.push('');
-        });
-        return lines.join('\n').trim();
-      },
+
+      // composeAnswer 已随行程规划独立成页而移除：
+      // 行程页直接渲染 plan.result 的结构（天/时间轴/预约项目），不需要再拼纯文本。
 
       /* 与手机端同一套打字节奏：约 90 帧放完，26ms 一帧，长回答也不会等太久 */
       typeOut: function (text) {

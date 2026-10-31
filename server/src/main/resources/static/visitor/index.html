@@ -26,6 +26,9 @@
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
   <link rel="stylesheet" href="../assets/css/app.css">
   <link rel="stylesheet" href="../assets/css/theme-dark.css">
+  <link rel="stylesheet" href="../assets/css/theme-warm.css">
+  <link rel="stylesheet" href="../assets/css/theme-ink.css">
+  <link rel="stylesheet" href="../assets/css/virtual-map.css">
   <link rel="stylesheet" href="./css/visitor.css">
   <script src="../assets/js/theme.js"></script>
 </head>
@@ -412,25 +415,7 @@
             </div>
           </div>
 
-          <div class="card menu">
-            <div class="menu-item" v-for="(m, i) in menus" :key="m.key"
-                 :class="{ 'menu-line': i !== menus.length - 1 }" @click="go(m.view, m.tab)">
-              <div class="menu-icon" :style="{ background: m.bg, color: m.color }">
-                <svg class="ico" aria-hidden="true"><use :href="iconHref(m.icon)"></use></svg>
-              </div>
-              <div class="menu-body"><b>{{ m.text }}</b><span>{{ m.desc }}</span></div>
-              <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
-            </div>
-            <div class="menu-item menu-line" @click="openPwd">
-              <div class="menu-icon" style="background:#FCF4E2;color:#B07A18">
-                <svg class="ico" aria-hidden="true"><use :href="iconHref('i-shield')"></use></svg>
-              </div>
-              <div class="menu-body"><b>修改密码</b><span>定期更换，账号更安全</span></div>
-              <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
-            </div>
-          </div>
-
-          <!-- 个性化设置：主题切换（浅色 / 深色），整站跟随 -->
+          <!-- 个性化设置：紧跟在印章墙下方，进「我的」就能看到（需求：上移） -->
           <div class="card">
             <div class="card-title"><i></i>个性化设置</div>
             <div class="settings-row">
@@ -439,11 +424,32 @@
                 <span class="dim tiny">深色适合夜间，卡片与弹窗整体跟随</span>
               </div>
               <div class="theme-switch">
-                <button class="theme-opt" :class="{ on: themeMode === 'light' }" @click="setTheme('light')">
-                  <svg class="ico"><use :href="iconHref('i-sun')"></use></svg>浅色</button>
-                <button class="theme-opt" :class="{ on: themeMode === 'dark' }" @click="setTheme('dark')">
-                  <svg class="ico"><use :href="iconHref('i-moon')"></use></svg>深色</button>
+                <button v-for="t in themeOptions" :key="t.key" class="theme-opt"
+                        :class="{ on: themeMode === t.key }" @click="setTheme(t.key)">
+                  <span class="theme-dot" :style="{ background: t.dot }"></span>{{ t.text }}</button>
               </div>
+            </div>
+          </div>
+
+          <div class="card menu">
+            <!-- 每一项都画分隔线：之前用「不是最后一项才画」，但 menus 后面还跟着「修改密码」，
+                 导致举报中心（数组最后一项）和修改密码之间缺一条线。 -->
+            <div class="menu-item menu-line" v-for="m in menus" :key="m.key" @click="go(m.view, m.tab)">
+              <div class="menu-icon" :style="{ background: m.bg, color: m.color }">
+                <svg class="ico" aria-hidden="true"><use :href="iconHref(m.icon)"></use></svg>
+              </div>
+              <div class="menu-body"><b>{{ m.text }}</b><span>{{ m.desc }}</span></div>
+              <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
+            </div>
+            <!-- 举报中心（menus 最后一项）与修改密码之间要有分隔线：
+                 原来靠「不是最后一项才加 menu-line」的规则，举报中心恰好是最后一项，
+                 所以它下面没有线 —— 这里给修改密码显式加 menu-line 补上。 -->
+            <div class="menu-item menu-line" @click="openPwd">
+              <div class="menu-icon" style="background:#FCF4E2;color:#B07A18">
+                <svg class="ico" aria-hidden="true"><use :href="iconHref('i-shield')"></use></svg>
+              </div>
+              <div class="menu-body"><b>修改密码</b><span>定期更换，账号更安全</span></div>
+              <div class="menu-arrow"><svg class="ico"><use :href="iconHref('i-arrow-right')"></use></svg></div>
             </div>
           </div>
 
@@ -1182,6 +1188,30 @@
         <div class="page-bottom-space"></div>
       </section>
 
+      <!-- 村内地图（战旗村虚拟地图） -->
+      <section v-if="view === 'map'" class="page-body subpage">
+        <div class="topbar">
+          <a class="topbar-back" @click="go('home')"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></a>
+          <b class="topbar-title">战旗村地图</b>
+        </div>
+        <div class="pad-x" style="padding-top:12px">
+          <div class="map-filter">
+            <button v-for="fc in mapFilters" :key="fc.key" class="chip"
+                    :class="{ on: mapKind === fc.key }" @click="mapKind = fc.key">{{ fc.text }}</button>
+          </div>
+          <div ref="mapBox" class="map-box"></div>
+          <div class="map-list">
+            <div v-for="m in mapMarkers" :key="m.key" class="map-row" @click="openMapMarker(m)">
+              <img :src="m.cover" alt="">
+              <div class="map-row-main"><b>{{ m.name }}</b><span class="dim tiny">{{ m.subtitle }}</span></div>
+              <svg class="ico arrow"><use :href="iconHref('i-arrow-right')"></use></svg>
+            </div>
+            <div v-if="!mapMarkers.length" class="empty"><p class="dim">这个分类暂时没有标点的地点</p></div>
+          </div>
+        </div>
+        <div class="page-bottom-space"></div>
+      </section>
+
       <!-- 活动日历 -->
       <section v-if="view === 'activities'" class="page-body subpage">
         <div class="topbar">
@@ -1572,6 +1602,7 @@
 <script src="../assets/js/speech.js"></script>
 <script src="../assets/js/spot-icons.js"></script>
 <script src="../assets/js/profile.js"></script>
+<script src="../assets/js/virtual-map.js"></script>
 <script src="./js/visitor.js"></script>
 </body>
 </html>

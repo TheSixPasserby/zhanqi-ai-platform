@@ -263,6 +263,14 @@
         current: {},
         // 主题：'light' | 'dark'（初值由 ZQTheme 决定，head 里已应用过一次）
         themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light'),
+        themeOptions: (window.ZQTheme ? window.ZQTheme.options : []),
+        // 村内地图
+        mapKind: 'all', mapInstance: null,
+        mapFilters: [
+          { key: 'all', text: '全部' }, { key: 'spot', text: '点位' },
+          { key: 'study', text: '研学' }, { key: 'homestay', text: '民宿' },
+          { key: 'experience', text: '农事' }, { key: 'activity', text: '活动' },
+        ],
         spotGalleryIndex: 0,     // 点位图集当前第几张
         spotGalleryTimer: null,  // 点位图集自动轮播定时器
         productGalleryIndex: 0,  // 商品图集当前第几张
@@ -561,10 +569,38 @@
           { key: 'wall', text: '我的印章墙', desc: '集齐全部印章领纪念品', icon: 'i-stamp', view: 'spots', tab: true, bg: '#FBEDE7', color: '#BE5230' },
           { key: 'ai', text: 'AI 文旅助手', desc: '问村内的事，有知识库出处', icon: 'i-ai', view: 'ai', bg: '#EAF1F9', color: '#2F6BA8' },
           { key: 'plan', text: 'AI 行程规划', desc: '按偏好编排 1-3 天路线', icon: 'i-map', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
+          { key: 'map', text: '战旗村地图', desc: '点位、民宿、研学与活动位置', icon: 'i-map', view: 'map', bg: '#E8F1F7', color: '#2C5F7A' },
           { key: 'acts', text: '村内活动日历', desc: '非遗节庆与农事体验', icon: 'i-calendar', view: 'activities', bg: '#F1EEE7', color: '#5C6B65' },
           { key: 'shop', text: '去逛商城', desc: '农产文创好物', icon: 'i-shop', view: 'shop', tab: true, bg: '#E8F4EE', color: '#2C7A57' },
           { key: 'reports', text: '举报中心', desc: '商家违规反馈与处理进度', icon: 'i-shield', view: 'reports', bg: '#FBEDE7', color: '#BE5230' },
         ];
+      },
+
+      /* -------------------- 村内地图 -------------------- */
+      mapMarkers: function () {
+        var list = [];
+        (this.spots || []).forEach(function (s) {
+          if (s.mapX == null || s.mapY == null) { return; }
+          list.push({ key: 'spot-' + s.id, kind: 'spot', refId: s.id, name: s.name,
+            subtitle: (s.type || '点位') + ' · ' + (s.location || ''),
+            cover: s.cover, x: Number(s.mapX), y: Number(s.mapY) });
+        });
+        (this.products || []).forEach(function (p) {
+          if (p.mapX == null || p.mapY == null) { return; }
+          if (p.category === 'goods') { return; }
+          list.push({ key: p.category + '-' + p.id, kind: p.category, refId: p.id, name: p.name,
+            subtitle: (p.categoryText || '') + ' · ¥' + p.price + '/' + (p.unit || '份'),
+            cover: p.cover, x: Number(p.mapX), y: Number(p.mapY) });
+        });
+        (this.activities || []).forEach(function (a) {
+          if (a.mapX == null || a.mapY == null) { return; }
+          list.push({ key: 'act-' + a.id, kind: 'activity', refId: a.id, name: a.title,
+            subtitle: (a.tag || '活动') + ' · ' + (a.date || ''),
+            cover: a.cover, x: Number(a.mapX), y: Number(a.mapY) });
+        });
+        if (this.mapKind === 'all') { return list; }
+        var kind = this.mapKind;
+        return list.filter(function (m) { return m.kind === kind; });
       },
 
       isTopView: function () {
@@ -681,6 +717,8 @@
        都会把 view 改回 'home'，于是这里立刻停；不用在每处跳转都记得手动调 stop。
        只挂在 view 上，不挂 viewStack —— 返回栈变化本身不改变当前页面。 */
     watch: {
+      // 分类切换只换标记集合，保留当前缩放/平移
+      mapKind: function () { this.refreshMapMarkers(); },
       view: function (now, before) {
         if (before === 'spotDetail' && now !== 'spotDetail') {
           this.stopSpeak();
@@ -1027,7 +1065,44 @@
 
       /* ---------------------------- 导航 ---------------------------- */
 
+      /* -------------------- 村内地图 -------------------- */
+      initMap: function () {
+        var self = this;
+        this.$nextTick(function () {
+          setTimeout(function () {
+            var box = self.$refs.mapBox;
+            if (!box || !window.ZQMap) { return; }
+            if (self.mapInstance) { self.mapInstance.destroy(); self.mapInstance = null; }
+            self.mapInstance = window.ZQMap.create({
+              el: box, markers: self.mapMarkers, showLegend: true,
+              onMarkerClick: function (m) { self.openMapMarker(m); },
+            });
+          }, 0);
+        });
+      },
+      refreshMapMarkers: function () {
+        if (this.mapInstance) { this.mapInstance.setMarkers(this.mapMarkers); }
+      },
+      openMapMarker: function (m) {
+        if (!m) { return; }
+        if (m.kind === 'spot') {
+          var sp = (this.spots || []).filter(function (s) { return s.id === m.refId; })[0];
+          if (sp) { this.openSpot(sp); } else { this.toast('点位不存在'); }
+          return;
+        }
+        if (m.kind === 'activity') {
+          var act = (this.activities || []).filter(function (a) { return a.id === m.refId; })[0];
+          if (act) { this.openActivity(act); } else { this.toast('活动不存在'); }
+          return;
+        }
+        var prod = (this.products || []).filter(function (p) { return p.id === m.refId; })[0];
+        if (prod) { this.openProduct(prod); } else { this.toast('商品不存在'); }
+      },
+
       go: function (view, isTop) {
+        // 地图页：进入时创建控件、离开时销毁
+        if (view === 'map') { this.initMap(); }
+        else if (this.mapInstance) { this.mapInstance.destroy(); this.mapInstance = null; }
         // 离开点位详情就停图集轮播，别让定时器在后台一直跑
         if (view !== 'spotDetail') { this.stopSpotGallery(); }
 
@@ -2404,6 +2479,7 @@
     destroyed: function () {
       this.stopSpotGallery();
       this.stopSpeak();
+      if (this.mapInstance) { this.mapInstance.destroy(); this.mapInstance = null; }
       if (this.chatTimer) { clearInterval(this.chatTimer); this.chatTimer = null; }
       if (this._themeOff) { this._themeOff(); this._themeOff = null; }
     },

@@ -8,6 +8,9 @@
   <link rel="stylesheet" href="../vendors/element-ui.css">
   <link rel="stylesheet" href="../assets/css/app.css">
   <link rel="stylesheet" href="../assets/css/theme-dark.css">
+  <link rel="stylesheet" href="../assets/css/theme-warm.css">
+  <link rel="stylesheet" href="../assets/css/theme-ink.css">
+  <link rel="stylesheet" href="../assets/css/virtual-map.css">
   <link rel="stylesheet" href="./css/admin.css">
   <script src="../assets/js/theme.js"></script>
 </head>
@@ -740,6 +743,17 @@
         <div class="dim" style="font-size:12px;margin:-4px 0 14px 64px">
           价格与库存使用原生数字输入，保存时会显式转成数字并校验（价格 ≥0、库存为 ≥0 整数）；保存成功后自动回读服务端数据核对。
         </div>
+        <el-form-item label="地图位置">
+          <div style="width:100%">
+            <div class="map-pick-tip">
+              <span v-if="form.mapX != null && form.mapY != null" class="tag ok">已选点 x={{ form.mapX }} · y={{ form.mapY }}</span>
+              <span v-else class="dim" style="font-size:12px">未标点：点地图选择位置</span>
+              <el-button v-if="form.mapX != null" size="mini" type="text" @click="clearMapPick">取消选点</el-button>
+            </div>
+            <div ref="pickMap" class="map-pick-box"></div>
+            <div class="dim" style="font-size:12px;margin-top:6px">点一下选位置，再点同一处可取消。</div>
+          </div>
+        </el-form-item>
         <el-form-item label="标签"><el-input v-model="tagsText" placeholder="用逗号分隔，如：产地直发，当季新米"></el-input></el-form-item>
         <el-form-item label="一句话卖点"><el-input v-model="form.intro"></el-input></el-form-item>
         <el-form-item label="详细描述"><el-input type="textarea" :rows="4" v-model="form.desc"></el-input></el-form-item>
@@ -1145,6 +1159,16 @@
           <el-form-item label="结束日期"><el-date-picker v-model="form.endDate" type="date" value-format="yyyy-MM-dd"
                                     placeholder="单日活动留空" style="width:100%"></el-date-picker></el-form-item>
           <el-form-item label="活动地点"><el-input v-model="form.place"></el-input></el-form-item>
+          <el-form-item label="地图位置">
+            <div style="width:100%">
+              <div class="map-pick-tip">
+                <span v-if="form.mapX != null && form.mapY != null" class="tag ok">已选点 x={{ form.mapX }} · y={{ form.mapY }}</span>
+                <span v-else class="dim" style="font-size:12px">未标点：点地图选择位置</span>
+                <el-button v-if="form.mapX != null" size="mini" type="text" @click="clearMapPick">取消选点</el-button>
+              </div>
+              <div ref="pickMap" class="map-pick-box"></div>
+            </div>
+          </el-form-item>
           <el-form-item label="活动标签"><el-input v-model="form.tag" placeholder="如：非遗 / 农事 / 节庆"></el-input></el-form-item>
           <el-form-item label="可约人数">
             <el-input-number v-model="form.capacity" :min="1" :max="9999"></el-input-number>
@@ -1250,10 +1274,9 @@
               <div class="cell-sub" style="margin-top:4px">浅色为默认宣纸白；深色为墨绿夜色，卡片、表格、弹窗一起切换</div>
             </div>
             <div class="theme-switch">
-              <button class="theme-opt" :class="{ on: themeMode === 'light' }" @click="setTheme('light')">
-                <i class="el-icon-sunny"></i> 浅色</button>
-              <button class="theme-opt" :class="{ on: themeMode === 'dark' }" @click="setTheme('dark')">
-                <i class="el-icon-moon"></i> 深色</button>
+              <button v-for="t in themeOptions" :key="t.key" class="theme-opt"
+                      :class="{ on: themeMode === t.key }" @click="setTheme(t.key)">
+                <span class="theme-dot" :style="{ background: t.dot }"></span>{{ t.text }}</button>
             </div>
           </div>
         </div>
@@ -1546,6 +1569,7 @@
 <script src="../assets/js/api.js"></script>
 <script src="../assets/js/charts.js"></script>
 <script src="../assets/js/profile.js"></script>
+<script src="../assets/js/virtual-map.js"></script>
 <script src="./js/admin.js"></script>
 </body>
 </html>

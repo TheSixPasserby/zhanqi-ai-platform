@@ -359,11 +359,52 @@
       return {
         loading: false, keyword: '', list: [], total: 0,
         editVisible: false, saving: false, form: {}, tagsText: '',
+        // 地图选点（管理员可查看并编辑商品位置）
+        pickMapInstance: null, pickMarkers: [],
         fmt: fmt
       };
     },
     created: function () { this.load(); },
     methods: {
+      /* ------------------------ 地图选点 ------------------------ */
+      initPickMap: function () {
+        var self = this;
+        this.$nextTick(function () {
+          setTimeout(function () {
+            var box = self.$refs.pickMap;
+            if (!box || !window.ZQMap) { return; }
+            if (self.pickMapInstance) { self.pickMapInstance.destroy(); self.pickMapInstance = null; }
+            if (!self.pickMarkers.length) {
+              api.get('/api/tour/spots', null, { silent: true }).then(function (res) {
+                if (res && res.ok && res.spots) { self.pickMarkers = res.spots; self.rebuildPickMap(); }
+              });
+            }
+            self.pickMapInstance = window.ZQMap.create({
+              el: box,
+              markers: (self.pickMarkers || []).filter(function (s) { return s.mapX != null && s.mapY != null; })
+                .map(function (s) { return { key: 'sp-' + s.id, kind: 'spot', name: s.name, x: Number(s.mapX), y: Number(s.mapY) }; }),
+              selectable: true,
+              showLegend: false,
+              picked: (self.form && self.form.mapX != null && self.form.mapY != null)
+                ? { x: Number(self.form.mapX), y: Number(self.form.mapY) } : null,
+              onPick: function (x, y) {
+                if (x == null) { self.form.mapX = null; self.form.mapY = null; }
+                else { self.form.mapX = x; self.form.mapY = y; }
+              },
+            });
+          }, 80);
+        });
+      },
+      rebuildPickMap: function () {
+        if (!this.pickMapInstance) { return; }
+        this.pickMapInstance.setMarkers((this.pickMarkers || []).filter(function (s) { return s.mapX != null && s.mapY != null; })
+          .map(function (s) { return { key: 'sp-' + s.id, kind: 'spot', name: s.name, x: Number(s.mapX), y: Number(s.mapY) }; }));
+      },
+      clearMapPick: function () {
+        this.form.mapX = null;
+        this.form.mapY = null;
+        if (this.pickMapInstance) { this.pickMapInstance.setPicked(null); }
+      },
       load: function () {
         var self = this;
         this.loading = true;
@@ -380,6 +421,7 @@
           if (!res.ok) { return; }
           self.fillForm(res.product || {});
           self.editVisible = true;
+          self.initPickMap();
         });
       },
       /**
@@ -419,7 +461,10 @@
           name: name, category: f.category, price: price, unit: f.unit,
           stock: stock, status: f.status,
           tags: String(this.tagsText || '').split(/[,，、\s]+/).filter(Boolean),
-          intro: f.intro, desc: f.desc
+          intro: f.intro, desc: f.desc,
+          // 地图坐标：显式传（含 null 表示清空），后端 coordinate() 会夹到 0-100
+          mapX: (f.mapX == null || f.mapX === '') ? null : Number(f.mapX),
+          mapY: (f.mapY == null || f.mapY === '') ? null : Number(f.mapY)
         }).then(function (res) {
           self.saving = false;
           if (!res.ok) { return; }
@@ -460,6 +505,8 @@
       return {
         tab: 'spots', loading: false, saving: false, list: [], formVisible: false,
         form: {}, tagsText: '',
+        // 地图选点（活动/点位可查看并编辑位置）
+        pickMapInstance: null, pickMarkers: [],
         aiForm: { enabled: false, baseUrl: '', apiKey: '', model: 'deepseek-chat', systemPrompt: '', hasKey: false, keyMasked: '' },
         aiSaving: false, aiTesting: false,
         bookVisible: false, bookingActivity: {}, bookings: [], bookingSaving: false,
@@ -641,6 +688,48 @@
             : {});
         this.tagsText = '';
         this.formVisible = true;
+        this.initPickMap();
+      },
+      /* ------------------------ 地图选点（活动/点位位置） ------------------------ */
+      initPickMap: function () {
+        var self = this;
+        // 只有活动与点位需要位置；知识库等其它表不显示地图
+        if (!['activities', 'spots'].includes(this.tab)) { return; }
+        this.$nextTick(function () {
+          setTimeout(function () {
+            var box = self.$refs.pickMap;
+            if (!box || !window.ZQMap) { return; }
+            if (self.pickMapInstance) { self.pickMapInstance.destroy(); self.pickMapInstance = null; }
+            if (!self.pickMarkers || !self.pickMarkers.length) {
+              api.get('/api/tour/spots', null, { silent: true }).then(function (res) {
+                if (res && res.ok && res.spots) { self.pickMarkers = res.spots; self.rebuildPickMap(); }
+              });
+            }
+            self.pickMapInstance = window.ZQMap.create({
+              el: box,
+              markers: (self.pickMarkers || []).filter(function (s) { return s.mapX != null && s.mapY != null; })
+                .map(function (s) { return { key: 'sp-' + s.id, kind: 'spot', name: s.name, x: Number(s.mapX), y: Number(s.mapY) }; }),
+              selectable: true,
+              showLegend: false,
+              picked: (self.form && self.form.mapX != null && self.form.mapY != null)
+                ? { x: Number(self.form.mapX), y: Number(self.form.mapY) } : null,
+              onPick: function (x, y) {
+                if (x == null) { self.form.mapX = null; self.form.mapY = null; }
+                else { self.form.mapX = x; self.form.mapY = y; }
+              },
+            });
+          }, 80);
+        });
+      },
+      rebuildPickMap: function () {
+        if (!this.pickMapInstance) { return; }
+        this.pickMapInstance.setMarkers((this.pickMarkers || []).filter(function (s) { return s.mapX != null && s.mapY != null; })
+          .map(function (s) { return { key: 'sp-' + s.id, kind: 'spot', name: s.name, x: Number(s.mapX), y: Number(s.mapY) }; }));
+      },
+      clearMapPick: function () {
+        this.form.mapX = null;
+        this.form.mapY = null;
+        if (this.pickMapInstance) { this.pickMapInstance.setPicked(null); }
       },
       edit: function (row) {
         this.form = Object.assign({}, row);
@@ -651,6 +740,7 @@
           if (!this.form.voice) { this.form.voice = 'auto'; }
         }
         this.formVisible = true;
+        this.initPickMap();
       },
       /** 判断是不是 icons.svg 里的图标 key（历史数据存的是单个汉字，不能直接当 key 拼 URL） */
       isStampIcon: function (key) {
@@ -929,6 +1019,12 @@
         sessionLoading: false,
         schemaList: [],
         schemaLoading: false,
+        // 【2026-10-31 修复】「个性化设置」面板在 player=view-server 这个子组件里，
+        // 但主题状态原本只加在根 Vue 上 —— 子组件读不到父组件的 data，
+        // 所以面板能渲染出来却是空的（themeMode/setTheme 都是 undefined）。
+        // 这里在组件自己也持有一份，并订阅 ZQTheme，与其它端行为一致。
+        themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light'),
+        themeOptions: (window.ZQTheme ? window.ZQTheme.options : []),
         fmt: fmt
       };
     },
@@ -937,8 +1033,23 @@
         return this.server || { status: {}, links: {}, interfaces: [], tables: {}, discovery: {}, ai: {} };
       }
     },
-    created: function () { this.loadSettings(); },
+    created: function () {
+      var self = this;
+      this.loadSettings();
+      if (window.ZQTheme) {
+        this.themeMode = window.ZQTheme.get();
+        this._themeOff = window.ZQTheme.onChange(function (mode) { self.themeMode = mode; });
+      }
+    },
+    beforeDestroy: function () {
+      if (this._themeOff) { this._themeOff(); this._themeOff = null; }
+    },
     methods: {
+      /** 切换主题：样式应用在 ZQTheme，这里只同步选中态 */
+      setTheme: function (mode) {
+        if (!window.ZQTheme) { return; }
+        this.themeMode = window.ZQTheme.set(mode);
+      },
       onTab: function (tab) {
         if (tab.name === 'sessions') { this.loadSessions(); }
         if (tab.name === 'schema') { this.loadSchema(); }

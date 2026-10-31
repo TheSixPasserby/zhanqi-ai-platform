@@ -1396,3 +1396,68 @@ body {
   display: grid; place-items: center; background: var(--brand); color: #fff; box-shadow: var(--shadow-sm);
 }
 .profile-card .avatar-edit .i { width: 13px; height: 13px; }
+
+/* ==================== 村内地图页 ==================== */
+.map-filter { display: flex; gap: 8px; flex-wrap: wrap; }
+.map-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.map-box { min-width: 0; }
+.map-side { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; }
+.map-side-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.map-side-head h3 { margin: 0; font-size: 14px; }
+.map-list { max-height: 520px; overflow-y: auto; }
+.map-row { display: flex; align-items: center; gap: 11px; padding: 11px 14px; border-bottom: 1px dashed var(--line); cursor: pointer; transition: background .16s; }
+.map-row:last-child { border-bottom: 0; }
+.map-row:hover { background: var(--surface-2); }
+.map-row img { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex: none; background: var(--surface-3); }
+.map-row-main { flex: 1; min-width: 0; }
+.map-row-main b { display: block; font-size: 13px; }
+.map-row-main span { display: block; margin-top: 2px; }
+.map-row .arrow { width: 14px; height: 14px; opacity: .5; flex: none; }
+
+@media (max-width: 1080px) {
+  .map-layout { grid-template-columns: 1fr; }
+  .map-list { max-height: 320px; }
+}
+
+/* ==================== 行程规划页（独立于 AI 助手） ==================== */
+.plan-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+.plan-form { padding: 16px 18px; }
+.plan-form .field { margin-bottom: 14px; }
+.plan-form .field > span { display: block; margin-bottom: 7px; font-size: 12.5px; color: var(--text-3); }
+.plan-form textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 13px;
+  line-height: 1.6; resize: vertical; outline: none;
+}
+.plan-form textarea:focus { border-color: var(--brand-line); background: var(--surface); }
+.plan-form .stepper { display: inline-flex; align-items: center; gap: 10px; }
+.plan-form .stepper button {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface-2); color: var(--text-2); font-size: 15px; cursor: pointer; font-family: inherit;
+}
+.plan-form .stepper b { min-width: 28px; text-align: center; font-family: var(--mono); }
+.plan-result { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.plan-result .empty {
+  background: var(--surface); border: 1px dashed var(--line-strong); border-radius: var(--radius);
+  padding: 56px 20px; text-align: center; color: var(--text-3);
+}
+.plan-hero {
+  border-radius: var(--radius-lg); padding: 20px 22px; color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  box-shadow: var(--shadow);
+}
+.plan-hero > b { display: block; font-size: 17px; }
+.plan-hero > p { margin: 9px 0 0; color: rgba(255, 255, 255, .9); font-size: 12.5px; line-height: 1.8; }
+.plan-stats { display: flex; gap: 0; margin-top: 14px; padding-top: 13px; border-top: 1px solid rgba(255, 255, 255, .22); }
+.plan-stats > div { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.plan-stats b { font-size: 18px; }
+.plan-stats span { margin-top: 3px; font-size: 10.5px; color: rgba(255, 255, 255, .78); }
+.tip-item { display: flex; gap: 9px; padding: 6px 0; font-size: 13px; line-height: 1.7; }
+.tip-item i {
+  flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--brand-soft);
+  color: var(--brand); font-size: 11px; font-style: normal; display: grid; place-items: center; margin-top: 2px;
+}
+
+@media (max-width: 1080px) {
+  .plan-layout { grid-template-columns: 1fr; }
+}
