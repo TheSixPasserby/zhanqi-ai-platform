@@ -1,0 +1,236 @@
+/* ============================================================================
+ *  暖阳主题（三端共用）
+ *
+ *  陶土朱为主色的暖色主题：米黄底 + 暖白面，像傍晚的川西院落。
+ *
+ *  实现方式与 theme-dark.css 完全一致：**只覆盖设计令牌**，
+ *  不动任何组件样式 —— 卡片、弹窗、表格、输入框因此会整体跟随，不会出现局部不换色。
+ * ========================================================================== */
+
+
+html[data-theme="warm"] {
+  /* 底色与分隔线：米黄底、暖白面 */
+  --bg: #F7F1E6;
+  --surface: #FFFCF6;
+  --surface-2: #FBF4E8;
+  --surface-3: #F2E9D9;
+  --line: #E6DAC4;
+  --line-strong: #D6C7AA;
+
+  /* 文字：深棕，不用纯黑，避免和暖底打架 */
+  --text: #3B2E22;
+  --text-2: #6B5A48;
+  --text-3: #9A8874;
+
+  /* 主色：陶土朱当主色（暖阳主题的性格色） */
+  --brand: #BE5230;
+  --brand-2: #D97552;
+  --brand-deep: #9B4126;
+  --brand-soft: #FBEDE7;
+  --brand-line: #EBCFBF;
+
+  /* 强调色：竹青（与主色互补） */
+  --accent: #146B57;
+  --accent-soft: #E6F2ED;
+
+  /* 语义色 */
+  --warn: #B07A18;
+  --warn-soft: #FCF4E2;
+  --ok: #2C7A57;
+  --ok-soft: #E8F4EE;
+  --info: #2F6BA8;
+  --info-soft: #EAF1F9;
+  --danger: #B33A3A;
+  --danger-soft: #FBECEC;
+
+  /* 阴影：暖底上用棕调阴影，比纯黑柔和 */
+  --shadow-sm: 0 1px 2px rgba(59, 46, 34, .06);
+  --shadow: 0 1px 2px rgba(59, 46, 34, .05), 0 6px 20px rgba(59, 46, 34, .07);
+  --shadow-lg: 0 4px 12px rgba(59, 46, 34, .07), 0 18px 44px rgba(59, 46, 34, .1);
+}
+
+/* 让浏览器原生控件（滚动条、表单控件）也走深色，避免出现亮色滚动条 */
+html[data-theme="warm"] { color-scheme: dark; }
+
+/* --------------------------------------------------------------------------
+   下面这几处是**写死了浅色值**的地方（没有引用令牌），必须单独覆盖：
+   H5 的 body/screen 底色、聊天区渐变、卡片白底、抽屉白底等。
+   -------------------------------------------------------------------------- */
+html[data-theme="warm"] body,
+html[data-theme="warm"] .screen { background: var(--bg); }
+
+/* H5 宽屏时手机模拟外框 */
+html[data-theme="warm"] .screen { box-shadow: 0 0 0 1px var(--line); }
+@media (min-width: 620px) {
+  html[data-theme="warm"] body { background: #0E1211; }
+}
+
+/* 卡片、抽屉、底部栏、Tab 栏：默认白底的地方统一走 surface */
+html[data-theme="warm"] .card,
+html[data-theme="warm"] .drawer,
+html[data-theme="warm"] .modal-card,
+html[data-theme="warm"] .bottom-bar,
+html[data-theme="warm"] .tabbar,
+html[data-theme="warm"] .chat-shell,
+html[data-theme="warm"] .chat-input,
+html[data-theme="warm"] .el-dialog,
+html[data-theme="warm"] .el-drawer,
+html[data-theme="warm"] .el-card,
+html[data-theme="warm"] .el-table,
+html[data-theme="warm"] .el-table tr,
+html[data-theme="warm"] .el-table th,
+html[data-theme="warm"] .el-table td,
+html[data-theme="warm"] .el-input__inner,
+html[data-theme="warm"] .el-textarea__inner,
+html[data-theme="warm"] .el-select-dropdown,
+html[data-theme="warm"] .el-dropdown-menu,
+html[data-theme="warm"] .el-message-box,
+html[data-theme="warm"] .el-pagination,
+html[data-theme="warm"] .el-tabs__item {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* 表格行间与表头：用 surface-2 区分，否则整块糊在一起 */
+html[data-theme="warm"] .el-table th,
+html[data-theme="warm"] .el-table__header-wrapper,
+html[data-theme="warm"] .el-table__body tr:nth-child(even) {
+  background: var(--surface-2) !important;
+}
+html[data-theme="warm"] .el-table,
+html[data-theme="warm"] .el-table td,
+html[data-theme="warm"] .el-table th {
+  border-color: var(--line) !important;
+}
+html[data-theme="warm"] .el-table__body tr:hover > td {
+  background: var(--surface-3) !important;
+}
+
+/* 输入框 / 下拉 / 日期选择：Element UI 默认是白色 */
+html[data-theme="warm"] .el-input__inner,
+html[data-theme="warm"] .el-textarea__inner,
+html[data-theme="warm"] .el-range-input {
+  background: var(--surface-2) !important;
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+}
+html[data-theme="warm"] .el-input__inner::placeholder,
+html[data-theme="warm"] .el-textarea__inner::placeholder { color: var(--text-3) !important; }
+
+/* 聊天区渐变（H5 与 PC 都写死了浅色渐变） */
+html[data-theme="warm"] .chat-body {
+  background: linear-gradient(180deg, var(--surface-2), var(--surface) 200px) !important;
+}
+
+/* 气泡：对方白底、自己品牌浅底，深色下分别换成 surface / brand-soft */
+html[data-theme="warm"] .msg-text,
+html[data-theme="warm"] .msg-card,
+html[data-theme="warm"] .chat-bubble {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+html[data-theme="warm"] .msg.me .msg-text,
+html[data-theme="warm"] .chat-msg.self .chat-bubble {
+  background: var(--brand-soft);
+  border-color: var(--brand-line);
+}
+
+/* 消息卡片的白色子元素 */
+html[data-theme="warm"] .msg-card,
+html[data-theme="warm"] .chat-card-msg,
+html[data-theme="warm"] .chat-card-title { background: var(--surface-2); }
+
+/* 抽屉遮罩在深色下要更黑，否则看不清边界 */
+html[data-theme="warm"] .drawer-mask,
+html[data-theme="warm"] .mask { background: rgba(0, 0, 0, .62); }
+
+/* 悬停 / 选中态：浅色下是 white，深色下必须换，否则一悬停就白一块 */
+html[data-theme="warm"] .chat-thread:hover,
+html[data-theme="warm"] .chat-thread.on,
+html[data-theme="warm"] .thread-row:hover,
+html[data-theme="warm"] .goods-card:hover,
+html[data-theme="warm"] .spot-card:hover,
+html[data-theme="warm"] .act-card:hover,
+html[data-theme="warm"] .user-menu,
+html[data-theme="warm"] .el-dropdown-menu {
+  background: var(--surface-2);
+  color: var(--text);
+}
+html[data-theme="warm"] .chat-thread.on { box-shadow: inset 3px 0 0 var(--brand); }
+
+/* 表单控件 / 日期选择器在深色下的日历面板 */
+html[data-theme="warm"] .el-picker-panel,
+html[data-theme="warm"] .el-date-table td,
+html[data-theme="warm"] .el-popper {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--line);
+}
+html[data-theme="warm"] .el-date-table td.available:hover { color: var(--brand); }
+
+/* 分页 / 标签 / 按钮的浅底变体 */
+html[data-theme="warm"] .el-button--default,
+html[data-theme="warm"] .el-tag,
+html[data-theme="warm"] .el-pagination button,
+html[data-theme="warm"] .el-pager li {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+html[data-theme="warm"] .el-pager li.active { color: var(--brand); }
+
+/* 图片：深色下轻微降亮，避免大片实景图在暗背景里刺眼 */
+html[data-theme="warm"] .goods-cover img,
+html[data-theme="warm"] .spot-cover img,
+html[data-theme="warm"] .drawer-cover img,
+html[data-theme="warm"] .act-cover img,
+html[data-theme="warm"] .spot-gallery img { filter: brightness(.92) saturate(.96); }
+
+/* 页脚 / 侧边栏 / 导航条 */
+html[data-theme="warm"] .site-foot,
+html[data-theme="warm"] .topnav,
+html[data-theme="warm"] .auth-head,
+html[data-theme="warm"] .m-head,
+html[data-theme="warm"] .m-foot,
+html[data-theme="warm"] .admin-head,
+html[data-theme="warm"] .side {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+/* 顶部导航：搜索框、图标按钮、分割线都写死了浅色 */
+html[data-theme="warm"] .topnav { background: var(--surface); border-color: var(--line); }
+html[data-theme="warm"] .nav-links a { color: var(--text-2); }
+html[data-theme="warm"] .nav-links a.on,
+html[data-theme="warm"] .nav-links a:hover { color: var(--brand); }
+html[data-theme="warm"] .nav-search input { background: var(--surface-2); border-color: var(--line); color: var(--text); }
+html[data-theme="warm"] .nav-search input::placeholder { color: var(--text-3); }
+html[data-theme="warm"] .icon-btn { background: var(--surface-2); border-color: var(--line); color: var(--text-2); }
+html[data-theme="warm"] .icon-btn:hover { background: var(--surface-3); color: var(--brand); }
+
+/* H5 顶部 hero / Tab 栏 / 底部操作栏 */
+html[data-theme="warm"] .tabbar { background: var(--surface); border-color: var(--line); }
+html[data-theme="warm"] .tabbar-item { color: var(--text-3); }
+html[data-theme="warm"] .tabbar-item.on { color: var(--brand); }
+html[data-theme="warm"] .topbar { background: var(--surface); border-color: var(--line); }
+html[data-theme="warm"] .field .input,
+html[data-theme="warm"] .input,
+html[data-theme="warm"] .textarea,
+html[data-theme="warm"] select { background: var(--surface-2); border-color: var(--line); color: var(--text); }
+
+/* 菜单项图标的小色块是行内 style 写死的浅色（#E6F2ED / #FBEDE7 …），深色下太亮。
+   降低不透明度比改源码更稳：不用逐个元素改行内样式，也不会漏。 */
+html[data-theme="warm"] .menu-icon,
+html[data-theme="warm"] .stat-icon { opacity: .55; filter: saturate(1.15) brightness(.9); }
+html[data-theme="warm"] .menu-icon .ico,
+html[data-theme="warm"] .stat-icon .ico { opacity: 1; }
+
+/* 印章圈：深色下描边与底色都偏亮 */
+html[data-theme="warm"] .seal-circle { background: var(--surface-2); border-color: var(--line); }
+html[data-theme="warm"] .seal-circle.seal-off { border-color: var(--line-strong); opacity: .5; }
+
+/* 过渡：切主题时给背景色一点过渡，不要瞬间硬切（不超过 200ms，避免拖影） */
+html.theme-anim, html.theme-anim * {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease !important;
+}

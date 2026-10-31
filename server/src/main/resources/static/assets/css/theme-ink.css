@@ -1,0 +1,236 @@
+/* ============================================================================
+ *  青墨主题（三端共用）
+ *
+ *  黛青为主色的冷色主题：墨青灰底 + 黛蓝面，像宣纸上的墨色。
+ *
+ *  实现方式与 theme-dark.css 完全一致：**只覆盖设计令牌**，
+ *  不动任何组件样式 —— 卡片、弹窗、表格、输入框因此会整体跟随，不会出现局部不换色。
+ * ========================================================================== */
+
+
+html[data-theme="ink"] {
+  /* 底色与分隔线：墨青灰、黛蓝面 */
+  --bg: #1B2A33;
+  --surface: #23343E;
+  --surface-2: #2A3D48;
+  --surface-3: #324753;
+  --line: #3A505C;
+  --line-strong: #4A626E;
+
+  /* 文字：冷白，带一点蓝调 */
+  --text: #E6EDF0;
+  --text-2: #A9BAC3;
+  --text-3: #7A8E99;
+
+  /* 主色：黛青 */
+  --brand: #5FBFB0;
+  --brand-2: #7DD6C7;
+  --brand-deep: #A6E8DC;
+  --brand-soft: #1F3B3A;
+  --brand-line: #2E5754;
+
+  /* 强调色：赭石 */
+  --accent: #D98E5A;
+  --accent-soft: #3A2A1F;
+
+  /* 语义色：冷底上略降饱和，避免太跳 */
+  --warn: #D6A445;
+  --warn-soft: #3A301C;
+  --ok: #56C596;
+  --ok-soft: #1B3630;
+  --info: #6BA8E8;
+  --info-soft: #1C2E3E;
+  --danger: #E3756C;
+  --danger-soft: #3B2120;
+
+  /* 阴影：墨底更重 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .3);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .26), 0 6px 20px rgba(0, 0, 0, .34);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, .32), 0 18px 44px rgba(0, 0, 0, .46);
+}
+
+/* 让浏览器原生控件（滚动条、表单控件）也走深色，避免出现亮色滚动条 */
+html[data-theme="ink"] { color-scheme: dark; }
+
+/* --------------------------------------------------------------------------
+   下面这几处是**写死了浅色值**的地方（没有引用令牌），必须单独覆盖：
+   H5 的 body/screen 底色、聊天区渐变、卡片白底、抽屉白底等。
+   -------------------------------------------------------------------------- */
+html[data-theme="ink"] body,
+html[data-theme="ink"] .screen { background: var(--bg); }
+
+/* H5 宽屏时手机模拟外框 */
+html[data-theme="ink"] .screen { box-shadow: 0 0 0 1px var(--line); }
+@media (min-width: 620px) {
+  html[data-theme="ink"] body { background: #0E1211; }
+}
+
+/* 卡片、抽屉、底部栏、Tab 栏：默认白底的地方统一走 surface */
+html[data-theme="ink"] .card,
+html[data-theme="ink"] .drawer,
+html[data-theme="ink"] .modal-card,
+html[data-theme="ink"] .bottom-bar,
+html[data-theme="ink"] .tabbar,
+html[data-theme="ink"] .chat-shell,
+html[data-theme="ink"] .chat-input,
+html[data-theme="ink"] .el-dialog,
+html[data-theme="ink"] .el-drawer,
+html[data-theme="ink"] .el-card,
+html[data-theme="ink"] .el-table,
+html[data-theme="ink"] .el-table tr,
+html[data-theme="ink"] .el-table th,
+html[data-theme="ink"] .el-table td,
+html[data-theme="ink"] .el-input__inner,
+html[data-theme="ink"] .el-textarea__inner,
+html[data-theme="ink"] .el-select-dropdown,
+html[data-theme="ink"] .el-dropdown-menu,
+html[data-theme="ink"] .el-message-box,
+html[data-theme="ink"] .el-pagination,
+html[data-theme="ink"] .el-tabs__item {
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* 表格行间与表头：用 surface-2 区分，否则整块糊在一起 */
+html[data-theme="ink"] .el-table th,
+html[data-theme="ink"] .el-table__header-wrapper,
+html[data-theme="ink"] .el-table__body tr:nth-child(even) {
+  background: var(--surface-2) !important;
+}
+html[data-theme="ink"] .el-table,
+html[data-theme="ink"] .el-table td,
+html[data-theme="ink"] .el-table th {
+  border-color: var(--line) !important;
+}
+html[data-theme="ink"] .el-table__body tr:hover > td {
+  background: var(--surface-3) !important;
+}
+
+/* 输入框 / 下拉 / 日期选择：Element UI 默认是白色 */
+html[data-theme="ink"] .el-input__inner,
+html[data-theme="ink"] .el-textarea__inner,
+html[data-theme="ink"] .el-range-input {
+  background: var(--surface-2) !important;
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+}
+html[data-theme="ink"] .el-input__inner::placeholder,
+html[data-theme="ink"] .el-textarea__inner::placeholder { color: var(--text-3) !important; }
+
+/* 聊天区渐变（H5 与 PC 都写死了浅色渐变） */
+html[data-theme="ink"] .chat-body {
+  background: linear-gradient(180deg, var(--surface-2), var(--surface) 200px) !important;
+}
+
+/* 气泡：对方白底、自己品牌浅底，深色下分别换成 surface / brand-soft */
+html[data-theme="ink"] .msg-text,
+html[data-theme="ink"] .msg-card,
+html[data-theme="ink"] .chat-bubble {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+html[data-theme="ink"] .msg.me .msg-text,
+html[data-theme="ink"] .chat-msg.self .chat-bubble {
+  background: var(--brand-soft);
+  border-color: var(--brand-line);
+}
+
+/* 消息卡片的白色子元素 */
+html[data-theme="ink"] .msg-card,
+html[data-theme="ink"] .chat-card-msg,
+html[data-theme="ink"] .chat-card-title { background: var(--surface-2); }
+
+/* 抽屉遮罩在深色下要更黑，否则看不清边界 */
+html[data-theme="ink"] .drawer-mask,
+html[data-theme="ink"] .mask { background: rgba(0, 0, 0, .62); }
+
+/* 悬停 / 选中态：浅色下是 white，深色下必须换，否则一悬停就白一块 */
+html[data-theme="ink"] .chat-thread:hover,
+html[data-theme="ink"] .chat-thread.on,
+html[data-theme="ink"] .thread-row:hover,
+html[data-theme="ink"] .goods-card:hover,
+html[data-theme="ink"] .spot-card:hover,
+html[data-theme="ink"] .act-card:hover,
+html[data-theme="ink"] .user-menu,
+html[data-theme="ink"] .el-dropdown-menu {
+  background: var(--surface-2);
+  color: var(--text);
+}
+html[data-theme="ink"] .chat-thread.on { box-shadow: inset 3px 0 0 var(--brand); }
+
+/* 表单控件 / 日期选择器在深色下的日历面板 */
+html[data-theme="ink"] .el-picker-panel,
+html[data-theme="ink"] .el-date-table td,
+html[data-theme="ink"] .el-popper {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--line);
+}
+html[data-theme="ink"] .el-date-table td.available:hover { color: var(--brand); }
+
+/* 分页 / 标签 / 按钮的浅底变体 */
+html[data-theme="ink"] .el-button--default,
+html[data-theme="ink"] .el-tag,
+html[data-theme="ink"] .el-pagination button,
+html[data-theme="ink"] .el-pager li {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text-2);
+}
+html[data-theme="ink"] .el-pager li.active { color: var(--brand); }
+
+/* 图片：深色下轻微降亮，避免大片实景图在暗背景里刺眼 */
+html[data-theme="ink"] .goods-cover img,
+html[data-theme="ink"] .spot-cover img,
+html[data-theme="ink"] .drawer-cover img,
+html[data-theme="ink"] .act-cover img,
+html[data-theme="ink"] .spot-gallery img { filter: brightness(.92) saturate(.96); }
+
+/* 页脚 / 侧边栏 / 导航条 */
+html[data-theme="ink"] .site-foot,
+html[data-theme="ink"] .topnav,
+html[data-theme="ink"] .auth-head,
+html[data-theme="ink"] .m-head,
+html[data-theme="ink"] .m-foot,
+html[data-theme="ink"] .admin-head,
+html[data-theme="ink"] .side {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+/* 顶部导航：搜索框、图标按钮、分割线都写死了浅色 */
+html[data-theme="ink"] .topnav { background: var(--surface); border-color: var(--line); }
+html[data-theme="ink"] .nav-links a { color: var(--text-2); }
+html[data-theme="ink"] .nav-links a.on,
+html[data-theme="ink"] .nav-links a:hover { color: var(--brand); }
+html[data-theme="ink"] .nav-search input { background: var(--surface-2); border-color: var(--line); color: var(--text); }
+html[data-theme="ink"] .nav-search input::placeholder { color: var(--text-3); }
+html[data-theme="ink"] .icon-btn { background: var(--surface-2); border-color: var(--line); color: var(--text-2); }
+html[data-theme="ink"] .icon-btn:hover { background: var(--surface-3); color: var(--brand); }
+
+/* H5 顶部 hero / Tab 栏 / 底部操作栏 */
+html[data-theme="ink"] .tabbar { background: var(--surface); border-color: var(--line); }
+html[data-theme="ink"] .tabbar-item { color: var(--text-3); }
+html[data-theme="ink"] .tabbar-item.on { color: var(--brand); }
+html[data-theme="ink"] .topbar { background: var(--surface); border-color: var(--line); }
+html[data-theme="ink"] .field .input,
+html[data-theme="ink"] .input,
+html[data-theme="ink"] .textarea,
+html[data-theme="ink"] select { background: var(--surface-2); border-color: var(--line); color: var(--text); }
+
+/* 菜单项图标的小色块是行内 style 写死的浅色（#E6F2ED / #FBEDE7 …），深色下太亮。
+   降低不透明度比改源码更稳：不用逐个元素改行内样式，也不会漏。 */
+html[data-theme="ink"] .menu-icon,
+html[data-theme="ink"] .stat-icon { opacity: .55; filter: saturate(1.15) brightness(.9); }
+html[data-theme="ink"] .menu-icon .ico,
+html[data-theme="ink"] .stat-icon .ico { opacity: 1; }
+
+/* 印章圈：深色下描边与底色都偏亮 */
+html[data-theme="ink"] .seal-circle { background: var(--surface-2); border-color: var(--line); }
+html[data-theme="ink"] .seal-circle.seal-off { border-color: var(--line-strong); opacity: .5; }
+
+/* 过渡：切主题时给背景色一点过渡，不要瞬间硬切（不超过 200ms，避免拖影） */
+html.theme-anim, html.theme-anim * {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease !important;
+}
