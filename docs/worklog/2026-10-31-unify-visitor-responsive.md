@@ -15,6 +15,9 @@
    标记与标签改到 HTML 图层（`.vmap-pins`），图标换成五类语义化 SVG 字形
    （点位=星、研学=书、民宿=屋顶、农事=麦穗、活动=日历）。
    标签用「候选槽位 + 矩形碰撞」自动避让，80 个候选位按 5 圈 × 16 方向生成。
+   **管理员端三个入口都能查看并修改位置**：商品编辑（`tpl-products`）、
+   点位编辑与活动表单（`tpl-content`）—— 点位这一处是本轮补的，
+   第 30 轮只接了商品和活动，点位坐标只能改数据库。
 
 2. **顶部导航文字排版**。旧电脑版把 8 个导航项的文字写成**裸文本节点**，
    而 `pc.css` 里 `@media(max-width:1120px){ .nav-links a span{display:none} }` 想隐藏文字，
@@ -77,7 +80,9 @@
 
 - `node tools/normalize-scripts.js --check`：通过
 - `node tools/smoke-test.js 8083`：**159/159 通过**
-- `node tools/browser-check.js 8083`：**107 项通过，0 失败**（改造前 75 项，新增 32 项断言）
+- `node tools/browser-check.js 8083`：**116 项通过，0 失败**（改造前 75 项）
+  - 第 31 轮新增：统一游客端 32 条、手机 tabbar 几何 2 条（见 2026-10-31-fix-mobile-tabbar-overflow）、
+    管理员端地图选点 7 条（见 2026-10-31-admin-spot-map-picker）
 - dist jar 是否已同步：**是**（`tools/build.ps1` 重新打包，纯 jar 模式验证 `/visitor/pc/` = 404、
   `/assets/js/virtual-map.js` = 200）
 - 额外实机探针（不进仓库，`logs/probe-*.js`）：

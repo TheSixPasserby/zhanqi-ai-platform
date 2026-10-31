@@ -1390,6 +1390,120 @@ function check(name, ok, detail) {
     await v.evalJs(`localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1`);
   }
 
+  /* ---- g. 管理员端可查看并修改点位/活动/商品的地图位置 ---- */
+  {
+    // 登录态注入同样要「先落同源页 → 写 localStorage → 再导航」，
+    // 但管理后台是 Element UI 的桌面应用，视口必须给桌面尺寸。
+    const v = await visit(BASE + '/admin/', { viewport: DESKTOP, wait: 1600 });
+    const signIn = await v.evalJs(`(async () => {
+      const login = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: 'admin', password: 'admin123', client: 'admin' }),
+      }).then(r => r.json()).catch(() => ({}));
+      if (!login.ok) { return 'no-demo-account'; }
+      localStorage.setItem('zhanqi.admin.token', login.token);
+      localStorage.setItem('zhanqi.admin.user', JSON.stringify({ role: login.role, name: login.name, at: Date.now() }));
+      return 'ok';
+    })()`);
+    const evStart = cdp.events.length;
+    await cdp.send('Page.navigate', { url: BASE + '/admin/' });
+    await sleep(4400);
+
+    const adminMap = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      if (!vm) { return { skip: 'not mounted' }; }
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      // 内容管理是子组件，按「有 tab 且持有 pickMarkers」把它找出来
+      const findContent = (c, acc) => {
+        (c.$children || []).forEach(k => {
+          if (k.tab !== undefined && k.pickMarkers) { acc.push(k); }
+          findContent(k, acc);
+        });
+        return acc;
+      };
+      vm.view = 'content';
+      await sleep(1500);
+      const comp = findContent(vm, [])[0];
+      if (!comp) { return { skip: 'no content component' }; }
+      comp.tab = 'spots';
+      await sleep(1000);
+      const row = (comp.list || [])[0];
+      if (!row) { return { skip: 'no spot row' }; }
+      comp.edit(row);
+      await sleep(1900);
+      const box = document.querySelector('.map-pick-box');
+      const r = box ? box.getBoundingClientRect() : null;
+      const before = comp.pickMapInstance ? comp.pickMapInstance.getPicked() : null;
+      const pins = document.querySelectorAll('.map-pick-box .vmap-pin').length;
+      // 真正在画布上点一下（派发原生 click，走的是「选点 → 写回 form.mapX/mapY」整条链路，
+      // 不是只改高亮）。1:1 缩放下画布正中对应地图坐标 (50, 50)。
+      const stage = document.querySelector('.map-pick-box .vmap-stage');
+      let clickPoint = null;
+      if (stage) {
+        const sr = stage.getBoundingClientRect();
+        clickPoint = { x: Math.round(sr.left + sr.width / 2), y: Math.round(sr.top + sr.height / 2) };
+        stage.dispatchEvent(new MouseEvent('click', {
+          bubbles: true, cancelable: true, clientX: clickPoint.x, clientY: clickPoint.y,
+        }));
+      }
+      await sleep(500);
+      const after = comp.pickMapInstance ? comp.pickMapInstance.getPicked() : null;
+      const formXY = { x: comp.form && comp.form.mapX, y: comp.form && comp.form.mapY };
+      return {
+        spotName: row.name,
+        rowX: row.mapX, rowY: row.mapY,
+        formVisible: !!comp.formVisible,
+        hasBox: !!box,
+        boxW: r ? Math.round(r.width) : 0,
+        boxH: r ? Math.round(r.height) : 0,
+        pins: pins,
+        before: before,
+        after: after,
+        formXY: formXY,
+        clickPoint: clickPoint,
+        tipText: (document.querySelector('.map-pick-tip') || {}).textContent || '',
+        hasPicked: !!document.querySelector('.map-pick-box .vmap-picked'),
+        toolbar: document.querySelectorAll('.map-pick-box .vmap-btn').length,
+        zoomText: (document.querySelector('.map-pick-box .vmap-zoom') || {}).textContent || '',
+      };
+    })()`);
+
+    if (!adminMap || adminMap.skip) {
+      note('管理员端地图位置检查跳过：' + (adminMap && adminMap.skip) + ' signIn=' + signIn);
+      check('管理员端点位编辑弹窗能打开地图选点', false, 'skip=' + (adminMap && adminMap.skip));
+    } else {
+      check('管理员端点位编辑弹窗打开后地图容器有尺寸',
+        !!(adminMap.hasBox && adminMap.boxW > 100 && adminMap.boxH > 100),
+        'selector=.map-pick-box  尺寸=' + adminMap.boxW + 'x' + adminMap.boxH
+          + ' 点位=' + adminMap.spotName + ' formVisible=' + adminMap.formVisible);
+      check('管理员端地图回显了该点位已保存的坐标',
+        !!(adminMap.before && Math.abs(Number(adminMap.before.x) - Number(adminMap.rowX)) < 0.5
+            && Math.abs(Number(adminMap.before.y) - Number(adminMap.rowY)) < 0.5),
+        'form.mapX/mapY=' + adminMap.rowX + '/' + adminMap.rowY
+          + ' getPicked()=' + JSON.stringify(adminMap.before)
+          + ' 选中高亮=' + adminMap.hasPicked);
+      check('管理员端地图上能看到其它点位标记（可选点参考）',
+        !!(adminMap.pins >= 1),
+        'selector=.map-pick-box .vmap-pin  count=' + adminMap.pins);
+      // 1:1 缩放下点画布正中 ≈ (50,50)，允许 2 个百分点的取整误差
+      check('管理员端可以在地图上改选新位置（点击后写回表单坐标）',
+        !!(adminMap.after && Math.abs(adminMap.after.x - 50) <= 2 && Math.abs(adminMap.after.y - 50) <= 2
+           && adminMap.formXY && Math.abs(Number(adminMap.formXY.x) - adminMap.after.x) < 0.5),
+        '点击位置=' + JSON.stringify(adminMap.clickPoint)
+          + ' getPicked()=' + JSON.stringify(adminMap.after)
+          + ' form.mapX/mapY=' + JSON.stringify(adminMap.formXY)
+          + ' 提示=' + JSON.stringify(String(adminMap.tipText || '').trim().slice(0, 40)));
+      check('管理员端地图带缩放工具（可放大缩小）',
+        adminMap.toolbar >= 3 && /%$/.test(String(adminMap.zoomText)),
+        'selector=.map-pick-box .vmap-btn  count=' + adminMap.toolbar + ' 缩放读数=' + adminMap.zoomText);
+      await screenshot('admin-10-spot-map-pick.png');
+    }
+    const prob = collectPageProblems(evStart);
+    check('管理员端地图路径无未捕获异常与控制台错误', prob.errors.length === 0, unique(prob.errors).slice(0, 3).join(' | '));
+    check('管理员端地图路径无 4xx/5xx 失败请求', prob.bad.length === 0, unique(prob.bad).slice(0, 3).join(' | '));
+    await v.evalJs(`localStorage.removeItem('zhanqi.admin.token'); localStorage.removeItem('zhanqi.admin.user'); 1`);
+  }
+
   /* ------------------------------ 汇总 ------------------------------ */
 
   console.log('');

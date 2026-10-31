@@ -1142,6 +1142,17 @@
               <span class="dim">{{ stampIconLabel(form.stampIcon) }} · 游客端印章墙会显示此图标；老数据单字自动兼容</span>
             </div>
           </el-form-item>
+          <el-form-item label="地图位置">
+            <div style="width:100%">
+              <div class="map-pick-tip">
+                <span v-if="form.mapX != null && form.mapY != null" class="tag ok">已选点 x={{ form.mapX }} · y={{ form.mapY }}</span>
+                <span v-else class="dim" style="font-size:12px">未标点：点地图选择位置</span>
+                <el-button v-if="form.mapX != null" size="mini" type="text" @click="clearMapPick">取消选点</el-button>
+              </div>
+              <div ref="pickMap" class="map-pick-box"></div>
+              <div class="dim" style="font-size:12px;margin-top:6px">点一下选位置，再点同一处可取消；游客端村内地图与详情页小地图都按这里的坐标画。</div>
+            </div>
+          </el-form-item>
           <el-form-item label="点位介绍"><el-input type="textarea" :rows="3" v-model="form.intro"></el-input></el-form-item>
           <el-form-item label="语音讲解包">
             <el-select v-model="form.voice" style="width:220px">

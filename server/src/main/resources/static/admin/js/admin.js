@@ -758,6 +758,13 @@
       save: function () {
         var self = this;
         var payload = Object.assign({}, this.form);
+        // 点位 / 活动的地图坐标显式转成数字或 null：
+        // 表单里可能残留空字符串，直接提交会让 mapX 变成 ''，
+        // 游客端 mapMarkers 判断 mapX != null 会把空串当成有效坐标画到 (0,0)。
+        if (this.tab === 'spots' || this.tab === 'activities') {
+          payload.mapX = (payload.mapX == null || payload.mapX === '') ? null : Number(payload.mapX);
+          payload.mapY = (payload.mapY == null || payload.mapY === '') ? null : Number(payload.mapY);
+        }
         if (this.tab === 'knowledge') {
           payload.tags = this.tagsText.split(/[,，、\s]+/).filter(Boolean);
         }
