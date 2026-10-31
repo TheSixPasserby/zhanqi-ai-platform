@@ -612,6 +612,13 @@ public class AdminService {
             Object rooms = body.get("roomTypes");
             patch.put("roomTypes", rooms instanceof List ? rooms : List.of(text(rooms).split("[,，、\\s]+")));
         }
+        // 地图坐标：管理端可编辑商品位置；null 表示清空（不在地图上显示）
+        if (body.containsKey("mapX")) {
+            patch.put("mapX", coordinate(body.get("mapX")));
+        }
+        if (body.containsKey("mapY")) {
+            patch.put("mapY", coordinate(body.get("mapY")));
+        }
 
         if (patch.isEmpty()) {
             throw ApiException.badRequest("没有需要保存的改动");
@@ -790,6 +797,23 @@ public class AdminService {
 
     private String text(Object v) {
         return v == null ? "" : String.valueOf(v).trim();
+    }
+
+    /**
+     * 地图坐标：0-100 百分比，越界夹回；空值/非数字返回 null（表示未标点）。
+     * 与 ShopService 的同名方法行为一致 —— 管理端与商家端改的是同一批字段。
+     */
+    private Double coordinate(Object v) {
+        if (v == null) { return null; }
+        String s = text(v);
+        if (s.isEmpty() || "null".equalsIgnoreCase(s)) { return null; }
+        try {
+            double d = Double.parseDouble(s);
+            if (Double.isNaN(d)) { return null; }
+            return Math.max(0, Math.min(100, d));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String kw(Object v) {
