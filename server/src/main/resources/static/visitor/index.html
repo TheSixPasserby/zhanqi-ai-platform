@@ -170,7 +170,8 @@
           </a>
 
           <nav class="nav-links">
-            <a v-for="n in navLinks" :key="n.view" :class="{ on: view === n.view }" @click="go(n.view, true)">
+            <a v-for="n in navLinks" :key="n.view" :title="n.text"
+               :class="{ on: view === n.view }" @click="go(n.view, true)">
               <svg class="i" aria-hidden="true"><use :href="iconHref(n.icon)"></use></svg><span>{{ n.text }}</span>
             </a>
           </nav>

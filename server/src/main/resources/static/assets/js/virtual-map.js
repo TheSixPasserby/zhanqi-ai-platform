@@ -434,27 +434,45 @@
       if (destroyed) return;
       var pins = pinsLayer.querySelectorAll('.vmap-pin');
       if (!pins.length) return;
-      var placed = [];
-      var pad = zoom >= 1.6 ? 1 : 3;
-      var order = [];
-      for (var i = 0; i < pins.length; i++) {
-        var m0 = pins[i].__marker;
-        var rank = m0 && m0.kind === 'spot' ? 0 : 1;
-        order.push({ node: pins[i], rank: rank, idx: i });
-      }
-      order.sort(function (a, b) { return a.rank - b.rank || a.idx - b.idx; });
 
-      for (var oi = 0; oi < order.length; oi++) {
-        var node = order[oi].node;
-        var m = node.__marker;
+      /*
+       * 第一遍：定位所有圆点，并把每个圆点占的矩形记下来。
+       * 为什么要单独记：标签除了彼此不能压，也不能盖住「别人的圆点」——
+       * 之前只判了标签与标签，结果密集区里标签压住旁边图标，
+       * 看着像那个点位没标出来（实测桌面档 45 处、手机档 50 处）。
+       */
+      var dots = [];
+      var i, node, m, p;
+      for (i = 0; i < pins.length; i++) {
+        node = pins[i];
+        m = node.__marker;
         if (!m) continue;
-        var p = toPx(m._x, m._y);
+        p = toPx(m._x, m._y);
         node.style.left = p.x + 'px';
         node.style.top = p.y + 'px';
-        /* 超出画布的点仍然渲染（放大后可能露出来），但要淡出，避免压在边缘 */
-        var out = p.x < -2 || p.y < -2 || p.x > side + 2 || p.y > side + 2;
-        node.classList.toggle('is-out', out);
+        node.classList.toggle('is-out', p.x < -2 || p.y < -2 || p.x > side + 2 || p.y > side + 2);
+        var dotEl = node.querySelector('.vmap-dot');
+        var dr = dotEl ? dotEl.offsetWidth : 22;
+        var dh = dotEl ? dotEl.offsetHeight : 22;
+        dots.push({ node: node, m: m, x: p.x, y: p.y,
+                    r: { x1: p.x - dr / 2, y1: p.y - dh / 2, x2: p.x + dr / 2, y2: p.y + dh / 2 } });
+      }
 
+      /* 第二遍：按「点位优先」的顺序摆标签 */
+      var pad = zoom >= 1.6 ? 1 : 3;
+      var order = dots.slice().sort(function (a, b) {
+        var ra = a.m.kind === 'spot' ? 0 : 1, rb = b.m.kind === 'spot' ? 0 : 1;
+        return ra - rb;
+      });
+      var placed = [];
+      /* 圆点也算障碍物，但要比标签之间松一点（pad + 2），
+         否则密集区的标签会被迫飞到很远，看着跟自己的点位脱节。 */
+      var dotPad = pad + 1;
+
+      for (var oi = 0; oi < order.length; oi++) {
+        node = order[oi].node;
+        m = order[oi].m;
+        p = { x: order[oi].x, y: order[oi].y };
         var lb = node.querySelector('.vmap-label');
         if (!lb) continue;
         var full = m.name || '';
@@ -466,13 +484,19 @@
         for (var ci = 0; ci < cand.length && !best; ci++) {
           if (lb.textContent !== cand[ci]) lb.textContent = cand[ci];
           var w = lb.offsetWidth, h = lb.offsetHeight;
-          for (var s = 0; s < LABEL_SLOTS.length; s++) {
-            var dx = LABEL_SLOTS[s][0], dy = LABEL_SLOTS[s][1];
+          for (var sl = 0; sl < LABEL_SLOTS.length; sl++) {
+            var dx = LABEL_SLOTS[sl][0], dy = LABEL_SLOTS[sl][1];
             var cx = p.x + dx, cy = p.y + dy;
             var r = { x1: cx - w / 2, y1: cy - h / 2, x2: cx + w / 2, y2: cy + h / 2 };
             if (r.x1 < 1 || r.y1 < 1 || r.x2 > side - 1 || r.y2 > side - 1) continue;
             var hit = false;
             for (var q = 0; q < placed.length; q++) if (rectsOverlap(r, placed[q], pad)) { hit = true; break; }
+            if (!hit) {
+              for (var d = 0; d < dots.length; d++) {
+                if (dots[d].node === node) continue;
+                if (rectsOverlap(r, dots[d].r, dotPad)) { hit = true; break; }
+              }
+            }
             if (!hit) { best = { dx: dx, dy: dy, r: r }; break; }
           }
         }
