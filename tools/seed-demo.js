@@ -64,4 +64,4 @@ console.log('回读校验：');
 (check.stdout || '').split('\n').filter(Boolean).forEach(function (l) { console.log('  ' + l.replace(/\t/g, ' = ')); });
 console.log('');
 console.log('演示账号：xiaoshuai / 123456（小帅）');
-console.log('入口：http://localhost:8080/visitor/pc/  → 我的订单');
+console.log('入口：http://localhost:8080/visitor/  → 我的订单');

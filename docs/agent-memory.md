@@ -501,3 +501,39 @@
 - **标签避让要「先截断再隐藏」，不要直接隐藏**：直接隐藏会让密集区显得空。
   截断（去地名前缀 + 超 5 字加省略号）比隐藏多留一倍信息量，hover 时恢复全名即可。
   （2026-10-31，来源：同上）
+
+## 统一游客端与响应式改造（2026-10-31 第二轮）
+
+- **游客端只有 `/visitor/` 一套页面，没有 `/visitor/pc/` 了**。
+  断点 **1024px**：`@media (min-width:1024px)` 出桌面顶部导航 `.topnav` 并隐藏底部 `.tabbar`，
+  以下反之。别再写「电脑版 / 手机版」两套，也别再引 `zq.visitor.forceMobile/forceDesktop`。
+  （2026-10-31，来源：2026-10-31-unify-visitor-responsive）
+
+- **`assets/css/app.css` 的 `.card` 没有 padding**（只有 `.card.pad`/`.card-body` 有），
+  而 `visitor/css/visitor.css` 的 `.card` 有 16px。裸用 `.card` 装内容会贴死边框。
+  PC 行程页「内容压边框」就是这个原因，不是间距写小了。
+  （2026-10-31，来源：同上）
+
+- **导航项文字必须包 `<span>`**。写成裸文本节点时，`@media(...){ .nav-links a span{display:none} }`
+  这类「窄屏隐藏文字」规则永远匹配不到，表现是挤压换行而不是优雅降级。
+  （2026-10-31，来源：同上）
+
+- **地图标记与标签放 HTML 层，底图放 SVG**。SVG 里量不到文字实际宽高（`getBBox` 随缩放变化），
+  标签碰撞检测只有 HTML 的 `offsetWidth/offsetHeight` 可靠。
+  对齐靠 `preserveAspectRatio=xMidYMid meet` + `side=min(clientW,clientH)` 两层同时居中。
+  （2026-10-31，来源：同上）
+
+- **地图标记的唯一键不能只认 `m.id`**。游客端传的是 `{key,kind,refId,name,x,y}` 没有 id，
+  43 个标记会全部 `data-id=undefined`，去重后只剩 1 个。取键顺序：`id → key → refId → 下标`。
+  （2026-10-31，来源：同上）
+
+- **`<use href="#不存在的symbol">` 不报错，静默渲染成空白**。新增图标引用后要核对
+  `icons.svg` 里确实有该 symbol（本次 `i-arrow-left` 就一直是空的）。
+  返回键别用 `‹` 字符，字形随字体漂移，手机与电脑对不齐。
+  （2026-10-31，来源：同上）
+
+- **改布局后先量「子元素个数与几何」，别只盯着 CSS 看**。plan 两栏不生效的根因是
+  闭合 `</div>` 错位导致 `.plan-layout` 只有 1 个子元素，`lay.children.length` 一眼就看出。
+  另：纯 jar 模式下改前端必须重新 `tools/build.ps1`，只有
+  `--spring.web.resources.static-locations=file:...` 模式才即时生效。
+  （2026-10-31，来源：同上）

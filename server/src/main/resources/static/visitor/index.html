@@ -6,23 +6,11 @@
   <meta name="theme-color" content="#146B57">
   <meta name="format-detection" content="telephone=no">
   <title>战旗云 · 游客端</title>
-  <script>
-    /* 设备检测：电脑浏览器（宽屏 + 精确指针）自动进电脑版 /visitor/pc/。
-       · 手机 / 平板保持本页；
-       · 手动切到手机版时带 ?pc=0，会写 sessionStorage，本次会话不再跳；
-       · 电脑版那边有对称的检测，防止手机误入。
-       注意：这段必须在 CSS 与 Vue 之前执行，否则会先闪一下手机版布局。 */
-    (function () {
-      var q = location.search || '';
-      if (q.indexOf('pc=0') >= 0) { sessionStorage.setItem('zq.visitor.forceMobile', '1'); return; }
-      if (sessionStorage.getItem('zq.visitor.forceMobile') === '1') { return; }
-      var ua = navigator.userAgent || '';
-      var isMobile = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(ua);
-      var wide = window.matchMedia && window.matchMedia('(min-width: 900px)').matches;
-      var fine = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
-      if (!isMobile && wide && fine) { location.replace('pc/' + q); }
-    })();
-  </script>
+  <!--
+    游客端只有这一套页面，靠 CSS 媒体查询自适应电脑与手机，不再有独立的「电脑版」目录。
+    （历史背景：以前 /visitor/ 与 /visitor/pc/ 是两套 HTML+JS，功能与样式各改一遍，
+      长期不同步；现在统一成一个入口，桌面端只是把同样的内容排得更宽。）
+  -->
   <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg">
   <link rel="stylesheet" href="../assets/css/app.css">
   <link rel="stylesheet" href="../assets/css/theme-dark.css">
@@ -55,7 +43,7 @@
     -->
     <div v-if="view === 'connect'" class="screen">
       <header class="topbar">
-        <button class="topbar-back" @click="goBack">‹</button>
+        <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
         <div class="topbar-title"><h1>连接服务器</h1><p>填写服务端地址</p></div>
       </header>
       <div class="pad-x">
@@ -164,6 +152,59 @@
       <div class="login-foot">登录即表示同意平台服务条款与隐私政策</div>
     </div>
     <div v-else class="screen app-screen">
+
+      <!--
+        桌面导航条：只在宽屏（≥900px）显示，手机由底部 tabbar 承担导航。
+        这里的文字一律包在 <span> 里 —— 之前电脑版把文字写成裸文本节点，
+        媒体查询想隐藏文字时选择器 .nav-links a span 完全匹配不到，
+        宽度一窄八项加搜索框就挤压换行。
+      -->
+      <header class="topnav">
+        <div class="nav-inner">
+          <a class="nav-brand" @click="go('home', true)">
+            <img class="brand-logo" src="../assets/img/logo.svg" alt="">
+            <span class="brand-text">
+              <b>{{ site.shortName || '战旗云' }}</b>
+              <em>游客端</em>
+            </span>
+          </a>
+
+          <nav class="nav-links">
+            <a v-for="n in navLinks" :key="n.view" :class="{ on: view === n.view }" @click="go(n.view, true)">
+              <svg class="i" aria-hidden="true"><use :href="iconHref(n.icon)"></use></svg><span>{{ n.text }}</span>
+            </a>
+          </nav>
+
+          <div class="nav-right">
+            <div class="nav-search">
+              <svg class="i" aria-hidden="true"><use :href="iconHref('i-search')"></use></svg>
+              <input v-model.trim="keyword" placeholder="搜商品" @keyup.enter="go('shop', true); loadProducts()">
+            </div>
+            <button class="icon-btn" title="我的消息" @click="go('chatList', true)">
+              <svg class="i" aria-hidden="true"><use :href="iconHref('i-mail')"></use></svg>
+            </button>
+            <button class="icon-btn" title="购物车" @click="openCart">
+              <svg class="i" aria-hidden="true"><use :href="iconHref('i-cart')"></use></svg>
+              <i v-if="cartCount" class="badge">{{ cartCount }}</i>
+            </button>
+            <div class="nav-user">
+              <span class="avatar" @click="go('mine', true)">
+                <img v-if="avatarUrl" :src="avatarUrl" alt="">
+                <template v-else>{{ (user.name || '游').slice(0, 1) }}</template>
+              </span>
+              <!-- 头像悬浮菜单：与商户端/管理端保持同一套结构（图标 + 文字），
+                   改密码只在「个人中心」里，不再放进悬浮菜单。 -->
+              <div class="user-menu">
+                <b>{{ user.name }}</b>
+                <a v-for="m in userMenus" :key="m.text" :class="{ danger: m.danger }"
+                   @click="m.danger ? doLogout() : go(m.view, true)">
+                  <svg class="i" aria-hidden="true"><use :href="iconHref(m.icon)"></use></svg><span>{{ m.text }}</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
 
       <!-- ------------------------------ 首页 ------------------------------ -->
       <section v-show="view === 'home'" class="page-body">
@@ -482,7 +523,7 @@
       <!-- 点位详情 -->
       <section v-if="view === 'spotDetail'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>{{ current.name || '点位详情' }}</h1><p>{{ current.type }}</p></div>
         </div>
         <div v-if="current.id">
@@ -520,6 +561,18 @@
               <p class="para">{{ current.intro }}</p>
             </div>
 
+            <!-- 点位在地图上的位置：与「村内地图」共用同一个 SVG 控件，
+                 只画当前这一个点，并把它居中放大，方便看出它在村里的哪一片。 -->
+            <div class="card" v-if="current.mapX != null && current.mapY != null">
+              <div class="card-title"><i class="accent"></i>在地图上的位置</div>
+              <div class="detail-map" ref="spotMapBox"></div>
+              <p class="dim tiny detail-map-tip">
+                <svg class="ico" aria-hidden="true"><use :href="iconHref('i-location')"></use></svg>
+                {{ current.location || '战旗村' }}
+                <a class="detail-map-more" @click="openMapFocus(current.mapX, current.mapY)">在村内地图中查看 ›</a>
+              </p>
+            </div>
+
             <div class="card seal-box">
               <div class="seal-circle" :class="{ 'seal-off': !current.checked }"><svg class="ico"><use :href="iconHref(spotIcon(current))"></use></svg></div>
               <div>
@@ -539,7 +592,7 @@
       <!-- 商品详情 -->
       <section v-if="view === 'productDetail'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>{{ product.name || '商品详情' }}</h1><p>{{ product.categoryText }}</p></div>
         </div>
         <div v-if="product.id">
@@ -590,6 +643,21 @@
               <div class="card-title"><i></i>商品介绍</div>
               <p class="para">{{ product.desc || '商家还没有填写详细介绍。' }}</p>
               <p v-if="product.intro" class="para dim sub-para">{{ product.intro }}</p>
+            </div>
+
+            <!--
+              需到店的项目在地图上的位置：研学 / 民宿 / 农事三类都有实体地点，
+              只画当前商品所属商家标定的那一个点（与村内地图同一套控件）。
+              农产文创是快递发货，没有「到店位置」，所以不显示。
+            -->
+            <div class="card" v-if="product.mapX != null && product.mapY != null && product.category !== 'goods'">
+              <div class="card-title"><i class="accent"></i>{{ product.category === 'homestay' ? '民宿位置' : (product.category === 'study' ? '研学地点' : '体验地点') }}</div>
+              <div class="detail-map" ref="productMapBox"></div>
+              <p class="dim tiny detail-map-tip">
+                <svg class="ico" aria-hidden="true"><use :href="iconHref('i-location')"></use></svg>
+                {{ productMerchant.address || productMerchant.name || '战旗村' }}
+                <a class="detail-map-more" @click="openMapFocus(product.mapX, product.mapY)">在村内地图中查看 ›</a>
+              </p>
             </div>
 
             <!-- 四类购买表单：goods 收货地址 / study 日期+场次 / homestay 入住+离店+房型 / experience 日期+时段 -->
@@ -701,7 +769,7 @@
       <!-- 商家主页：店铺信息 + 客服 + 在售商品 -->
       <section v-if="view === 'merchantHome'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>{{ merchantHome.name || '商家主页' }}</h1><p>店铺信息与在售商品</p></div>
         </div>
 
@@ -750,10 +818,51 @@
         <div class="page-bottom-space"></div>
       </section>
 
+      <!--
+        我的消息：会话列表。
+        以前只有电脑版有这一页，手机端想联系商家必须先翻到某个商品详情的「客服」按钮，
+        进过一次之后就再也找不回来。统一游客端后两处入口并存。
+      -->
+      <section v-if="view === 'chatList'" class="page-body subpage">
+        <div class="topbar">
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
+          <div class="topbar-title"><h1>我的消息</h1><p>与商家的沟通记录</p></div>
+          <button class="btn btn-ghost btn-xs" @click="loadChatThreads">刷新</button>
+        </div>
+        <div class="pad-x">
+          <div v-if="chatThreadsLoading" class="sk-list">
+            <div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div>
+          </div>
+          <div v-else-if="!chatThreads.length" class="empty-box">
+            <b>还没有会话</b>
+            <p>在商品详情点「客服」，或在商家主页联系商家，就能开始对话。</p>
+            <button class="btn btn-sm" @click="go('shop', true)">去逛商城</button>
+          </div>
+          <div v-else class="thread-list">
+            <div class="thread-row" v-for="t in chatThreads" :key="t.merchantId"
+                 @click="openChat(t.merchantId, t.merchantName)">
+              <span class="thread-avatar">
+                <img :src="t.merchantAvatar || defaultAvatar" alt="" @error="imgFail">
+                <i v-if="t.online" class="online-dot"></i>
+              </span>
+              <div class="thread-main">
+                <div class="thread-head">
+                  <b class="ell1">{{ t.merchantName }}</b>
+                  <span class="dim tiny">{{ time(t.lastAt) }}</span>
+                </div>
+                <p class="dim small ell1">{{ t.lastText || '还没有消息，去打个招呼吧' }}</p>
+              </div>
+              <span v-if="t.unread" class="thread-unread">{{ t.unread }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="page-bottom-space"></div>
+      </section>
+
       <!-- 商家客服聊天（移动端简版）：文字 / 商品卡 / 订单卡 / 图片 / 拍摄 -->
       <section v-if="view === 'chat'" class="page-body subpage im-page">
         <div class="topbar im-topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title">
             <h1>{{ chatMerchant.name || '在线客服' }}</h1>
             <p :class="{ on: chatOnline }">{{ chatPeerText }}</p>
@@ -859,7 +968,7 @@
       <!-- 我的订单 / 结算 -->
       <section v-if="view === 'orders'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>{{ checkoutMode ? '确认订单' : '我的订单' }}</h1>
             <p>{{ checkoutMode ? '逐项确认信息后提交' : '按状态筛选' }}</p></div>
         </div>
@@ -982,7 +1091,7 @@
       <!-- 订单详情：状态 / 商品 / 商家 / 拒绝协商 / 物流 / 预约信息 -->
       <section v-if="view === 'orderDetail'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>订单详情</h1><p>{{ orderDetail.id ? '单号 ' + orderDetail.id : '' }}</p></div>
         </div>
 
@@ -1153,7 +1262,7 @@
       <!-- 预约页 -->
       <section v-if="view === 'booking'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>研学 · 民宿 · 农事预约</h1><p>提前一天预约，到村直接体验</p></div>
         </div>
         <div class="tabs tabs-pad">
@@ -1191,10 +1300,10 @@
       <!-- 村内地图（战旗村虚拟地图） -->
       <section v-if="view === 'map'" class="page-body subpage">
         <div class="topbar">
-          <a class="topbar-back" @click="go('home')"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></a>
+          <button class="topbar-back" @click="go('home')"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <b class="topbar-title">战旗村地图</b>
         </div>
-        <div class="pad-x" style="padding-top:12px">
+        <div class="pad-x map-page" style="padding-top:12px">
           <div class="map-filter">
             <button v-for="fc in mapFilters" :key="fc.key" class="chip"
                     :class="{ on: mapKind === fc.key }" @click="mapKind = fc.key">{{ fc.text }}</button>
@@ -1215,7 +1324,7 @@
       <!-- 活动日历 -->
       <section v-if="view === 'activities'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>村内活动日历</h1><p>非遗节庆 · 农事体验 · 研学课程</p></div>
         </div>
         <div class="pad-x">
@@ -1245,7 +1354,7 @@
       <!-- 活动详情 + 预约 -->
       <section v-if="view === 'activityDetail'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>{{ currentAct.title || '活动详情' }}</h1><p>{{ currentAct.tag || '村内活动' }}</p></div>
         </div>
 
@@ -1308,7 +1417,7 @@
       <!-- 举报中心：我的举报进度 + 提交举报 -->
       <section v-if="view === 'reports'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>举报中心</h1><p>商家违规反馈 · 处理进度可查</p></div>
         </div>
 
@@ -1399,7 +1508,7 @@
 
       <section v-if="view === 'ai'" class="page-body subpage chat-page">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>AI 文旅助手</h1><p>{{ ai.mode || '本地知识库检索' }}</p></div>
         </div>
 
@@ -1444,10 +1553,14 @@
       <!-- AI 行程规划 -->
       <section v-if="view === 'plan'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="goBack">‹</button>
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <div class="topbar-title"><h1>AI 行程规划</h1><p>按你的偏好编排一天到三天</p></div>
         </div>
         <div class="pad-x">
+          <!-- 电脑上表单与结果左右分栏（.plan-layout 只在 >=1024px 生效），
+               手机仍是单列往下排。分栏后不用为看结果一路往下滚，改条件也能立刻重生成。 -->
+          <div class="plan-layout">
+          <div class="plan-form-col">
           <div class="card">
             <div class="field">
               <span>玩几天</span>
@@ -1473,7 +1586,9 @@
               {{ loadingPlan ? '正在生成…' : (planResult ? '重新生成' : '生成行程') }}
             </button>
           </div>
+          </div>
 
+          <div class="plan-result-col">
           <template v-if="planResult">
             <div class="plan-hero">
               <b>{{ planResult.title }}</b>
@@ -1520,6 +1635,8 @@
           <div v-else-if="!loadingPlan" class="empty-box">
             <b>选好条件，点「生成行程」</b>
             <p>AI 会从村内 8 个林盘点位里按你的偏好排出一条路线，并给出时间轴与花费预估。</p>
+          </div>
+          </div>
           </div>
         </div>
         <div class="page-bottom-space"></div>

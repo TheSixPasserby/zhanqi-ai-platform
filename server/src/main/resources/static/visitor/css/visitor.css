@@ -1,8 +1,14 @@
 /* ============================================================================
-   游客端（H5 / 手机浏览器）样式
+   游客端样式（唯一一套：手机 / 平板 / 电脑共用）
    —— 复用 assets/css/app.css 里的设计令牌（竹青 #146B57 / 陶土朱 #BE5230 /
       宣纸米白 #F6F4EF），保证与 PC 管理后台、商户工作台视觉统一。
-   移动优先：所有尺寸按手机屏幕设计，宽屏时居中成一条「手机宽度」的栏。
+
+   响应式策略（改写自原来的「手机壳」方案）：
+   1) 手机（< 1024px）：底部 tabbar 导航，单列内容，这是主要使用场景；
+   2) 电脑（>= 1024px）：顶部导航条 .topnav + 多列栅格，隐藏 tabbar；
+   3) 原来那套「宽屏时把内容限宽 560px 居中、外面加一圈深色底」的做法已删除 ——
+      那本质上是在电脑上模拟一台手机，屏幕越大浪费越多，也不像正经网页。
+      现在宽屏是真的用满宽度，只是正文仍限宽以免一行太长。
    ============================================================================ */
 
 [v-cloak] { display: none; }
@@ -12,20 +18,20 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* 手机之外的屏幕（PC 浏览器打开 H5）把内容限宽居中，避免拉伸变形 */
+/* 内容容器：不再限死 560px。窄屏时正文靠 .page-body 限宽居中，宽屏时铺满 */
 .screen {
-  max-width: 560px;
+  max-width: none;
   margin: 0 auto;
   min-height: 100vh;
-  background: #F6F4EF;
+  background: var(--bg, #F6F4EF);
   position: relative;
-  box-shadow: 0 0 0 1px rgba(31, 42, 38, .05);
 }
 
-/* 宽屏时给页面一个浅色外框，视觉上像手机模拟器 */
-@media (min-width: 620px) {
-  body { background: #EDEAE3; }
-  .tabbar, .bottom-bar, .drawer, .toast-wrap, .cart-fab { max-width: 560px; left: 50%; transform: translateX(-50%); }
+/* 平板及以下：正文限宽居中，固定层（tabbar / 抽屉 / 底部条）也跟着限宽，
+   否则在 800px 平板上一条通栏抽屉会很怪 */
+@media (max-width: 1023px) {
+  .page-body, .topbar { max-width: 720px; margin-left: auto; margin-right: auto; }
+  .tabbar, .bottom-bar, .drawer, .toast-wrap, .cart-fab { max-width: 720px; left: 50%; transform: translateX(-50%); }
   .bottom-bar { transform: translateX(-50%); }
 }
 
@@ -188,9 +194,13 @@ body {
 .topbar-shop { flex-direction: column; align-items: stretch; gap: 12px; padding-bottom: 16px; }
 .topbar-back {
   width: 34px; height: 34px; flex: none; border-radius: 50%; border: none;
-  background: rgba(255, 255, 255, .2); color: #fff; font-size: 22px; line-height: 1;
-  font-family: inherit; cursor: pointer; padding-bottom: 4px;
+  background: rgba(255, 255, 255, .2); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: inherit; cursor: pointer; padding: 0;
 }
+/* 返回键统一用 i-arrow-left 图标：'‹' 这种字符字形随字体漂移，
+   手机与电脑上的位置和粗细对不齐，看着像排版没做干净 */
+.topbar-back .ico { width: 18px; height: 18px; color: #fff; }
 .topbar-title h1 { font-size: 17px; font-weight: 700; margin: 0; color: #fff; }
 .topbar-title p { font-size: 11.5px; color: rgba(255, 255, 255, .78); margin: 3px 0 0; }
 
@@ -800,8 +810,9 @@ body {
 .loading-line i { display: block; width: 40%; height: 100%; background: var(--brand); animation: bootSlide 1.1s ease-in-out infinite; }
 
 /* ==================================================================
-   订单元信息 / 商家卡片 / 物流 / 聊天 / 举报（H5 同步 P6）
-   —— 与 visitor/pc 使用同一套设计和文案，只做移动端适配
+   订单元信息 / 商家卡片 / 物流 / 聊天 / 举报
+   —— 手机与电脑共用这套规则，宽屏差异统一放在文件末尾的
+      @media (min-width: 1024px) 段里覆盖，不要在这里写死尺寸
    ================================================================== */
 
 /* ------------------------------ 订单详情 ------------------------------ */
@@ -1114,3 +1125,258 @@ body {
 .map-row-main span { display: block; margin-top: 2px; }
 .map-row .arrow { width: 14px; height: 14px; opacity: .5; flex: none; }
 .map-row:active { background: var(--surface-2); }
+
+/* ============================================================================
+   宽屏（电脑）适配
+   —— 阈值取 1024px：这一档以上才放得下 8 个导航项 + 搜索框 + 三个按钮而不换行。
+      1024 以下（平板竖屏、手机横屏）继续用底部 tabbar，那才是拇指够得着的区域。
+   ============================================================================ */
+
+/* 顶部导航：窄屏不渲染（display:none 而不是 v-if，切窗口大小能立刻响应） */
+.topnav { display: none; }
+
+@media (min-width: 1024px) {
+  .topnav {
+    display: block;
+    position: sticky; top: 0; z-index: 40;
+    background: rgba(255, 255, 255, .9);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  /* 深色 / 青墨主题下白底会刺眼，换成半透明深底 */
+  html[data-theme="dark"] .topnav,
+  html[data-theme="ink"] .topnav { background: rgba(28, 38, 34, .88); }
+
+  .nav-inner {
+    max-width: 1240px; margin: 0 auto; height: 68px; padding: 0 26px;
+    display: flex; align-items: center; gap: 24px;
+  }
+
+  .nav-brand { display: flex; align-items: center; gap: 10px; cursor: pointer; flex: none; }
+  .brand-logo { width: 34px; height: 34px; border-radius: 10px; display: block; }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+  .brand-text b { font-size: 15px; letter-spacing: .4px; white-space: nowrap; }
+  .brand-text em { font-size: 11px; color: var(--text-3); font-style: normal; white-space: nowrap; }
+
+  /*
+   * 导航项：文字必须包在 span 里。
+   * 之前电脑版把文字直接写成裸文本节点，想用 .nav-links a span 隐藏文字的选择器
+   * 根本匹配不到 —— 窗口一窄，8 项加搜索框就挤压换行。现在文字有 span，
+   * 窄屏可以把文字收起来只留图标，排版不会崩。
+   */
+  .nav-links { display: flex; align-items: center; gap: 2px; flex: none; }
+  .nav-links a {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 12px; border-radius: 10px;
+    font-size: 13.5px; color: var(--text-2); cursor: pointer;
+    white-space: nowrap; transition: background .16s, color .16s;
+  }
+  .nav-links a .i { width: 18px; height: 18px; flex: none; }
+  .nav-links a:hover { background: var(--surface-3); color: var(--text); }
+  .nav-links a.on { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex: none; }
+
+  .nav-search {
+    display: flex; align-items: center; gap: 8px;
+    height: 38px; padding: 0 12px; border-radius: 10px;
+    background: var(--surface-3); color: var(--text-3);
+  }
+  .nav-search .i { width: 16px; height: 16px; flex: none; }
+  .nav-search input {
+    border: 0; outline: 0; background: transparent; color: var(--text);
+    font-size: 13px; font-family: inherit; width: 120px;
+  }
+
+  .icon-btn {
+    position: relative; width: 38px; height: 38px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--surface);
+    display: grid; place-items: center; cursor: pointer; color: var(--text-2);
+  }
+  .icon-btn .i { width: 18px; height: 18px; }
+  .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .icon-btn .badge {
+    position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px;
+    padding: 0 4px; border-radius: 999px; background: var(--accent); color: #fff;
+    font-size: 10px; font-style: normal; line-height: 17px; text-align: center;
+  }
+
+  .nav-user { position: relative; display: flex; align-items: center; }
+  .nav-user .avatar {
+    width: 34px; height: 34px; border-radius: 11px; overflow: hidden;
+    background: var(--brand-soft); color: var(--brand);
+    font-weight: 700; font-size: 14px; cursor: pointer;
+    display: grid; place-items: center; flex: none;
+  }
+  .nav-user .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .user-menu {
+    position: absolute; top: 44px; right: 0; min-width: 152px; padding: 8px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 12px; box-shadow: var(--shadow-lg);
+    opacity: 0; visibility: hidden; transform: translateY(-6px);
+    transition: opacity .16s, transform .16s, visibility .16s;
+  }
+  .nav-user:hover .user-menu,
+  .nav-user:focus-within .user-menu { opacity: 1; visibility: visible; transform: none; }
+  .user-menu b {
+    display: block; padding: 6px 10px 8px; font-size: 13px;
+    border-bottom: 1px solid var(--line); margin-bottom: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .user-menu a {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 11px; border-radius: 8px;
+    font-size: 13px; line-height: 1.4; color: var(--text-2); cursor: pointer;
+  }
+  .user-menu a .i { width: 15px; height: 15px; flex: none; opacity: .85; }
+  .user-menu a:hover { background: var(--surface-3); color: var(--text); }
+  .user-menu a.danger { color: var(--accent); }
+  .user-menu a.danger:hover { background: rgba(190, 82, 48, .1); }
+  .user-menu a.danger .i { opacity: 1; }
+
+  /* 电脑上不用底部 tabbar：导航已经在顶部，再留一条底栏纯属浪费屏幕 */
+  .tabbar { display: none; }
+  .page-bottom-space { height: 40px; }
+  .page-bottom-space.tall { height: 60px; }
+
+  /* 正文区域：内容仍限宽（一行太长不好读），但比手机宽得多 */
+  .page-body { max-width: 1180px; margin: 0 auto; padding-bottom: 40px; }
+  .pad-x { padding: 0 26px; }
+
+  /* 顶部绿色条在电脑上不需要：那本是手机端用来替代标题栏的 */
+  .topbar { max-width: 1180px; margin: 0 auto; }
+
+  /* 首页：手机是单列往下堆，电脑排成两栏，右侧放列表 */
+  .hero { border-radius: 22px; margin: 22px 26px 16px; }
+  /* 手机是 flex 换行 + 33.333% 三等分；电脑必须显式切 grid，
+     否则 grid-template-columns 在 flex 容器上不生效，宫格会退化成 2 列竖排 */
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; padding: 0 26px; }
+  .grid-item { width: auto; padding: 16px 8px; }
+  .hscroll { overflow: visible; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 0 26px; }
+  .spot-card { width: auto; }
+  .spot-cover { width: 100%; height: 130px; }
+  .goods-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 26px; }
+  .act-row { margin: 0 26px 12px; }
+
+  /* 商城：手机两列，电脑四列 */
+  .goods-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .goods-cell { width: auto; }
+  .goods-cell-cover { height: 160px; }
+
+  /* 点位卡片：电脑两列 */
+  .spot-item { display: flex; gap: 16px; align-items: stretch; }
+  .spot-item-cover { width: 220px; height: 140px; border-radius: 12px; flex: none; }
+  .spot-item-body { flex: 1; min-width: 0; }
+
+  /* 印章墙：电脑一行 10 枚 */
+  .wall .seal, .wall-mini .seal { width: 10%; }
+
+  /* 聊天：电脑上给一个更高的消息区，读起来不憋屈 */
+  .im-page { max-width: 900px; margin: 0 auto; height: calc(100vh - 68px); }
+  .im-scroll { padding: 18px 22px 8px; }
+  .im-bubble { max-width: 62%; }
+
+  /* AI 助手同理 */
+  .chat-page { max-width: 900px; margin: 0 auto; }
+
+  /* 村内地图：地图在左、地点清单在右，比手机上一上一下更省滚动 */
+  .map-page { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+  .map-page .map-filter { grid-column: 1 / -1; margin-bottom: 0; }
+  .map-page .map-box { margin-bottom: 0; }
+  .map-page .map-list { max-height: 640px; overflow-y: auto; }
+
+  /* 行程规划：电脑上表单与结果左右分栏，不用一直往下滚 */
+  .plan-layout { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+  .plan-layout > .plan-form-col { position: sticky; top: 84px; }
+
+  /* 登录 / 连接页：电脑上整页铺开就太散了，收成一个居中的窄栏 */
+  .login-screen { max-width: 480px; margin: 0 auto; padding: 40px 0 24px; }
+  .login-hero { border-radius: 24px; padding: 42px 24px 62px; }
+  .login-sheet { margin: -34px 0 0; padding: 24px 22px 26px; }
+  .login-foot { padding: 20px 0 10px; }
+
+  /* 购物车抽屉：电脑上做成右侧面板而不是底部抽屉 */
+  .drawer {
+    top: 0; bottom: 0; left: auto; right: 0;
+    width: 400px; max-width: 400px; max-height: none;
+    border-radius: 0; transform: translateX(102%);
+  }
+  .drawer.open { transform: none; }
+  .toast-wrap { bottom: 28px; }
+}
+
+/* 1024~1180 之间导航会略挤：把「我的订单」这类长文案缩一点，别撑破 */
+@media (min-width: 1024px) and (max-width: 1180px) {
+  .nav-inner { gap: 14px; padding: 0 16px; }
+  .nav-links a { padding: 9px 9px; font-size: 13px; }
+  .nav-links a .i { width: 17px; height: 17px; }
+  .nav-search input { width: 92px; }
+}
+
+/* ==================== AI 行程规划：内容与边框的呼吸感 ====================
+   需求原话是「计划内容与边框重合」。根因不是间距小，而是电脑版那套页面用了
+   assets/css/app.css 里不带 padding 的 .card，内容直接贴死边框。
+   统一游客端后所有 .card 都来自本文件（padding:16px），这里再把行程页调宽一档，
+   让时间轴左轴的圆点不至于顶到卡片边。 */
+.plan-result-col .card { padding: 18px 18px 20px; }
+.plan-result-col .card-title { margin-bottom: 14px; }
+.day-head { padding-bottom: 13px; border-bottom: 1px dashed var(--surface-3); margin-bottom: 14px; }
+.day-head b { font-size: 15px; }
+.day-head span.dim { margin-left: 8px; }
+.tl-item { padding-bottom: 14px; }
+.tl-item:last-child { padding-bottom: 0; }
+.tl-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 3px; }
+.tl-body p { margin: 4px 0 0; }
+.plan-result-col .tip-item { padding: 10px 0; border-bottom: 1px dashed var(--surface-3); }
+.plan-result-col .tip-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.plan-hero { padding: 18px 18px 16px; margin-bottom: 14px; }
+
+/* ==================== 我的消息：会话列表 ==================== */
+.thread-list { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.thread-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 14px; border-bottom: 1px solid var(--surface-3); cursor: pointer;
+}
+.thread-row:last-child { border-bottom: 0; }
+.thread-row:active { background: var(--surface-2); }
+.thread-avatar { position: relative; width: 46px; height: 46px; border-radius: 14px; overflow: hidden; flex: none; background: var(--surface-3); }
+.thread-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thread-avatar .online-dot {
+  position: absolute; right: 2px; bottom: 2px; width: 10px; height: 10px;
+  border-radius: 50%; background: #22B183; border: 2px solid var(--surface);
+}
+.thread-main { flex: 1; min-width: 0; }
+.thread-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.thread-head b { font-size: 14px; }
+.thread-main p { margin: 4px 0 0; }
+.thread-unread {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--accent); color: #fff; font-size: 11px; line-height: 18px;
+  text-align: center; flex: none;
+}
+
+/* ==================== 详情页里的位置小地图 ==================== */
+.detail-map {
+  /* 固定高度而不是让地图自己撑：详情页里这块是「示意位置」，
+     给太高会把下面的购买表单挤到很下面，手机上一屏看不完 */
+  height: 240px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.detail-map .vmap { border: 0; border-radius: 0; box-shadow: none; height: 100%; }
+.detail-map .vmap-stage { aspect-ratio: auto; height: 100%; min-height: 0; max-height: none; }
+.detail-map-tip {
+  display: flex; align-items: center; gap: 6px; margin: 10px 0 0;
+  flex-wrap: wrap;
+}
+.detail-map-tip .ico { width: 14px; height: 14px; opacity: .7; flex: none; }
+.detail-map-more { margin-left: auto; color: var(--brand); font-weight: 600; cursor: pointer; white-space: nowrap; }
+.detail-map-more:active { opacity: .7; }
+@media (min-width: 1024px) {
+  .detail-map { height: 300px; }
+}
+

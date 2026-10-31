@@ -198,6 +198,8 @@ function check(name, ok, detail) {
   }
   const DESKTOP = [1440, 900];
   const MOBILE = [430, 932];
+  // 第 31 轮验收指定的手机视口（iPhone 11/XR 逻辑尺寸），单列出来便于报告里对照
+  const MOBILE_NARROW = [414, 896];
 
   async function visit(url, opts) {
     opts = opts || {};
@@ -241,6 +243,72 @@ function check(name, ok, detail) {
     };
 
     return { errors: dropBenign(errors), badRequests, evalJs };
+  }
+
+  /**
+   * 打开统一游客端（/visitor/）并注入演示账号登录态。
+   *
+   * 【为什么登录态必须分两步写】实测 Page.addScriptToEvaluateOnNewDocument 里写
+   * localStorage 无效：新文档脚本执行时 origin 还没定下来，写入被丢弃，页面照样停在
+   * 登录页。稳定做法是「先落到同源页面 → 在已确定的 origin 下写 localStorage →
+   * 再导航到目标页」。
+   *
+   * 【为什么 token 与 user 必须一起写】页面把「只有 token、没有 user」当成登录态
+   * 不完整，仍然停在登录页 —— 只写 token 是这里最容易踩的坑。
+   *
+   * 第 31 轮起游客端只有一套页面（/visitor/），不再有 pc/ 目录与设备跳转，
+   * 所以这里也不再写 sessionStorage 的 zq.visitor.forceMobile / forceDesktop。
+   */
+  async function visitVisitorSignedIn(opts) {
+    opts = opts || {};
+    const v = await visit(BASE + '/', { viewport: opts.viewport || DESKTOP, wait: 1200 });
+    const signIn = await v.evalJs(`(async () => {
+      const login = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: 'xiaoshuai', password: '123456', client: 'visitor' }),
+      }).then(r => r.json()).catch(() => ({}));
+      if (!login.ok) { return 'no-demo-account'; }
+      localStorage.setItem('zhanqi.visitor.token', login.token);
+      localStorage.setItem('zhanqi.visitor.user', JSON.stringify({ role: login.role, name: login.name, at: Date.now() }));
+      return 'ok';
+    })()`);
+    // 从这一刻起才统计异常/失败请求，避免把登录前那个页面的 401 噪声算进来
+    const evStart = cdp.events.length;
+    await cdp.send('Page.navigate', { url: BASE + '/visitor/' });
+    await sleep(opts.wait || 4200);
+    return { v: v, signIn: signIn, evStart: evStart };
+  }
+
+  /**
+   * 从 cdp.events 里摘出「未捕获异常 + 控制台错误 + 4xx/5xx 请求」。
+   * 401 是「注入登录态之前页面自己请求」造成的，属预期，统一过滤掉。
+   * 返回 { errors, bad } 两个数组，调用方各自 check，失败时能直接看到选择器/URL。
+   */
+  function collectPageProblems(fromIndex) {
+    const errors = [];
+    const bad = [];
+    const events = cdp.events.slice(fromIndex || 0);
+    for (const ev of events) {
+      if (ev.method === 'Runtime.exceptionThrown') {
+        const d = ev.params.exceptionDetails || {};
+        errors.push(((d.exception && d.exception.description) || d.text || '未知异常').split('\n')[0]);
+      }
+      if (ev.method === 'Log.entryAdded' && (ev.params.entry || {}).level === 'error') {
+        errors.push(ev.params.entry.text);
+      }
+      if (ev.method === 'Runtime.consoleAPICalled' && ev.params.type === 'error') {
+        const args = (ev.params.args || []).map((a) => a.value || a.description || '').join(' ');
+        if (args) { errors.push(args); }
+      }
+      if (ev.method === 'Network.responseReceived') {
+        const r = ev.params.response || {};
+        if (r.status >= 400 && r.status !== 401) { bad.push(r.status + ' ' + (r.url || '')); }
+      }
+    }
+    return {
+      errors: dropBenign(errors).filter((e) => !/401/.test(e) && !/Failed to load resource/.test(e)),
+      bad: bad,
+    };
   }
 
   /**
@@ -782,126 +850,127 @@ function check(name, ok, detail) {
   }
 
   /* ------------------ 5. 聊天界面样式完整性（哨兵） ------------------ */
-  // 2026-10-29 回归：pc.css 被整块覆盖，丢掉 150 个选择器（.msg / .chat-shell / .msg-avatar /
+  // 2026-10-29 回归：样式表被整块覆盖，丢掉 150 个选择器（.msg / .chat-shell / .msg-avatar /
   // .chat-composer 等），表现为「消息没有气泡、头像变成大圆、输入框错位」——
   // 但页面不报错、接口全 200，只看异常与 DOM 存在性抓不到。
-  // 这里直接量渲染后的几何：气泡必须有背景与内边距、头像 34px、输入框高度正常。
+  // 2026-10-31（第 31 轮）：游客端合并成一套自适应页面，/visitor/pc/ 整个目录废弃，
+  // PC 独有的 .chat-shell / .msg-avatar / .chat-input-row textarea 也随之消失。
+  // 断言一条都没删，只把「量什么」换成统一页面自己的 H5 聊天结构：
+  //   .im-scroll（滚动容器）/ .im-msg（消息行）/ .im-bubble（气泡）/ .im-input input（输入框）；
+  // 头像改量会话列表的 .thread-avatar —— 守的仍然是「样式表被覆盖后头像被撑成大图」。
   console.log('');
   console.log('— 5. 聊天界面样式完整性 ' + '-'.repeat(37));
   {
-    const v = await visit(BASE + '/visitor/pc/', { viewport: { width: 1280, height: 860 } });
-    // 直接写 localStorage 登录态，再用 CDP 重新导航（页面内 location.href 会被手机端检测改道）
-    await v.evalJs(`(async () => {
-      const login = await fetch('/api/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account: 'xiaoshuai', password: '123456', client: 'visitor' }),
-      }).then(r => r.json()).catch(() => ({}));
-      if (login.ok) {
-        localStorage.setItem('zhanqi.visitor.token', login.token);
-        localStorage.setItem('zhanqi.visitor.user', JSON.stringify({ role: login.role, name: login.name, at: Date.now() }));
-        sessionStorage.setItem('zq.visitor.forceMobile', '0');
-        return 'ok';
-      }
-      return 'no-demo-account';
-    })()`);
-    await setViewport(1280, 860);
-    await cdp.send("Page.navigate", { url: BASE + "/visitor/pc/" });
-    await sleep(3600);
+    const signed = await visitVisitorSignedIn({ viewport: DESKTOP, wait: 4400 });
+    const v = signed.v;
     const geoms = await v.evalJs(`(async () => {
-      const vm = document.querySelector('#pc') && document.querySelector('#pc').__vue__;
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
       if (!vm) { return { skip: 'not mounted (url=' + location.pathname + ')' }; }
       vm.go('chatList');
-      await new Promise(r => setTimeout(r, 1800));
+      await new Promise(r => setTimeout(r, 2000));
+      const avatar = document.querySelector('.thread-avatar');
+      const avatarW = avatar ? avatar.offsetWidth : 0;
       const rows = [...document.querySelectorAll('.thread-row')];
-      if (!rows.length) { return { skip: 'no thread' }; }
+      if (!rows.length) { return { skip: 'no thread', avatarW: avatarW }; }
       rows[0].click();
       await new Promise(r => setTimeout(r, 2800));
-      const shell = document.querySelector('.chat-shell');
-      const avatars = [...document.querySelectorAll('.chat-body .msg-avatar')];
-      const texts = [...document.querySelectorAll('.chat-body .msg-text')];
-      const input = document.querySelector('.chat-input-row textarea');
-      const t0 = texts[0];
+      const scroll = document.querySelector('.im-scroll');
+      const msgs = [...document.querySelectorAll('.im-msg')];
+      const bubbles = [...document.querySelectorAll('.im-bubble')];
+      const t0 = bubbles.filter(b => !/im-bubble-(img|card)/.test(String(b.className)))[0] || bubbles[0];
       const cs = t0 ? getComputedStyle(t0) : null;
+      const input = document.querySelector('.im-input input');
       return {
-        hasShell: !!shell,
-        msgCount: document.querySelectorAll('.chat-body .msg').length,
-        avatarW: avatars[0] ? avatars[0].offsetWidth : 0,
+        view: vm.view,
+        hasScroll: !!scroll,
+        msgCount: msgs.length,
+        bubbleCount: bubbles.length,
+        avatarW: avatarW,
         bubbleBg: cs ? cs.backgroundColor : null,
         bubblePad: cs ? cs.paddingLeft : null,
         inputH: input ? input.offsetHeight : 0,
-        emptyBubbles: texts.filter(t => !String(t.textContent || '').trim()).length,
+        emptyBubbles: bubbles.filter(b => !String(b.textContent || '').trim()).length,
       };
     })()`);
     if (geoms && geoms.skip) {
       note('聊天样式检查跳过：' + geoms.skip);
     } else {
-      check('聊天容器与消息都渲染出来', !!(geoms && geoms.hasShell && geoms.msgCount > 0), JSON.stringify(geoms));
+      check('聊天容器与消息都渲染出来', !!(geoms && geoms.hasScroll && geoms.msgCount > 0),
+        'selector=.im-scroll/.im-msg  hasScroll=' + (geoms && geoms.hasScroll)
+          + ' msgCount=' + (geoms && geoms.msgCount) + ' view=' + (geoms && geoms.view));
       check('消息气泡有背景与内边距（CSS 未被覆盖）',
         !!(geoms && geoms.bubbleBg && geoms.bubbleBg !== 'rgba(0, 0, 0, 0)' && parseFloat(geoms.bubblePad) >= 8),
-        JSON.stringify(geoms));
-      check('头像尺寸正常（34px，不是丢失样式后的大图）',
-        !!(geoms && geoms.avatarW > 0 && geoms.avatarW <= 40), String(geoms && geoms.avatarW));
+        'selector=.im-bubble  backgroundColor=' + (geoms && geoms.bubbleBg)
+          + ' paddingLeft=' + (geoms && geoms.bubblePad));
+      check('头像尺寸正常（会话列表头像 46px，不是丢失样式后的大图）',
+        !!(geoms && geoms.avatarW > 0 && geoms.avatarW <= 60),
+        'selector=.thread-avatar  offsetWidth=' + (geoms && geoms.avatarW));
       check('输入框高度正常（不是 0 或被撑坏）',
-        !!(geoms && geoms.inputH >= 30 && geoms.inputH <= 130), String(geoms && geoms.inputH));
-      check('没有空白气泡', !!(geoms && geoms.emptyBubbles === 0), String(geoms && geoms.emptyBubbles));
+        !!(geoms && geoms.inputH >= 30 && geoms.inputH <= 130),
+        'selector=.im-input input  offsetHeight=' + (geoms && geoms.inputH));
+      check('没有空白气泡', !!(geoms && geoms.emptyBubbles === 0),
+        'selector=.im-bubble  空气泡数=' + (geoms && geoms.emptyBubbles));
       await screenshot('visitor-16-chat-style.png');
     }
-    await v.evalJs("localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); 1");
+    // 统一游客端是单一页面：聊天这条路径同样要保证「无未捕获异常、无控制台错误、无 4xx/5xx」。
+    const prob = collectPageProblems(signed.evStart);
+    check('聊天路径无未捕获异常与控制台错误', prob.errors.length === 0, unique(prob.errors).slice(0, 3).join(' | '));
+    check('聊天路径无 4xx/5xx 失败请求', prob.bad.length === 0, unique(prob.bad).slice(0, 3).join(' | '));
+    await v.evalJs(`localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1`);
   }
-
   /* ------------- 5. 多行正文、主题、游客端入口与头像菜单（哨兵） ------------- */
-  // 这一组守 2026-10-30 这一轮的四件事，都是「能通过肉眼验收、但容易悄悄回归」的点：
+  // 这一组守 2026-10-30 那一轮的四件事，都是「能通过肉眼验收、但容易悄悄回归」的点：
   //  ① 点位/商品正文里不能出现字面反斜杠 n（SQL 转义写错就会漏出来）；
   //  ② 深色主题必须真的换掉设计令牌（只改局部背景的话这里会失败）；
   //  ③ 游客端不能再出现商户工作台 / 管理后台入口；
   //  ④ 头像悬浮窗不能有「修改密码」，且每项都有图标。
+  // 第 31 轮起只在统一游客端（/visitor/，桌面视口 1440x900）上测，选择器保持不变。
   console.log('');
   console.log('— 5. 多行正文 / 主题 / 入口 / 头像菜单 ' + '-'.repeat(34));
   {
-    const v = await visit(BASE + '/visitor/pc/', { viewport: { width: 1440, height: 900 } });
-    await v.evalJs(`(async () => {
-      const login = await fetch('/api/auth/login', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account: 'xiaoshuai', password: '123456', client: 'visitor' }),
-      }).then(r => r.json()).catch(() => ({}));
-      if (login.ok) {
-        localStorage.setItem('zhanqi.visitor.token', login.token);
-        localStorage.setItem('zhanqi.visitor.user', JSON.stringify({ role: login.role, name: login.name, at: Date.now() }));
-        sessionStorage.setItem('zq.visitor.forceMobile', '0');
-      }
-      return 1;
-    })()`);
-    await cdp.send('Page.navigate', { url: BASE + '/visitor/pc/' });
-    await sleep(3400);
+    const signed = await visitVisitorSignedIn({ viewport: DESKTOP, wait: 4400 });
+    const v = signed.v;
     const state = await v.evalJs(`(() => {
-      const vm = document.querySelector('#pc') && document.querySelector('#pc').__vue__;
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
       const spot = vm && (vm.spots || [])[0];
       const txt = spot ? String(spot.intro || '') : '';
       const bodyText = document.body.textContent || '';
       const menu = document.querySelector('.user-menu');
       const items = menu ? [...menu.querySelectorAll('a')] : [];
-      const cs = getComputedStyle(document.documentElement);
       return {
         mounted: !!vm,
+        path: location.pathname,
         literalN: txt.indexOf(String.fromCharCode(92) + 'n') >= 0,
         paragraphs: txt.split(String.fromCharCode(10)).length,
         hasMerchantEntry: /商户工作台/.test(bodyText),
         hasAdminEntry: /管理后台/.test(bodyText),
+        menuPresent: !!menu,
         menuItems: items.length,
+        menuTexts: items.map(a => String(a.textContent || '').trim()),
         menuAllIcons: items.every(a => !!a.querySelector('.i')),
         menuHasPwd: menu ? /修改密码/.test(menu.textContent) : false,
-        themeMode: window.ZQTheme ? window.ZQTheme.get() : 'none',
       };
     })()`);
     if (!state || !state.mounted) {
       note('多行正文与主题检查跳过：未挂载');
     } else {
-      check('点位正文无字面反斜杠 n', state.literalN === false, 'literalN=' + state.literalN);
-      check('点位正文按段落分行', state.paragraphs >= 3, 'paragraphs=' + state.paragraphs);
-      check('游客端无「商户工作台」入口', state.hasMerchantEntry === false);
-      check('游客端无「管理后台」入口', state.hasAdminEntry === false);
-      check('头像悬浮窗无「修改密码」', state.menuHasPwd === false);
-      check('头像悬浮窗每项都有图标', state.menuAllIcons === true, 'items=' + state.menuItems);
+      check('统一游客端（/visitor/）在桌面视口正常挂载',
+        state.path.slice(-9) === '/visitor/' && state.path.indexOf('/pc') < 0,
+        'location.pathname=' + state.path);
+      check('点位正文无字面反斜杠 n', state.literalN === false,
+        'selector=vm.spots[0].intro  literalN=' + state.literalN);
+      check('点位正文按段落分行', state.paragraphs >= 3,
+        'selector=vm.spots[0].intro  段落数=' + state.paragraphs);
+      check('游客端无「商户工作台」入口', state.hasMerchantEntry === false,
+        'document.body.textContent 命中商户工作台=' + state.hasMerchantEntry);
+      check('游客端无「管理后台」入口', state.hasAdminEntry === false,
+        'document.body.textContent 命中管理后台=' + state.hasAdminEntry);
+      check('头像悬浮窗存在（桌面端）', state.menuPresent === true,
+        'selector=.user-menu  存在=' + state.menuPresent);
+      check('头像悬浮窗无「修改密码」', state.menuHasPwd === false,
+        'selector=.user-menu  textContent 命中修改密码=' + state.menuHasPwd);
+      check('头像悬浮窗每项都有图标', state.menuAllIcons === true,
+        'selector=.user-menu a  items=' + state.menuItems + ' 文字=' + JSON.stringify(state.menuTexts));
 
       // 切到深色，确认令牌真的变了（不是只改局部背景）
       const dark = await v.evalJs(`(() => {
@@ -915,15 +984,18 @@ function check(name, ok, detail) {
           cardBg: card ? getComputedStyle(card).backgroundColor : null,
         };
       })()`);
-      check('切换后 data-theme=dark', dark.attr === 'dark', String(dark.attr));
-      check('深色令牌生效（--bg 变深）', dark.bg === '#151A18', String(dark.bg));
-      check('深色下卡片背景跟随', dark.cardBg !== 'rgb(255, 255, 255)', String(dark.cardBg));
+      check('切换后 data-theme=dark', dark.attr === 'dark', 'data-theme=' + String(dark.attr));
+      check('深色令牌生效（--bg 变深）', dark.bg === '#151A18', '--bg=' + String(dark.bg));
+      check('深色下卡片背景跟随', dark.cardBg !== 'rgb(255, 255, 255)',
+        'selector=.card  backgroundColor=' + String(dark.cardBg));
       await screenshot('visitor-18-dark-theme.png');
-      await v.evalJs("window.ZQTheme.set('light'); localStorage.removeItem('zhanqi.theme'); 1");
+      await v.evalJs(`window.ZQTheme.set('light'); localStorage.removeItem('zhanqi.theme'); 1`);
     }
-    await v.evalJs("localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1");
+    const prob = collectPageProblems(signed.evStart);
+    check('正文/主题路径无未捕获异常与控制台错误', prob.errors.length === 0, unique(prob.errors).slice(0, 3).join(' | '));
+    check('正文/主题路径无 4xx/5xx 失败请求', prob.bad.length === 0, unique(prob.bad).slice(0, 3).join(' | '));
+    await v.evalJs(`localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1`);
   }
-
   /* ------------------ 5. 商户端聊天消息区布局（哨兵） ------------------ */
   // 2026-10-30 回归：商家端 .chat-body 漏了 display:flex，
   // 导致「消息组贴底」的 margin-top:auto 变成无效声明，消息全堆在顶部、底部留一大片空白。
@@ -1011,6 +1083,295 @@ function check(name, ok, detail) {
     // 401 是这条路径上的预期结果（app 会据此清理登录态），不应算作请求失败
     const unexpected = v.badRequests.filter((r) => !/401/.test(r));
     check('过期令牌场景下没有其它异常请求', unexpected.length === 0, unique(unexpected).slice(0, 3).join(' | '));
+  }
+
+  /* ------------- 6. 第 31 轮：统一游客端（单一页面 + 自适应） ------------- */
+  // 背景：第 31 轮把「游客端 PC 版（/visitor/pc/）」整套删掉，只留 /visitor/ 一套页面，
+  // 靠媒体查询在 ≥1024px 显示桌面布局（顶部导航）、窄屏显示手机布局（底部 tabbar）。
+  // 这一组就是这轮的验收清单，每一小项都对应用户明确要求的一条：
+  //   a. 只有一套游客端：/visitor/pc/ 不再可用，桌面视口也不会被跳走；
+  //   b. 顶部导航排版：8 个入口齐全、文字不换行不溢出、相邻项不重叠；
+  //   c. 手机视口：顶部导航隐藏、底部 tabbar 4 项可见；
+  //   d. 点位详情显示地图位置，且真的渲染出标记；
+  //   e. 研学/民宿/农事三类需位置商品的详情同样显示地图与标记；
+  //   f. AI 行程规划的内容不贴卡片边框；
+  //   g. 正文里没有字面反斜杠 n 残留。
+  // 断言失败一律带上「选择器 + 实测值」，否则只看到 true/false 根本没法定位。
+  console.log('');
+  console.log('— 6. 第 31 轮：统一游客端（单一页面 + 自适应） ' + '-'.repeat(20));
+  {
+    const signed = await visitVisitorSignedIn({ viewport: DESKTOP, wait: 4400 });
+    const v = signed.v;
+
+    /* ---- b. 顶部导航排版（桌面视口 1440x900） ---- */
+    const nav = await v.evalJs(`(() => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      const topnav = document.querySelector('.topnav');
+      const links = [...document.querySelectorAll('.nav-links a')];
+      const inner = document.querySelector('.nav-inner');
+      const innerKids = inner ? [...inner.children] : [];
+      const rectOf = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, width: r.width, height: r.height }; };
+      const overlaps = (arr) => {
+        const rs = arr.map(rectOf).sort((a, b) => a.left - b.left);
+        for (let i = 1; i < rs.length; i++) {
+          if (rs[i - 1].right > rs[i].left + 1) { return true; }
+        }
+        return false;
+      };
+      return {
+        mounted: !!vm,
+        path: location.pathname,
+        topnavDisplay: topnav ? getComputedStyle(topnav).display : 'absent',
+        topnavH: topnav ? topnav.getBoundingClientRect().height : 0,
+        count: links.length,
+        texts: links.map(a => String(a.textContent || '').trim()),
+        overflow: links.filter(a => a.scrollWidth > a.clientWidth + 1)
+          .map(a => String(a.textContent || '').trim() + ' scrollW=' + a.scrollWidth + ' clientW=' + a.clientWidth),
+        tooTall: links.filter(a => a.getBoundingClientRect().height > 44)
+          .map(a => String(a.textContent || '').trim() + ' h=' + a.getBoundingClientRect().height.toFixed(1)),
+        linkOverlap: overlaps(links),
+        innerKids: innerKids.length,
+        innerOverlap: overlaps(innerKids),
+      };
+    })()`);
+
+    const EXPECT_NAV = ['首页', '点位打卡', '商城', '活动', '我的订单', '村内地图', 'AI 助手', '行程规划'];
+    const navTexts = (nav && nav.texts) || [];
+    const navMissing = EXPECT_NAV.filter(t => navTexts.indexOf(t) < 0);
+    check('桌面视口下顶部导航可见（display 非 none 且有高度）',
+      !!(nav && nav.topnavDisplay !== 'none' && nav.topnavDisplay !== 'absent' && nav.topnavH > 0),
+      'selector=.topnav  display=' + (nav && nav.topnavDisplay) + ' height=' + (nav && nav.topnavH));
+    check('顶部导航 8 个入口全部存在', navMissing.length === 0,
+      'selector=.nav-links a  count=' + navTexts.length + ' 实测=' + JSON.stringify(navTexts)
+        + ' 缺少=' + JSON.stringify(navMissing));
+    check('顶部导航每一项文字都不换行、不溢出',
+      !!(nav && nav.count > 0 && nav.overflow.length === 0),
+      'selector=.nav-links a  溢出项=' + JSON.stringify((nav && nav.overflow) || 'none'));
+    check('顶部导航每一项高度不超过 44px（没有被撑成两行）',
+      !!(nav && nav.count > 0 && nav.tooTall.length === 0),
+      'selector=.nav-links a  超高项=' + JSON.stringify((nav && nav.tooTall) || 'none'));
+    check('顶部导航相邻项不互相重叠',
+      !!(nav && nav.count > 0 && nav.linkOverlap === false && nav.innerOverlap === false),
+      'selector=.nav-links a 相邻重叠=' + (nav && nav.linkOverlap)
+        + ' selector=.nav-inner 子项=' + (nav && nav.innerKids) + ' 相邻重叠=' + (nav && nav.innerOverlap));
+    await screenshot('visitor-30-topnav-desktop.png');
+
+    /* ---- d. 点位详情显示地图位置 ---- */
+    const spotMap = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      if (!vm) { return { skip: 'not mounted' }; }
+      const spot = (vm.spots || [])[0];
+      if (!spot) { return { skip: 'no spot' }; }
+      vm.openSpot(spot.id);
+      await new Promise(r => setTimeout(r, 2600));
+      const box = document.querySelector('.detail-map') || document.querySelector('.vmap');
+      const pins = [...document.querySelectorAll('.detail-map .vmap-pin, .vmap .vmap-pin')];
+      const bodyText = document.body.textContent || '';
+      const cur = vm.current || {};
+      return {
+        view: vm.view,
+        spotId: spot.id,
+        mapX: cur.mapX, mapY: cur.mapY,
+        hasBox: !!box,
+        boxClass: box ? String(box.className) : 'absent',
+        boxW: box ? box.getBoundingClientRect().width : 0,
+        boxH: box ? box.getBoundingClientRect().height : 0,
+        pins: pins.length,
+        literalN: bodyText.indexOf(String.fromCharCode(92) + 'n') >= 0,
+        literalAt: bodyText.indexOf(String.fromCharCode(92) + 'n'),
+      };
+    })()`);
+    if (spotMap && spotMap.skip) {
+      note('点位详情地图检查跳过：' + spotMap.skip);
+      check('点位详情显示地图位置（.detail-map / .vmap 容器存在）', false, 'skip=' + spotMap.skip);
+    } else {
+      check('点位详情显示地图位置（.detail-map / .vmap 容器存在）',
+        !!(spotMap && spotMap.hasBox && spotMap.boxW > 0),
+        'selector=.detail-map|.vmap  view=' + (spotMap && spotMap.view)
+          + ' spot=' + (spotMap && spotMap.spotId) + ' mapX=' + (spotMap && spotMap.mapX)
+          + ' mapY=' + (spotMap && spotMap.mapY) + ' 命中=' + (spotMap && spotMap.hasBox)
+          + ' class=' + (spotMap && spotMap.boxClass) + ' 尺寸=' + (spotMap && spotMap.boxW) + 'x' + (spotMap && spotMap.boxH));
+      check('点位详情地图至少渲染出 1 个标记',
+        !!(spotMap && spotMap.pins >= 1),
+        'selector=.vmap-pin  count=' + (spotMap && spotMap.pins));
+      check('点位详情正文无字面反斜杠 n 残留', spotMap && spotMap.literalN === false,
+        'selector=body.textContent  含字面反斜杠n=' + (spotMap && spotMap.literalN)
+          + ' indexOf=' + (spotMap && spotMap.literalAt));
+      await screenshot('visitor-31-spot-detail-map.png');
+    }
+
+    /* ---- e. 三类需位置商品详情也显示地图 ---- */
+    const prodMap = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      if (!vm) { return { skip: 'not mounted' }; }
+      const cats = ['study', 'homestay', 'experience'];
+      const out = [];
+      for (const cat of cats) {
+        const p = (vm.products || []).filter(x => x.category === cat)[0];
+        if (!p) { out.push({ cat: cat, skip: 'no product' }); continue; }
+        vm.openProduct(p.id);
+        await new Promise(r => setTimeout(r, 2000));
+        const box = document.querySelector('.detail-map') || document.querySelector('.vmap');
+        const pins = [...document.querySelectorAll('.detail-map .vmap-pin, .vmap .vmap-pin')];
+        const bodyText = document.body.textContent || '';
+        out.push({
+          cat: cat, id: p.id, name: p.name, view: vm.view,
+          mapX: p.mapX, mapY: p.mapY,
+          hasBox: !!box, boxW: box ? box.getBoundingClientRect().width : 0,
+          pins: pins.length,
+          literalN: bodyText.indexOf(String.fromCharCode(92) + 'n') >= 0,
+        });
+      }
+      return { items: out };
+    })()`);
+    const prodItems = (prodMap && prodMap.items) || [];
+    const CAT_LABEL = { study: '研学', homestay: '民宿', experience: '农事体验' };
+    ['study', 'homestay', 'experience'].forEach(function (cat) {
+      const it = prodItems.filter(function (x) { return x.cat === cat; })[0] || {};
+      check('需位置商品详情显示地图：' + CAT_LABEL[cat],
+        !!(it.hasBox && it.boxW > 0),
+        'category=' + cat + ' id=' + it.id + ' 名称=' + it.name + ' mapX=' + it.mapX
+          + ' mapY=' + it.mapY + ' selector=.detail-map|.vmap 命中=' + it.hasBox
+          + ' 宽=' + it.boxW + (it.skip ? ' skip=' + it.skip : ''));
+      check('需位置商品详情地图至少渲染出 1 个标记：' + CAT_LABEL[cat],
+        !!(it.pins >= 1),
+        'category=' + cat + ' id=' + it.id + ' selector=.vmap-pin  count=' + it.pins);
+    });
+    const prodLiteral = prodItems.filter(function (x) { return x.literalN === true; });
+    check('商品详情正文无字面反斜杠 n 残留', prodLiteral.length === 0,
+      'selector=body.textContent  命中商品=' + JSON.stringify(prodLiteral.map(function (x) { return x.cat + ':' + x.id; })));
+    await screenshot('visitor-32-product-detail-map.png');
+
+    /* ---- 本路径的异常/失败请求（放在 fetch /visitor/pc/ 之前，避免把 404 算进来） ---- */
+    const prob = collectPageProblems(signed.evStart);
+    check('统一游客端路径无未捕获异常与控制台错误', prob.errors.length === 0, unique(prob.errors).slice(0, 3).join(' | '));
+    check('统一游客端路径无 4xx/5xx 失败请求', prob.bad.length === 0, unique(prob.bad).slice(0, 3).join(' | '));
+
+    /* ---- a. 只有一套游客端 ---- */
+    const legacy = await v.evalJs(`(async () => {
+      try {
+        const r = await fetch('/visitor/pc/', { cache: 'no-store' });
+        const t = await r.text();
+        return {
+          status: r.status,
+          len: t.length,
+          isVisitorApp: /id="app"/.test(t) && /游客端/.test(t),
+          hasTopnav: /class="topnav"/.test(t),
+        };
+      } catch (e) { return { error: String(e) }; }
+    })()`);
+    check('已废弃的 /visitor/pc/ 不再返回游客端页面',
+      !!(legacy && (legacy.error || legacy.status >= 400 || legacy.isVisitorApp === false)),
+      'url=/visitor/pc/  status=' + (legacy && legacy.status) + ' 字节=' + (legacy && legacy.len)
+        + ' 是游客端页面=' + (legacy && legacy.isVisitorApp) + ' 含topnav=' + (legacy && legacy.hasTopnav)
+        + (legacy && legacy.error ? ' error=' + legacy.error : ''));
+    check('桌面视口打开 /visitor/ 不会被跳转到 pc/',
+      !!(nav && String(nav.path || '').slice(-9) === '/visitor/' && String(nav.path || '').indexOf('/pc') < 0),
+      'location.pathname=' + (nav && nav.path));
+
+    await v.evalJs(`localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1`);
+  }
+
+  /* ---- c. 手机视口：顶部导航隐藏、底部 tabbar 4 项 ---- */
+  {
+    const signed = await visitVisitorSignedIn({ viewport: MOBILE_NARROW, wait: 4400 });
+    const v = signed.v;
+    const mob = await v.evalJs(`(() => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      const topnav = document.querySelector('.topnav');
+      const tabbar = document.querySelector('.tabbar');
+      const items = [...document.querySelectorAll('.tabbar-item')];
+      return {
+        mounted: !!vm,
+        path: location.pathname,
+        isTopView: !!(vm && vm.isTopView),
+        topnavPresent: !!topnav,
+        topnavDisplay: topnav ? getComputedStyle(topnav).display : 'absent',
+        topnavH: topnav ? topnav.getBoundingClientRect().height : 0,
+        tabbarDisplay: tabbar ? getComputedStyle(tabbar).display : 'absent',
+        tabbarH: tabbar ? tabbar.getBoundingClientRect().height : 0,
+        tabbarItems: items.length,
+        tabbarTexts: items.map(a => String(a.textContent || '').trim()),
+        docW: document.documentElement.clientWidth,
+      };
+    })()`);
+    if (!mob || !mob.mounted) {
+      note('手机视口自适应检查跳过：未挂载');
+    } else {
+      check('手机视口（414x896）顶部导航不可见',
+        mob.topnavDisplay === 'none' || mob.topnavH === 0,
+        'selector=.topnav  display=' + mob.topnavDisplay + ' height=' + mob.topnavH
+          + ' 视口宽=' + mob.docW);
+      check('手机视口底部 tabbar 可见且有 4 项',
+        !!(mob.tabbarDisplay !== 'none' && mob.tabbarDisplay !== 'absent' && mob.tabbarH > 0 && mob.tabbarItems === 4),
+        'selector=.tabbar  display=' + mob.tabbarDisplay + ' height=' + mob.tabbarH
+          + ' selector=.tabbar-item  count=' + mob.tabbarItems + ' 文字=' + JSON.stringify(mob.tabbarTexts));
+      check('手机视口仍停在统一游客端（不跳 pc/）',
+        String(mob.path || '').slice(-9) === '/visitor/' && String(mob.path || '').indexOf('/pc') < 0,
+        'location.pathname=' + mob.path);
+      await screenshot('visitor-33-mobile-tabbar.png');
+    }
+    const prob = collectPageProblems(signed.evStart);
+    check('手机视口路径无未捕获异常与控制台错误', prob.errors.length === 0, unique(prob.errors).slice(0, 3).join(' | '));
+    check('手机视口路径无 4xx/5xx 失败请求', prob.bad.length === 0, unique(prob.bad).slice(0, 3).join(' | '));
+    await v.evalJs(`localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1`);
+  }
+
+  /* ---- f. AI 行程规划内容不贴边框 ---- */
+  {
+    const signed = await visitVisitorSignedIn({ viewport: DESKTOP, wait: 4400 });
+    const v = signed.v;
+    const plan = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      if (!vm) { return { skip: 'not mounted' }; }
+      vm.go('plan');
+      await new Promise(r => setTimeout(r, 1200));
+      vm.planDays = 2; vm.planPeople = 3; vm.planPrefs = ['非遗', '农事'];
+      if (typeof vm.generatePlan === 'function') { vm.generatePlan(); }
+      await new Promise(r => setTimeout(r, 4200));
+      const days = (vm.planResult && vm.planResult.days) || [];
+      const measure = (sel) => {
+        const el = document.querySelector(sel);
+        if (!el) { return { sel: sel, found: false }; }
+        const card = el.closest('.card');
+        if (!card) { return { sel: sel, found: true, card: false }; }
+        const r = el.getBoundingClientRect();
+        const c = card.getBoundingClientRect();
+        const cs = getComputedStyle(card);
+        return {
+          sel: sel, found: true, card: true,
+          leftGap: Math.round(r.left - c.left),
+          rightGap: Math.round(c.right - r.right),
+          cardPadL: cs.paddingLeft, cardPadR: cs.paddingRight,
+        };
+      };
+      return {
+        view: vm.view,
+        days: days.length,
+        cards: document.querySelectorAll('.plan-result-col .card').length,
+        boxes: ['.day-head', '.tl-item', '.tl-body'].map(measure),
+      };
+    })()`);
+    if (!plan || plan.skip) {
+      note('行程规划排版检查跳过：' + (plan && plan.skip));
+      check('AI 行程规划生成成功（有行程卡片）', false, 'skip=' + (plan && plan.skip));
+    } else {
+      check('AI 行程规划生成成功（有行程卡片）',
+        !!(plan.days >= 1 && plan.cards >= 1),
+        'view=' + plan.view + ' days=' + plan.days + ' selector=.plan-result-col .card  count=' + plan.cards);
+      const tight = (plan.boxes || []).filter(function (b) {
+        return !b.found || !b.card || Math.min(b.leftGap, b.rightGap) < 12;
+      });
+      check('AI 行程规划内容不贴卡片边框（水平内边距 ≥ 12px）', tight.length === 0,
+        '要求 min(左,右) ≥ 12px；实测=' + JSON.stringify((plan.boxes || []).map(function (b) {
+          return b.sel + ' 左=' + b.leftGap + ' 右=' + b.rightGap + ' (card padding ' + b.cardPadL + '/' + b.cardPadR + ')';
+        })));
+      await screenshot('visitor-34-plan-padding.png');
+    }
+    const prob = collectPageProblems(signed.evStart);
+    check('行程规划路径无未捕获异常与控制台错误', prob.errors.length === 0, unique(prob.errors).slice(0, 3).join(' | '));
+    check('行程规划路径无 4xx/5xx 失败请求', prob.bad.length === 0, unique(prob.bad).slice(0, 3).join(' | '));
+    await v.evalJs(`localStorage.removeItem('zhanqi.visitor.token'); localStorage.removeItem('zhanqi.visitor.user'); try{localStorage.removeItem('zhanqi.visitor.cart')}catch(e){} 1`);
   }
 
   /* ------------------------------ 汇总 ------------------------------ */
