@@ -537,3 +537,14 @@
   另：纯 jar 模式下改前端必须重新 `tools/build.ps1`，只有
   `--spring.web.resources.static-locations=file:...` 模式才即时生效。
   （2026-10-31，来源：同上）
+
+- **固定层（tabbar / 抽屉 / 底部条 / toast）居中用 `left:0 + right:0 + max-width + margin:auto`**，
+  不要用 `left:50% + translateX(-50%)`。后者会吃掉抽屉自己的 `translateY` 动画，
+  且 `left:50%` 配 `right:auto` 会让固定元素收缩成内容宽度，
+  `translateX(-50%)` 再按收缩后的宽度偏移 → 整条底栏左移半个屏宽、一半跑到屏幕外。
+  这段 `@media` 必须写在样式表**末尾**（同特异度后写覆盖先写）。
+  （2026-10-31，来源：2026-10-31-fix-mobile-tabbar-overflow）
+
+- **「元素存在 / 数量对 / display 正确」不等于「在屏幕上」**。手机 tabbar 被推出屏幕那次，
+  旧断言三条全绿。位置类布局必须量 `getBoundingClientRect()` 的 l/r/w 并与视口宽比对。
+  （2026-10-31，来源：同上）

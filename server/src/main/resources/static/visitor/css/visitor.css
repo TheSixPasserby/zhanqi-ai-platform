@@ -27,14 +27,6 @@ body {
   position: relative;
 }
 
-/* 平板及以下：正文限宽居中，固定层（tabbar / 抽屉 / 底部条）也跟着限宽，
-   否则在 800px 平板上一条通栏抽屉会很怪 */
-@media (max-width: 1023px) {
-  .page-body, .topbar { max-width: 720px; margin-left: auto; margin-right: auto; }
-  .tabbar, .bottom-bar, .drawer, .toast-wrap, .cart-fab { max-width: 720px; left: 50%; transform: translateX(-50%); }
-  .bottom-bar { transform: translateX(-50%); }
-}
-
 /* ------------------------------- 启动占位 ------------------------------- */
 
 .boot {
@@ -1378,5 +1370,25 @@ body {
 .detail-map-more:active { opacity: .7; }
 @media (min-width: 1024px) {
   .detail-map { height: 300px; }
+}
+
+/* ------------------------- 平板及以下：限宽居中 ------------------------- */
+/* 注意：这一段必须放在文件末尾。
+   固定层（tabbar / 抽屉 / 底部条 / 购物车浮球）的基础规则都在上面写死了
+   left:0 / right:0 / right:16px，同特异度的后写规则会覆盖先写的 ——
+   把这段放在文件前面，left:50% 会被后面的 left:0 顶掉，
+   只剩 transform:translateX(-50%) 生效，整条底栏会左移半个屏宽、一半跑到屏幕外。
+   2026-10-31 合并游客端时就踩过这个坑（手机截图里 tabbar 只剩「商城/我的」两项）。 */
+@media (max-width: 1023px) {
+  .page-body, .topbar { max-width: 720px; margin-left: auto; margin-right: auto; }
+  /* 固定层用「left:0 + right:0 + max-width + margin:auto」居中，
+     不要用 left:50% + translateX(-50%)：transform 会与抽屉的 translateY 动画打架，
+     而且 left:50% 配 right:auto 会让固定层收缩成内容宽度（实测 tabbar 只剩 96px）。 */
+  .tabbar, .bottom-bar, .drawer, .toast-wrap {
+    left: 0; right: 0; max-width: 720px;
+    margin-left: auto; margin-right: auto;
+  }
+  /* 购物车浮球固定在右侧，按限宽后的右边界对齐，不跟着居中 */
+  .cart-fab { right: max(16px, calc((100% - 720px) / 2 + 16px)); }
 }
 

@@ -1292,6 +1292,13 @@ function check(name, ok, detail) {
         tabbarH: tabbar ? tabbar.getBoundingClientRect().height : 0,
         tabbarItems: items.length,
         tabbarTexts: items.map(a => String(a.textContent || '').trim()),
+        // tabbar 与每个 tab 的横向几何：守「限宽居中不能把底栏推出屏幕」。
+        // 2026-10-31 踩过：把 left:50% + translateX(-50%) 写在文件前面，
+        // 被后面同特异度的 left:0 顶掉，只剩 transform 生效，底栏左移半个屏宽，
+        // 手机截图里只剩「商城 / 我的」两项 —— 元素存在、数量对、display 也对，
+        // 只有量几何才能发现。
+        tabbarRect: tabbar ? (() => { const r = tabbar.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right), w: Math.round(r.width) }; })() : null,
+        itemRects: items.map(a => { const r = a.getBoundingClientRect(); return { l: Math.round(r.left), r: Math.round(r.right), w: Math.round(r.width) }; }),
         docW: document.documentElement.clientWidth,
       };
     })()`);
@@ -1306,6 +1313,15 @@ function check(name, ok, detail) {
         !!(mob.tabbarDisplay !== 'none' && mob.tabbarDisplay !== 'absent' && mob.tabbarH > 0 && mob.tabbarItems === 4),
         'selector=.tabbar  display=' + mob.tabbarDisplay + ' height=' + mob.tabbarH
           + ' selector=.tabbar-item  count=' + mob.tabbarItems + ' 文字=' + JSON.stringify(mob.tabbarTexts));
+      const tb = mob.tabbarRect;
+      const vw = mob.docW;
+      check('手机视口底部 tabbar 横向铺满且没有被移出屏幕',
+        !!(tb && tb.l >= -1 && tb.r <= vw + 1 && tb.w >= vw - 2),
+        'selector=.tabbar  rect=' + JSON.stringify(tb) + ' 视口宽=' + vw);
+      const badItem = (mob.itemRects || []).filter(r => r.l < -1 || r.r > vw + 1 || r.w < 20);
+      check('手机视口每个 tab 都在屏幕内且宽度正常',
+        badItem.length === 0,
+        'selector=.tabbar-item  越界项=' + JSON.stringify(badItem));
       check('手机视口仍停在统一游客端（不跳 pc/）',
         String(mob.path || '').slice(-9) === '/visitor/' && String(mob.path || '').indexOf('/pc') < 0,
         'location.pathname=' + mob.path);
