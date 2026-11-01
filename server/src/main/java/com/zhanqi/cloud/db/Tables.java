@@ -46,14 +46,15 @@ public final class Tables {
 
         put("spots", "sp", List.of(
                 "id", "name", "type", "cover", "location", "intro", "tts", "stamp", "stampIcon", "voice",
-                "images"), Set.of("images"));
+                "images", "mapX", "mapY"), Set.of("images"));
 
         put("stamps", "st", List.of(
                 "id", "userId", "spotId", "spotName", "stamp", "stampIcon", "at"), Set.of());
 
         put("products", "p", List.of(
                 "id", "merchantId", "name", "category", "price", "unit", "stock", "sold",
-                "cover", "status", "tags", "timeSlots", "roomTypes", "desc", "intro", "images", "createdAt"),
+                "cover", "status", "tags", "timeSlots", "roomTypes", "desc", "intro", "images",
+                "mapX", "mapY", "createdAt"),
                 Set.of("tags", "timeSlots", "roomTypes", "images"));
 
         put("orders", "o", List.of(
@@ -66,7 +67,8 @@ public final class Tables {
                 "completedAt", "refundAmount", "refundedAt", "refundNote"), Set.of());
 
         put("activities", "a", List.of(
-                "id", "title", "date", "endDate", "place", "tag", "capacity", "desc", "cover"), Set.of());
+                "id", "title", "date", "endDate", "place", "tag", "capacity", "desc", "cover",
+                "mapX", "mapY"), Set.of());
 
         put("activityBookings", "ab", List.of(
                 "id", "activityId", "activityTitle", "userId", "userName", "phone",

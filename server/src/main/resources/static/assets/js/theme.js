@@ -15,7 +15,8 @@
   'use strict';
 
   var KEY = 'zhanqi.theme';        // 主题偏好全局共享（不按端隔离：用户在哪端选都应该生效）
-  var MODES = ['light', 'dark'];
+  /** 四种主题：浅色（默认）/ 深色 / 暖阳 / 青墨 */
+  var MODES = ['light', 'dark', 'warm', 'ink'];
 
   function read() {
     try {
@@ -28,14 +29,23 @@
     try { localStorage.setItem(KEY, mode); } catch (e) { /* 隐私模式忽略 */ }
   }
 
-  /** 把主题写到 <html data-theme>，CSS 用 [data-theme="dark"] 覆盖令牌 */
+  /**
+   * 把主题写到 <html data-theme>。
+   * CSS 里每个主题用 [data-theme="<mode>"] 覆盖设计令牌；浅色是默认（不设属性）。
+   */
   function apply(mode) {
     var html = document.documentElement;
-    if (mode === 'dark') { html.setAttribute('data-theme', 'dark'); }
-    else { html.removeAttribute('data-theme'); }
+    if (mode === 'dark' || mode === 'warm' || mode === 'ink') {
+      html.setAttribute('data-theme', mode);
+    } else {
+      html.removeAttribute('data-theme');
+    }
     // 移动端浏览器地址栏配色跟着变，否则深色页面顶着一条白栏很割裂
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) { meta.setAttribute('content', mode === 'dark' ? '#151A18' : '#146B57'); }
+    if (meta) {
+      var barColor = { dark: '#151A18', warm: '#6B4A2E', ink: '#1B2A33' }[mode] || '#146B57';
+      meta.setAttribute('content', barColor);
+    }
     return mode;
   }
 
@@ -59,8 +69,11 @@
       notify(mode);
       return mode;
     },
-    /** 在浅/深之间切换，返回切换后的值 */
-    toggle: function () { return Theme.set(read() === 'dark' ? 'light' : 'dark'); },
+    /** 按顺序轮换主题（浅色 → 深色 → 暖阳 → 青墨 → 浅色），返回切换后的值 */
+    toggle: function () {
+      var i = MODES.indexOf(read());
+      return Theme.set(MODES[(i + 1) % MODES.length]);
+    },
     /** 订阅变化（返回取消函数），供各端「个性化设置」同步 UI */
     onChange: function (fn) {
       if (typeof fn !== 'function') { return function () {}; }
@@ -73,6 +86,18 @@
     /** 供首屏同步调用 */
     apply: apply
   };
+
+  /**
+   * 各端「个性化设置」可直接绑定的选项列表。
+   * 放在这里而不是每个页面各写一份：加主题时只改一处，四端一起变。
+   * dot 是给按钮上的小圆点用的主色示意，让用户点之前就能看出区别。
+   */
+  Theme.options = [
+    { key: 'light', text: '浅色', dot: '#F6F4EF' },
+    { key: 'dark', text: '深色', dot: '#151A18' },
+    { key: 'warm', text: '暖阳', dot: '#BE5230' },
+    { key: 'ink', text: '青墨', dot: '#1B2A33' },
+  ];
 
   window.ZQTheme = Theme;
   // 首屏立刻应用（本脚本在 head 里同步引入，早于 body 渲染）

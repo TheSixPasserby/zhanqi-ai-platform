@@ -119,6 +119,8 @@ CREATE TABLE IF NOT EXISTS `spots` (
   `stampIcon` VARCHAR(32)  DEFAULT NULL       COMMENT '印章图标：icons.svg 的图标 key（如 i-rice）；兼容旧版单字',
   `voice`     VARCHAR(16)  DEFAULT 'auto'      COMMENT '讲解语音包：auto 自动 / male 男声 / female 女声',
   `images`    JSON         DEFAULT NULL        COMMENT '多图数组：详情页轮播与图集，至少 3 张；首张可与 cover 相同',
+  `mapX`      DECIMAL(6,2) DEFAULT NULL        COMMENT '虚拟地图横坐标，0-100（占地图宽度百分比，左上为原点）',
+  `mapY`      DECIMAL(6,2) DEFAULT NULL        COMMENT '虚拟地图纵坐标，0-100（占地图高度百分比）',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_spots_seq` (`seq`),
   KEY `idx_spots_type` (`type`)
@@ -166,6 +168,8 @@ CREATE TABLE IF NOT EXISTS `products` (
   `roomTypes`   JSON                             COMMENT '民宿房型数组，如 ["标准间","大床房"]',
   `intro`       TEXT                             COMMENT '补充说明',
   `images`      JSON          DEFAULT NULL        COMMENT '多图数组：详情页轮播与图集，至少 3 张',
+  `mapX`        DECIMAL(6,2)  DEFAULT NULL        COMMENT '虚拟地图横坐标 0-100（预约类商品才有意义；为空表示未标点）',
+  `mapY`        DECIMAL(6,2)  DEFAULT NULL        COMMENT '虚拟地图纵坐标 0-100',
   `createdAt`   VARCHAR(32)   DEFAULT NULL       COMMENT '创建日期',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_products_seq` (`seq`),
@@ -242,6 +246,8 @@ CREATE TABLE IF NOT EXISTS `activities` (
   `capacity`  INT          DEFAULT 30      COMMENT '可预约人数上限',
   `desc`      TEXT                     COMMENT '活动说明',
   `cover`     VARCHAR(128) DEFAULT NULL COMMENT '活动配图',
+  `mapX`      DECIMAL(6,2) DEFAULT NULL COMMENT '虚拟地图横坐标 0-100',
+  `mapY`      DECIMAL(6,2) DEFAULT NULL COMMENT '虚拟地图纵坐标 0-100',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_activities_seq` (`seq`),
   KEY `idx_activities_date` (`date`)

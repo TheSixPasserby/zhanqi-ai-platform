@@ -110,7 +110,15 @@ public class DatabaseBootstrap {
                 ensureColumn(conn, "merchants", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
                 ensureColumn(conn, "admins", "avatar", "TEXT NULL COMMENT '自定义头像 dataURL'");
                 ensureColumn(conn, "activities", "capacity", "INT NULL DEFAULT 30 COMMENT '可预约人数上限'");
-                // 多图：详情页图集与点位轮播都读这一列。老库自动补列，内容为空时前端回落到 cover。
+                // 虚拟地图坐标：0-100 的百分比（左上为原点）。为空表示「还没在地图上标点」，
+        // 前端据此不在地图上画这个点，而不是画在 (0,0) 角上。
+        ensureColumn(conn, "spots", "mapX", "DECIMAL(6,2) NULL COMMENT '地图横坐标 0-100'");
+        ensureColumn(conn, "spots", "mapY", "DECIMAL(6,2) NULL COMMENT '地图纵坐标 0-100'");
+        ensureColumn(conn, "products", "mapX", "DECIMAL(6,2) NULL COMMENT '地图横坐标 0-100'");
+        ensureColumn(conn, "products", "mapY", "DECIMAL(6,2) NULL COMMENT '地图纵坐标 0-100'");
+        ensureColumn(conn, "activities", "mapX", "DECIMAL(6,2) NULL COMMENT '地图横坐标 0-100'");
+        ensureColumn(conn, "activities", "mapY", "DECIMAL(6,2) NULL COMMENT '地图纵坐标 0-100'");
+        // 多图：详情页图集与点位轮播都读这一列。老库自动补列，内容为空时前端回落到 cover。
         ensureColumn(conn, "spots", "images", "JSON NULL COMMENT '多图数组'");
         ensureColumn(conn, "products", "images", "JSON NULL COMMENT '多图数组'");
         ensureColumn(conn, "spots", "voice",

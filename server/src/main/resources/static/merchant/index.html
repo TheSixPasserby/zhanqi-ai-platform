@@ -8,6 +8,9 @@
   <link rel="stylesheet" href="../vendors/element-ui.css">
   <link rel="stylesheet" href="../assets/css/app.css">
   <link rel="stylesheet" href="../assets/css/theme-dark.css">
+  <link rel="stylesheet" href="../assets/css/theme-warm.css">
+  <link rel="stylesheet" href="../assets/css/theme-ink.css">
+  <link rel="stylesheet" href="../assets/css/virtual-map.css">
   <link rel="stylesheet" href="./css/merchant.css">
   <script src="../assets/js/theme.js"></script>
 </head>
@@ -362,6 +365,22 @@
             <el-option v-for="c in covers" :key="c" :label="c" :value="c"></el-option>
           </el-select>
           <img v-if="form.cover" :src="form.cover" class="cover-preview" alt="">
+        </el-form-item>
+
+        <!-- 地图位置：点地图选点，再点同一处取消（预约类商品才需要，实物不占地图位置） -->
+        <el-form-item label="地图位置">
+          <div style="width:100%">
+            <div class="map-pick-tip">
+              <span v-if="form.mapX != null && form.mapY != null" class="tag ok">
+                已选点 x={{ form.mapX }} · y={{ form.mapY }}</span>
+              <span v-else class="dim" style="font-size:12px">还没有标点：点下方地图选择位置</span>
+              <el-button v-if="form.mapX != null" size="mini" type="text" @click="clearMapPick">取消选点</el-button>
+            </div>
+            <div ref="pickMap" class="map-pick-box"></div>
+            <div class="dim" style="font-size:12px;margin-top:6px">
+              在地图上点一下选位置；再点同一处可取消。实物商品不需要标点。
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="商品介绍">
           <el-input type="textarea" :rows="4" v-model="form.desc"></el-input>
@@ -943,10 +962,9 @@
             <div class="cell-sub">浅色为默认宣纸白；深色为墨绿夜色</div>
           </div>
           <div class="theme-switch">
-            <button class="theme-opt" :class="{ on: themeMode === 'light' }" @click="setTheme('light')">
-              <i class="el-icon-sunny"></i> 浅色</button>
-            <button class="theme-opt" :class="{ on: themeMode === 'dark' }" @click="setTheme('dark')">
-              <i class="el-icon-moon"></i> 深色</button>
+            <button v-for="t in themeOptions" :key="t.key" class="theme-opt"
+                    :class="{ on: themeMode === t.key }" @click="setTheme(t.key)">
+              <span class="theme-dot" :style="{ background: t.dot }"></span>{{ t.text }}</button>
           </div>
         </div>
       </div>
@@ -981,6 +999,7 @@
 <script src="../assets/js/api.js"></script>
 <script src="../assets/js/charts.js"></script>
 <script src="../assets/js/profile.js"></script>
+<script src="../assets/js/virtual-map.js"></script>
 <script src="./js/merchant.js"></script>
 </body>
 </html>

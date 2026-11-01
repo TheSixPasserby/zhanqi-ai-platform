@@ -58,9 +58,8 @@
 | --- | --- | --- |
 | **PC 管理后台** | `http://localhost:8080/admin/` | Chrome / Edge 等主流 PC 浏览器 |
 | **商户工作台** | `http://localhost:8080/merchant/` | 电脑浏览器（H5 页面） |
-| **游客端 H5** | `http://localhost:8080/visitor/` | 电脑浏览器 + 手机浏览器 |
+| **游客端** | `http://localhost:8080/visitor/` | 一套自适应页面，电脑与手机共用 |
 | **统一入口页** | `http://localhost:8080/` | 含手机端二维码，扫码直达游客端 |
-| **游客电脑版 H5** | `http://localhost:8080/visitor/pc/` | 电脑浏览器；`/visitor/` 会按设备判断跳转 |
 | **安卓 App** | 由 `uniapp-visitor/` 工程打包，见第六节 | 安卓手机 |
 
 > 手机访问要用**局域网地址**（形如 `http://192.168.x.x:8080/visitor/`），部署脚本会打印出来，入口页也有二维码。
@@ -125,8 +124,7 @@
 
 ```mermaid
 flowchart TD
-    H5[游客手机 H5 /visitor/] --> HTTP[HTTP JSON /api/**]
-    PC[游客电脑版 /visitor/pc/] --> HTTP
+    H5[游客端 /visitor/ 自适应] --> HTTP[HTTP JSON /api/**]
     ADMIN[管理后台 /admin/] --> HTTP
     MERCHANT[商户工作台 /merchant/] --> HTTP
     APP[uni-app 安卓 App] --> HTTP
@@ -991,10 +989,12 @@ notifications → orderLogs → reports → chatTyping → chatMessages
 
 `server/src/main/resources/static/visitor/` 是**手写 Vue 2 页面**，由后端静态托管：
 
-- 手机端：`/visitor/`；
-- 电脑端：`/visitor/pc/`；手机入口会根据宽屏与精确指针判断是否跳转电脑版。
+- 只有一套：`/visitor/`，靠 CSS 媒体查询在手机 / 平板 / 电脑之间自适应；
+- 1024px 以上显示顶部导航条（8 个入口 + 搜索 + 消息 / 购物车 / 头像菜单），
+  1023px 以下切回底部 tabbar 与单列布局；
+- 手机与电脑共用同一份 HTML/CSS/JS，不再按设备跳转到不同目录。
 
-开发时分别修改对应 HTML/CSS/JS，随后重新构建后端 jar 并同步 `dist/`。
+开发时直接改 `static/visitor/` 下的 HTML/CSS/JS，随后重新构建后端 jar 并同步 `dist/`。
 Node/npm 不是这套 H5 的运行依赖。
 
 ### 安卓 App
@@ -1114,7 +1114,7 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 
 **无服务端分页：**下列列表接口均没有 `page/pageSize/offset/limit` 参数，按实际筛选返回整个结果；后台界面的分页不等于 API 分页。局部排行/最近订单的固定截断另行说明。未另行说明的列表以 `seq` 写入顺序为基础，响应不包含 `seq`。
 
-`WebConfig` 允许 `/api/**` 跨域，方法为 GET/POST/PUT/DELETE/OPTIONS、任意请求头和来源模式、允许 credentials，预检缓存 3600 秒。OPTIONS 预检及 Spring 隐式 HEAD 不计入上述端点数。`/admin`、`/merchant`、`/visitor`、`/visitor/pc` 补斜杠跳转，对应目录路径转发到 `index.html`；这些是公开静态页面入口，不是 JSON API，也不计入端点数。
+`WebConfig` 允许 `/api/**` 跨域，方法为 GET/POST/PUT/DELETE/OPTIONS、任意请求头和来源模式、允许 credentials，预检缓存 3600 秒。OPTIONS 预检及 Spring 隐式 HEAD 不计入上述端点数。`/admin`、`/merchant`、`/visitor` 补斜杠跳转，对应目录路径转发到 `index.html`；这些是公开静态页面入口，不是 JSON API，也不计入端点数。
 
 <a id="api-server"></a>
 
@@ -1469,7 +1469,7 @@ npm run build:h5    # 生成 uni-app H5；不是上面手写 H5 的增量更新
 
 1. **商家头像和自行改密取错 id。**商家会话 `userId=null`、身份在 merchantId；`AuthService.updateAvatar/changePassword` 仍用 me.userId() 访问 merchants。头像更新执行 `WHERE id = null` 不命中行，却返回“头像已更新”；改密的 `db.find(...,null)` 返回 null，抛 404“账号不存在”。接口虽然允许 merchant，当前不能据此宣称商家功能可正常使用。管理员为商家重置密码走另一条 service 路径。
 2. **活动编辑不能回传派生预约字段。**后台活动列表通过 `fillBookingCounts` 加 bookedPeople/bookedCount，edit/save 把整行复制进 PUT body；这些字段不在 `Tables.activities`，`Db.update` 校验失败会变成 500。调用通用更新时仅提交 8.10 列出的真实列，不能提交 bookedPeople/bookedCount，也不能回传游客接口的 seatsLeft/myBooked/myBooking。当前后台代码仍存在这一提交路径。
-3. **PC 游客端结算缺 bookDate/people，且未展示 warnings。**`visitor/pc/pc.js` 的 checkout 只传 items/address/remark；预约商品会因缺日期失败，混单可能只建立实物订单。页面成功分支清空整个购物车且不展示 warnings，不能从它的“下单成功”推断全部预约已建立。API 使用者应显式传日期并逐项处理 warnings。
+3. **游客端结算的 warnings 只做提示，不阻断下单。**结算按 `checkoutLines()` 逐项提交，预约类商品各自带 bookDate/people；后端仍可能对个别项返回 warnings（例如名额刚被占满），页面把这些提示展示出来但不会自动回滚已建立的订单，所以“下单成功”不等于每一项都建立了预约。API 使用者应逐项检查 warnings。
 4. **注册响应未透传 service 结果。**AuthController 调用 `R.ok(auth.register(...))`，而 `R.ok(Object... kv)` 只接受成对键值；单个 Map 没有被展开。因此注册实际会创建账号，但成功 JSON 只有 `ok:true`，不含 service 构造的 account/role/message，也不发会话 token。不要为文档补写实现尚未返回的字段。
 5. **种子与旧数据可能冲突，删除后 id 也会复用。**`seed.sql` 为 INSERT IGNORE，不覆盖旧主键/唯一账号；旧实例中用户先创建了 u3/m4/p11 等 id，再启动带扩充 seed 的版本，新种子行会被跳过，而种子订单仍按固定 id 引用，可能关联到原有的其他对象。是否影响现有实例需根据升级前数据核对。`Db.nextId()` 按当前行数+1并在本表防撞，删除商家后 id 可重用，新账号可能看到引用旧 id 的历史订单；这点已有交接记录，当前代码仍保留。删除种子行后重启也可能重新补种，不能把删种子数据等同于永久删除演示预置。示例 id/价格/统计不保证与旧实例一致。
 6. **活动日期、名额展示与管理员状态编辑存在宽松规则。**活动种子日期是固定的，随时间过去会拒绝预约；活动参加 date 只验长度、不验区间。capacity≤0 的后台明细显示30、Tour按不限处理。管理员可把非取消商城订单的 used 改回 pending/confirmed；不代表普通商家的流转规则也如此。

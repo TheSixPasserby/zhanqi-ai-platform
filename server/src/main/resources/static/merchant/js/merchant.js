@@ -207,6 +207,10 @@
         loading: false, saving: false, keyword: '', category: '', list: [],
         categories: { goods: '农产文创', study: '研学课程', homestay: '民宿住宿', experience: '农事体验' },
         formVisible: false, form: {}, tagsText: '', timeSlotsText: '', roomTypesText: '',
+        // 地图选点：instance 是 ZQMap 控件，标记点用于「参考坐标」——把村内点位画出来当参照物，
+        // 商家选位时能对着真实村落布局点，而不是对着一张空白网格瞎猜。
+        pickMapInstance: null,
+        pickMarkers: [],
         aiVariants: [], aiIndex: 0, aiGeneratedBy: '',
         covers: [
           '/assets/img/photos/goods-rice.jpg', '/assets/img/photos/spot-radish.jpg', '/assets/img/photos/goods-buxie.jpg',
@@ -259,6 +263,63 @@
         this.aiVariants = [];
         this.aiIndex = 0;
         this.formVisible = true;
+        this.initPickMap();
+      },
+
+      /* ------------------------ 地图选点（商品位置） ------------------------ */
+      /**
+       * 初始化选点地图。
+       * 弹窗刚打开时 DOM 还没渲染，所以要等两帧（$nextTick + setTimeout）。
+       * 底图上同时画出村内点位作为参照，商家能对着真实布局选位。
+       */
+      initPickMap: function () {
+        var self = this;
+        this.$nextTick(function () {
+          setTimeout(function () {
+            var box = self.$refs.pickMap;
+            if (!box || !window.ZQMap) { return; }
+            if (self.pickMapInstance) { self.pickMapInstance.destroy(); self.pickMapInstance = null; }
+            self.pickMarkers = (self.$parent && self.$parent.spots ? self.$parent.spots : []) || [];
+            if (!self.pickMarkers.length) {
+              // 商家端没有 spots 数据时，用接口取一次（只为画参照点，失败不影响选点）
+              api.get('/api/tour/spots', null, { silent: true }).then(function (res) {
+                if (res && res.ok && res.spots) { self.pickMarkers = res.spots; self.rebuildPickMap(); }
+              });
+            }
+            self.pickMapInstance = window.ZQMap.create({
+              el: box,
+              markers: (self.pickMarkers || []).filter(function (s) { return s.mapX != null && s.mapY != null; })
+                .map(function (s) {
+                  return { key: 'sp-' + s.id, kind: 'spot', name: s.name, x: Number(s.mapX), y: Number(s.mapY) };
+                }),
+              selectable: true,
+              showLegend: false,
+              picked: (self.form && self.form.mapX != null && self.form.mapY != null)
+                ? { x: Number(self.form.mapX), y: Number(self.form.mapY) } : null,
+              onPick: function (x, y) {
+                if (x == null) {
+                  self.form.mapX = null;
+                  self.form.mapY = null;
+                } else {
+                  self.form.mapX = x;
+                  self.form.mapY = y;
+                }
+              },
+            });
+          }, 80);
+        });
+      },
+      rebuildPickMap: function () {
+        if (!this.pickMapInstance) { return; }
+        this.pickMapInstance.setMarkers((this.pickMarkers || []).filter(function (s) { return s.mapX != null && s.mapY != null; })
+          .map(function (s) {
+            return { key: 'sp-' + s.id, kind: 'spot', name: s.name, x: Number(s.mapX), y: Number(s.mapY) };
+          }));
+      },
+      clearMapPick: function () {
+        this.form.mapX = null;
+        this.form.mapY = null;
+        if (this.pickMapInstance) { this.pickMapInstance.setPicked(null); }
       },
       save: function () {
         var self = this;
@@ -270,6 +331,9 @@
         payload.tags = this.tagsText.split(/[,，、\s]+/).filter(Boolean);
         payload.price = Number(payload.price || 0);
         payload.stock = Number(payload.stock || 0);
+        // 地图坐标：选了就提交数字，没选显式传 null（让后端清空，而不是保留旧值）
+        payload.mapX = (this.form.mapX == null || this.form.mapX === '') ? null : Number(this.form.mapX);
+        payload.mapY = (this.form.mapY == null || this.form.mapY === '') ? null : Number(this.form.mapY);
         // 预约类商品才提交场次/房型；留空时数组为空，后端按分类给默认值
         if (this.isBooking) {
           payload.timeSlots = splitCommaList(this.timeSlotsText);
@@ -1061,7 +1125,8 @@
         saving: false,
         pwdForm: { old: '', new: '', confirm: '' },
         // 主题：初值由 ZQTheme 决定（head 里已应用过一次）
-        themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light')
+        themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light'),
+        themeOptions: (window.ZQTheme ? window.ZQTheme.options : [])
       };
     },
     created: function () {

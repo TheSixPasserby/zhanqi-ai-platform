@@ -150,6 +150,9 @@ public class ShopService {
         row.put("roomTypes", tags(body.get("roomTypes")));
         row.put("desc", trim(body.get("desc")));
         row.put("intro", trim(body.get("intro")));
+        // 地图坐标（0-100 百分比）：没选点时为 null，前端据此不在地图上画这个商品
+        row.put("mapX", coordinate(body.get("mapX")));
+        row.put("mapY", coordinate(body.get("mapY")));
         row.put("createdAt", Instant.now().toString());
         return decorateProduct(db.insert("products", row));
     }
@@ -192,6 +195,13 @@ public class ShopService {
         }
         if (body.containsKey("status")) {
             patch.put("status", "off".equals(trim(body.get("status"))) ? "off" : "on");
+        }
+        // 地图坐标：只在前端明确传了该字段时才更新（避免只改价格时把坐标清空）
+        if (body.containsKey("mapX")) {
+            patch.put("mapX", coordinate(body.get("mapX")));
+        }
+        if (body.containsKey("mapY")) {
+            patch.put("mapY", coordinate(body.get("mapY")));
         }
         db.update("products", String.valueOf(p.get("id")), patch);
         return decorateProduct(db.find("products", String.valueOf(p.get("id"))));
@@ -884,5 +894,27 @@ public class ShopService {
         } catch (Exception e) {
             return fallback;
         }
+    }
+
+    /**
+     * 地图坐标：0-100 的百分比，超出范围夹回边界；空值/非数字返回 null（表示「未标点」）。
+     *
+     * 为什么要夹：前端地图控件本身就限制在 0-100，但接口是公开的，
+     * 客户端可以传任意数；夹一下能保证库里不会出现 -5 或 999 这种坐标，
+     * 否则地图上会出现点位跑到画布外。
+     */
+    private Double coordinate(Object v) {
+        if (v == null) {
+            return null;
+        }
+        String s = String.valueOf(v).trim();
+        if (s.isEmpty() || "null".equalsIgnoreCase(s)) {
+            return null;
+        }
+        double d = number(v, Double.NaN);
+        if (Double.isNaN(d)) {
+            return null;
+        }
+        return Math.max(0, Math.min(100, d));
     }
 }
