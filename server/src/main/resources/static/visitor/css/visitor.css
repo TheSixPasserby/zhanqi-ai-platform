@@ -622,6 +622,24 @@ body {
   flex: none; display: flex; flex-wrap: wrap; gap: 8px;
   padding: 0 14px 10px;
 }
+/* 初始推荐问题已挪进 .chat（跟着欢迎语走），不再是贴底的一段，
+   所以 .chat 里的那组要去掉外层边距，并跟欢迎语一样居中。 */
+.chat .suggests { padding: 0 4px 6px; justify-content: center; }
+
+/* 空对话（还没有任何消息）：欢迎语 + 推荐问题作为一组在消息区里垂直居中。
+   用 auto 外边距而不是 justify-content:center —— 容器的 overflow-y 是 auto，
+   justify-content:center 在内容高于容器时会把顶部裁掉、且无法滚上去；
+   auto 外边距按规范在空间不足时归一为 0，不会出这个问题。 */
+.chat-empty { display: flex; flex-direction: column; }
+.chat-empty .chat-welcome { margin-top: auto; padding-bottom: 10px; }
+.chat-empty .suggests { margin-bottom: auto; }
+/* 电脑上对话内容限宽 760（消息区 900 减去左右留白）并居中，
+   一行超过 60~70 个汉字就很难扫读了 */
+@media (min-width: 1024px) {
+  .chat-page > .chat { padding: 22px 26px 12px; }
+  .chat-page .msg { max-width: 760px; margin-left: auto; margin-right: auto; }
+  .chat-page .msg-user .msg-bubble { max-width: 78%; }
+}
 .suggests::-webkit-scrollbar { display: none; }
 .suggests button {
   flex: none; padding: 8px 14px; border-radius: 999px; background: #fff;
@@ -959,6 +977,64 @@ body {
   align-self: stretch;
   width: auto;
 }
+/* 主题包里有一条 html[data-theme="dark|warm|ink"] .topbar { background: var(--surface) }
+   （theme-*.css，特异度 0,2,1），比基础 .topbar 的深绿渐变（0,1,0）高，
+   于是手机端换主题后沉浸式顶栏被刷成一块浅色实底，而标题文字仍是白色
+   —— 暖阳主题下是白字压米白底，几乎看不见。
+   这里用更高特异度（0,3,1）把这两类沉浸式顶栏的渐变底固定回来，
+   只有「页面级顶栏」才该跟随主题换成浅底（电脑端另有覆盖）。 */
+html[data-theme="dark"] .im-page > .topbar,
+html[data-theme="dark"] .chat-page > .topbar,
+html[data-theme="warm"] .im-page > .topbar,
+html[data-theme="warm"] .chat-page > .topbar,
+html[data-theme="ink"] .im-page > .topbar,
+html[data-theme="ink"] .chat-page > .topbar {
+  background: linear-gradient(135deg, #0E4C3E 0%, #146B57 100%);
+}
+
+/* ------------------------------------------------------------------
+ * 主题：AI 助手 / 客服聊天里这几处底色是写死的 #fff。
+ * theme-*.css 只覆盖 app.css 的设计令牌，没有针对 .msg-bubble / .im-bubble
+ * / .chat-input / 推荐问题的规则，于是深色与青墨主题下气泡和输入区是一块
+ * 刺眼的白，暖阳主题下白底配米白页面又发灰。这里按令牌补上，
+ * 让这三块和其它卡片一样跟着主题走。
+ * 注意「自己的气泡」仍是品牌色实底 + 白字，两种主题下对比度都够。
+ * ---------------------------------------------------------------- */
+html[data-theme="dark"] .msg-bubble,
+html[data-theme="warm"] .msg-bubble,
+html[data-theme="ink"] .msg-bubble,
+html[data-theme="dark"] .im-bubble,
+html[data-theme="warm"] .im-bubble,
+html[data-theme="ink"] .im-bubble {
+  background: var(--surface);
+  color: var(--text);
+}
+html[data-theme="dark"] .msg-user .msg-bubble,
+html[data-theme="warm"] .msg-user .msg-bubble,
+html[data-theme="ink"] .msg-user .msg-bubble,
+html[data-theme="dark"] .im-msg.mine .im-bubble,
+html[data-theme="warm"] .im-msg.mine .im-bubble,
+html[data-theme="ink"] .im-msg.mine .im-bubble {
+  background: var(--brand);
+  color: #fff;
+}
+html[data-theme="dark"] .chat-input,
+html[data-theme="warm"] .chat-input,
+html[data-theme="ink"] .chat-input,
+html[data-theme="dark"] .im-input,
+html[data-theme="warm"] .im-input,
+html[data-theme="ink"] .im-input {
+  background: var(--surface);
+  border-top-color: var(--line);
+}
+html[data-theme="dark"] .suggests button,
+html[data-theme="warm"] .suggests button,
+html[data-theme="ink"] .suggests button {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--brand);
+}
+
 .im-topbar { flex: none; }
 .im-topbar .topbar-title { flex: 1; min-width: 0; }
 .im-topbar .topbar-title h1 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -1321,6 +1397,12 @@ body {
     border-bottom: 0;
     color: var(--text);
     gap: 12px;
+    /* app.css 给后台顶栏写了 backdrop-filter: saturate(180%) blur(10px)，
+       背景清成 transparent 后它仍在起作用：把身后米白底 (246,244,239)
+       提饱和成 (248,244,235)，标题区上方浮出一块肉眼可辨的浅黄方块。
+       实测截图采样 y=72..160 全是 (248,244,235)，所以必须显式关掉。 */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
   .topbar-back {
     width: 34px; height: 34px;
@@ -1340,13 +1422,15 @@ body {
   html[data-theme="warm"] .topbar,
   html[data-theme="ink"] .topbar { background: none; border-bottom: 0; }
   html[data-theme="dark"] .im-page > .topbar,
-  html[data-theme="dark"] .chat-page > .topbar,
   html[data-theme="warm"] .im-page > .topbar,
-  html[data-theme="warm"] .chat-page > .topbar,
-  html[data-theme="ink"] .im-page > .topbar,
-  html[data-theme="ink"] .chat-page > .topbar {
+  html[data-theme="ink"] .im-page > .topbar {
     background: linear-gradient(135deg, #0E4C3E 0%, #146B57 100%);
   }
+  /* 电脑上 AI 助手页是「页面级标题区」而不是沉浸式顶栏，主题下同样要透明。
+     基础区那条 0,3,1 的渐变兜底是给手机端的，这里同特异度、位置更靠后压回去。 */
+  html[data-theme="dark"] .chat-page > .topbar,
+  html[data-theme="warm"] .chat-page > .topbar,
+  html[data-theme="ink"] .chat-page > .topbar { background: none; border-bottom: 0; }
 
   /* 商城把搜索框塞在标题下面（列向），电脑上空间够，改回「标题左、搜索右」一行 */
   .topbar-shop {
@@ -1371,25 +1455,22 @@ body {
   .progress { max-width: 560px; height: 10px; }
   .progress-tip { font-size: 12.5px; margin-top: 9px; }
 
-  /* 聊天 / AI 助手：这两页顶栏是沉浸式对话的一部分，电脑上仍保留深绿渐变，
-     只把返回键与标题字号恢复成对话页该有的规格 */
-  .im-page > .topbar,
-  .chat-page > .topbar {
+  /* 客服聊天：顶栏是沉浸式对话的一部分（读消息时不该看到一条浅色标题带），
+     电脑上仍保留深绿渐变，只把返回键与标题字号恢复成对话页该有的规格。
+     AI 助手页不放进来：它是「先看介绍、再提问」的页面，顶栏要和其它页一样
+     是透明标题区，深绿条在 1180px 宽的桌面上会变成一条挂空的色带。 */
+  .im-page > .topbar {
     padding: 13px 18px;
     background: linear-gradient(135deg, #0E4C3E 0%, #146B57 100%);
     border-bottom: 0;
     color: #fff;
   }
-  .im-page > .topbar .topbar-back,
-  .chat-page > .topbar .topbar-back {
+  .im-page > .topbar .topbar-back {
     background: rgba(255, 255, 255, .2); border-color: transparent; box-shadow: none; color: #fff;
   }
-  .im-page > .topbar .topbar-back .ico,
-  .chat-page > .topbar .topbar-back .ico { color: #fff; }
-  .im-page > .topbar .topbar-title h1,
-  .chat-page > .topbar .topbar-title h1 { font-size: 16.5px; color: #fff; }
-  .im-page > .topbar .topbar-title p,
-  .chat-page > .topbar .topbar-title p { color: rgba(255, 255, 255, .78); }
+  .im-page > .topbar .topbar-back .ico { color: #fff; }
+  .im-page > .topbar .topbar-title h1 { font-size: 16.5px; color: #fff; }
+  .im-page > .topbar .topbar-title p { color: rgba(255, 255, 255, .78); }
 
   /* 底部操作条（商品详情「立即预约」、结算「提交订单」等）：
      手机上是贴屏幕底边的通栏，电脑上屏幕太宽，通栏会把「合计 ¥256」甩到最左边、
@@ -1441,8 +1522,14 @@ body {
   .im-scroll { padding: 18px 22px 8px; }
   .im-bubble { max-width: 62%; }
 
-  /* AI 助手同理（68px 导航 + 1px 边框） */
-  .chat-page { max-width: 900px; margin: 0 auto; height: calc(100vh - 69px); padding-bottom: 0; }
+  /* AI 助手同理（68px 导航 + 1px 边框），但宽度跟其它页一样取 1180：
+     标题区要和别的页左对齐（900 宽的话标题会缩到画面中间一截），
+     对话内容另用 900 的窄栏居中，一行才不会长到读不下去。 */
+  .chat-page { max-width: 1180px; margin: 0 auto; height: calc(100vh - 69px); padding-bottom: 0; }
+  .chat-page > .chat,
+  .chat-page > .suggests,
+  .chat-page > .chat-input { max-width: 900px; margin-left: auto; margin-right: auto; width: 100%; }
+  .chat-page > .chat-input { border-radius: 14px 14px 0 0; }
 
   /* 村内地图：地图在左、地点清单在右，比手机上一上一下更省滚动 */
   .map-page { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
@@ -1470,12 +1557,15 @@ body {
   .toast-wrap { bottom: 28px; }
 }
 
-/* 1160 以下、1024 以上：8 项导航全带文字时自然宽度约 1091px，
-   窗口只要窄于这个数就会把 .nav-right 顶出屏幕（实测 1024 时 scrollWidth=1091）。
+/* 1024~1228 之间：8 项导航全带文字时，导航条本身要约 1091px，
+   再加上品牌、搜索框、消息/购物车按钮、头像，整行实测需要 1227px
+   （视口 1227 时 scrollWidth 正好 1227，1226 及以下开始溢出）。
+   所以断点上界必须盖到 1228 —— 只写到 1160 的话，1161~1227 这一段
+   文字收不回去，.nav-right 会被顶出屏幕（实测 1200px 宽时溢出 27px）。
    这一段把导航项的文字收起来只留图标 —— 这也正是当初给文字包 span 的原因：
    选择器 `.nav-links a span{display:none}` 只有文字真的在 span 里才生效。
-   悬停有 title 提示，功能不受影响；窗口拉到 1160 以上文字自动回来。 */
-@media (min-width: 1024px) and (max-width: 1160px) {
+   悬停有 title 提示，功能不受影响；窗口拉到 1228 以上文字自动回来。 */
+@media (min-width: 1024px) and (max-width: 1228px) {
   .nav-inner { gap: 16px; padding: 0 18px; }
   .nav-links a { padding: 9px 11px; }
   .nav-links a span { display: none; }

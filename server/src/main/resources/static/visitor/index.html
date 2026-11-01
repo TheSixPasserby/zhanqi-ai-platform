@@ -1507,11 +1507,20 @@
           <div class="topbar-title"><h1>AI 文旅助手</h1><p>{{ ai.mode || '本地知识库检索' }}</p></div>
         </div>
 
-        <div class="chat" ref="chat">
-          <div class="chat-welcome">
+        <div class="chat" ref="chat" :class="{ 'chat-empty': !messages.length && !thinking }">
+          <!-- 欢迎语只在「还没开口」时出现：一旦有消息就收起来，
+               否则对话会从欢迎语下面开始，永久占掉两百多像素高度。 -->
+          <div class="chat-welcome" v-if="!messages.length">
             <div class="chat-logo">AI</div>
             <b>你好，我是战旗村的 AI 文旅助手</b>
             <p>村内点位、非遗手作、农产好物、研学预约、交通住宿都可以问我。我只根据村内知识库回答，找不到时会直接告诉你，不会编造内容。</p>
+          </div>
+
+          <!-- 初始推荐问题：原先挂在 .chat 外面、贴着输入区。电脑上这一页高 831px、
+               欢迎语只有两行，欢迎语在上、推荐问题贴底，中间空出近半屏，像没加载完。
+               移进 .chat 与欢迎语成一组，.chat-empty 再用 auto 外边距整体垂直居中。 -->
+          <div class="suggests" v-if="!messages.length">
+            <button v-for="q in suggests" :key="q" @click="ask(q)">{{ q }}</button>
           </div>
 
           <div class="msg" :class="'msg-' + m.role" v-for="(m, i) in messages" :key="i">
@@ -1527,10 +1536,6 @@
             <div class="msg-avatar msg-avatar-ai">AI</div>
             <div class="msg-bubble"><div class="dots"><i v-for="n in 3" :key="n" :style="{ animationDelay: n * 0.16 + 's' }"></i></div></div>
           </div>
-        </div>
-
-        <div class="suggests" v-if="!messages.length">
-          <button v-for="q in suggests" :key="q" @click="ask(q)">{{ q }}</button>
         </div>
 
         <!-- 猜你想问：回答说完之后按关键词给 4 条追问，点一下就能继续 -->
