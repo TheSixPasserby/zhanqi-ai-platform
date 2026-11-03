@@ -918,9 +918,12 @@
        */
       openOrders: function () {
         if (this.checkoutMode) { this.leaveCheckout(false); }
-        this.view = 'orders';
-        this.viewStack = [];
-        window.scrollTo({ top: 0 });
+        /**
+         * 【要修的 bug】以前这里直接把 view 改成 orders 并清空 viewStack，
+         * 结果从商城/我的点「我的订单」再返回就掉到首页。
+         * 现在统一走 go()，orders 按来源入栈，返回即回到点它之前的那一页。
+         */
+        this.go('orders');
         this.loadOrders();
       },
       /* ---------------------------- 基础工具 ---------------------------- */
@@ -1164,7 +1167,9 @@
        */
       openMapFocus: function (x, y) {
         this.mapFocus = { x: Number(x), y: Number(y) };
-        this.go('map', true);
+        // 不传 isTop：地图是子页面，按来源入栈，返回时回到点「在村内地图中查看」
+        // 之前的那个详情页（而不是被当成顶层 Tab 清空栈后掉回首页）。
+        this.go('map');
       },
 
       /** 详情页里的小地图：只画当前这一个点，居中放大 */
@@ -1256,28 +1261,38 @@
           this.leaveCheckout(false);
         }
 
+        /**
+         * 【返回规则】栈底永远记住「从哪个顶层页出去的」，子页面一层层压在它上面。
+         *
+         * 【要修的 bug】以前进子页面只 push、从不记来源，栈底是空的，
+         * 于是从商城进商品详情再点返回，栈 pop 完就空了，落到写死的 'home' ——
+         * 用户逛商城时被一脚踢回首页。同理，从地图点图标进详情，返回也回不到地图。
+         * 现在切顶层页时把该页压成栈底（而不是清空），子页依次入栈，
+         * 返回就是「弹到上一层」，天然满足「从哪进返回哪」，不需要任何写死跳转。
+         */
         if (TOP_VIEWS.indexOf(view) >= 0) {
-          // 切顶层 Tab：清空返回栈，避免返回时回到已切走的页面
+          // 切顶层 Tab：栈重置为「只有这一层」，返回时不会回到已切走的页面
           this.view = view;
-          this.viewStack = [];
+          this.viewStack = [view];
         } else {
+          // 子页面：栈空说明是直接跳进来的（分享链接 / 刷新），补一个兜底来源
+          if (!this.viewStack.length) { this.viewStack = ['home']; }
           this.view = view;
-          this.viewStack.push(view);
+          // 栈顶已经是这一页就不重复压栈。
+          // 典型场景：活动详情里预约成功后 openActivity 会再进一次本页，
+          // 以前会造成「要连点两次返回」；现在栈就是真实的历史轨迹。
+          if (this.viewStack[this.viewStack.length - 1] !== view) {
+            this.viewStack.push(view);
+          }
         }
         window.scrollTo(0, 0);
         this.onEnter(view);
       },
 
       goBack: function () {
-        // 从结算页返回＝放弃这次提交，但购物车与已填内容保留
-        if (this.checkoutMode) {
-          this.leaveCheckout(false);
-          this.view = 'shop';
-          this.viewStack = [];
-          window.scrollTo({ top: 0 });
-          this.onEnter('shop');
-          return;
-        }
+        // 从结算页返回＝放弃这次提交，但购物车与已填内容保留。
+        // 这里不写死回商城：落点交给返回栈决定（从哪进结算就回哪）。
+        if (this.checkoutMode) { this.leaveCheckout(false); }
         // 从订单详情返回时清掉详情数据，避免下次进来先闪一下上一单的内容
         if (this.view === 'orderDetail') {
           this.orderDetail = {};
@@ -1286,11 +1301,35 @@
         }
         // 返回时同样要销毁详情页小地图、停掉图集轮播
         this.destroyDetailMap();
+        this.stopSpotGallery();
         this.stopActGallery();
-        this.viewStack.pop();
-        var prev = this.viewStack[this.viewStack.length - 1];
-        // 返回栈空了就回到对应顶层页
-        this.view = prev || (this.user ? 'home' : 'home');
+
+        /**
+         * 【要修的 bug】以前这里是无条件 pop()，栈底本来就是空的，
+         * pop 完只剩空栈，于是落点被写死成 home —— 商城 → 商品详情 → 返回，
+         * 回的是首页而不是商城。现在栈底恒为来源顶层页：pop 掉当前页后
+         * 剩下的那一项就是落点；只剩自己一层（深链直接进 / 刷新）时不 pop，
+         * 原地留在这一层，不再跳首页。
+         */
+        if (this.viewStack.length > 1) { this.viewStack.pop(); }
+        this.view = this.viewStack[this.viewStack.length - 1] || 'home';
+
+        /**
+         * 回到地图页必须重新建图。
+         *
+         * 【要修的 bug】go() 在离开地图时会 destroy 掉 ZQMap 实例（否则
+         * ResizeObserver 会一直挂在被 v-if 摘掉的隐藏节点上）。goBack 不经过 go()，
+         * 只改 view，于是「地图 → 点图标进详情 → 返回」回到的是空壳地图页：
+         * 底图、标记、缩放按钮全都没渲染，也点不动。
+         * 这里补上同一套「进地图就 init、离开就 destroy」的对称处理。
+         */
+        if (this.view === 'map') { this.initMap(); }
+        else if (this.mapInstance) { this.mapInstance.destroy(); this.mapInstance = null; }
+        // 返回到某个详情页时，详情里那份小地图也要重建（同样是上面那套对称处理）
+        if (this.view === 'spotDetail' || this.view === 'productDetail' || this.view === 'activityDetail') {
+          this.initDetailMap();
+        }
+
         window.scrollTo({ top: 0 });
         this.onEnter(this.view);
       },
@@ -2459,8 +2498,13 @@
         writeCart(this.cart);
         // 直接切视图，不走 go()：go('orders') 里有「离开结算态」的判断，
         // 会把刚设好的 checkoutMode 又关掉，进结算页看到的却是订单列表。
+        // 但返回栈要自己记：把来源页留在栈底、orders 压在上面，
+        // 于是结算页点返回＝回到进结算前的那一页，不再写死回商城。
+        if (!this.viewStack.length) { this.viewStack = ['home']; }
         this.view = 'orders';
-        this.viewStack = ['orders'];
+        if (this.viewStack[this.viewStack.length - 1] !== 'orders') {
+          this.viewStack.push('orders');
+        }
         window.scrollTo({ top: 0 });
       },
 

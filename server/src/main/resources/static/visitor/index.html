@@ -411,7 +411,9 @@
 
         <!-- 购物车浮标 -->
         <button v-if="cartCount > 0" class="cart-fab" @click="cartOpen = true">
-          <span>车</span><i>{{ cartCount }}</i>
+          <!-- 【要改】原来是「车」字，现在换成与三端统一的购物车图标（i-cart symbol），
+                按钮尺寸 / 位置 / 点击区域完全不动，只把中间的字换成 svg。 -->
+          <svg class="ico cart-fab-ico" aria-hidden="true"><use :href="iconHref('i-cart')"></use></svg><i>{{ cartCount }}</i>
         </button>
         <div class="page-bottom-space"></div>
       </section>
@@ -1295,7 +1297,10 @@
       <!-- 村内地图（战旗村虚拟地图） -->
       <section v-if="view === 'map'" class="page-body subpage">
         <div class="topbar">
-          <button class="topbar-back" @click="go('home')"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
+          <!-- 【要修的 bug】这里原来是 @click="go('home')"，写死回首页：
+                从首页进地图、或从点位详情跳地图时，返回都被硬拗到首页。
+                现在和其它详情页一样走 goBack()，按返回栈回到来源页。 -->
+          <button class="topbar-back" @click="goBack"><svg class="ico"><use :href="iconHref('i-arrow-left')"></use></svg></button>
           <!-- 标题用统一的 div>h1+p 结构（这里原来是一个裸 <b>，电脑端「页面标题区」的字号/颜色规则
                是按 .topbar-title h1 写的，裸 <b> 会漏掉，导致地图页标题比别的页小一号） -->
           <div class="topbar-title"><h1>战旗村地图</h1><p>14 个点位 · 研学 · 民宿 · 农事 · 活动</p></div>
