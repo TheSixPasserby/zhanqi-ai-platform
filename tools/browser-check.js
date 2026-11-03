@@ -718,13 +718,25 @@ function check(name, ok, detail) {
       vm.go('mine', true);
       await new Promise(r => setTimeout(r, 1500));
       const txt = document.body.innerText;
+      // 只看菜单卡片本身：页面底部「关于」卡片里也有一句
+      // 「…研学民宿预约与 AI 文旅助手服务」，那是产品介绍文案，不是入口，
+      // 用整页 innerText 去过滤会把它误判成残留入口。
+      const menuEl = document.querySelector('.card.menu');
+      const menuTxt = menuEl ? menuEl.innerText : '';
       return {
         stamps: (vm.stamps || []).length,
         hasWall: txt.indexOf('我的印章墙') >= 0,
-        hasMenu: txt.indexOf('AI 文旅助手') >= 0,
+        // 第 50 轮需求 3：个人中心只留「我的订单 / 我的印章墙 / 举报中心」，
+        // AI 文旅助手、AI 行程规划、战旗村地图、活动日历、去逛商城这五个浏览类入口已删。
+        hasMenu: menuTxt.indexOf('我的印章墙') >= 0 && menuTxt.indexOf('举报中心') >= 0,
+        menuBrowsing: ['AI 文旅助手', 'AI 行程规划', '战旗村地图', '活动日历', '去逛商城']
+          .filter(t => menuTxt.indexOf(t) >= 0),
       };
     })()`);
     check('我的页渲染印章墙与菜单', mineOk && mineOk.hasWall && mineOk.hasMenu, JSON.stringify(mineOk));
+    check('我的页已删掉五个浏览类入口（AI 助手 / 行程规划 / 地图 / 活动日历 / 商城）',
+      mineOk && mineOk.menuBrowsing.length === 0,
+      'selector=.card.menu 残留=' + JSON.stringify((mineOk && mineOk.menuBrowsing) || 'none'));
     check('我的页读了印章数据', mineOk && mineOk.stamps > 0, JSON.stringify(mineOk));
     await screenshot('visitor-13-mine.png');
 
@@ -1090,7 +1102,7 @@ function check(name, ok, detail) {
   // 靠媒体查询在 ≥1024px 显示桌面布局（顶部导航）、窄屏显示手机布局（底部 tabbar）。
   // 这一组就是这轮的验收清单，每一小项都对应用户明确要求的一条：
   //   a. 只有一套游客端：/visitor/pc/ 不再可用，桌面视口也不会被跳走；
-  //   b. 顶部导航排版：8 个入口齐全、文字不换行不溢出、相邻项不重叠；
+  //   b. 顶部导航排版：5 个入口齐全、文字不换行不溢出、相邻项不重叠；
   //   c. 手机视口：顶部导航隐藏、底部 tabbar 4 项可见；
   //   d. 点位详情显示地图位置，且真的渲染出标记；
   //   e. 研学/民宿/农事三类需位置商品的详情同样显示地图与标记；
@@ -1135,15 +1147,24 @@ function check(name, ok, detail) {
       };
     })()`);
 
-    const EXPECT_NAV = ['首页', '点位打卡', '商城', '活动', '我的订单', '村内地图', 'AI 助手', '行程规划'];
+    // 第 50 轮需求 1 + 2：导航只留 5 项（我的订单归到个人中心、AI 助手与行程规划
+    // 归到 AI 助手页入口），并且删掉了搜商品搜索栏。
+    const EXPECT_NAV = ['首页', '点位打卡', '商城', '活动', '村内地图'];
     const navTexts = (nav && nav.texts) || [];
     const navMissing = EXPECT_NAV.filter(t => navTexts.indexOf(t) < 0);
     check('桌面视口下顶部导航可见（display 非 none 且有高度）',
       !!(nav && nav.topnavDisplay !== 'none' && nav.topnavDisplay !== 'absent' && nav.topnavH > 0),
       'selector=.topnav  display=' + (nav && nav.topnavDisplay) + ' height=' + (nav && nav.topnavH));
-    check('顶部导航 8 个入口全部存在', navMissing.length === 0,
+    check('顶部导航 5 个入口全部存在', navMissing.length === 0,
       'selector=.nav-links a  count=' + navTexts.length + ' 实测=' + JSON.stringify(navTexts)
         + ' 缺少=' + JSON.stringify(navMissing));
+    check('顶部导航已删掉「我的订单 / AI 助手 / 行程规划」三项',
+      navTexts.indexOf('我的订单') < 0 && navTexts.indexOf('AI 助手') < 0 && navTexts.indexOf('行程规划') < 0,
+      'selector=.nav-links a 实测=' + JSON.stringify(navTexts));
+    const navSearchBt = await v.evalJs('(function(){ var el = document.querySelector(".topnav .nav-search"); return { present: !!el, w: el ? el.getBoundingClientRect().width : 0 }; })()');
+    check('顶部导航已删除搜商品搜索栏',
+      !!(navSearchBt && navSearchBt.present === false),
+      'selector=.topnav .nav-search  实测存在=' + (navSearchBt && navSearchBt.present));
     check('顶部导航每一项文字都不换行、不溢出',
       !!(nav && nav.count > 0 && nav.overflow.length === 0),
       'selector=.nav-links a  溢出项=' + JSON.stringify((nav && nav.overflow) || 'none'));

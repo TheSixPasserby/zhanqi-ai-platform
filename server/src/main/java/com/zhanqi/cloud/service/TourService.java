@@ -82,7 +82,7 @@ public class TourService {
     }
 
     /**
-     * 点位图集：优先用 spots.images，缺失时回落到 cover。
+     * 图集（点位 / 商品 / 活动共用）：优先用 images 列，缺失时回落到 cover。
      *
      * 为什么兜底：images 是后加的列，老库或后台只填了 cover 的点位不该在详情页变成空白，
      * 也不能假装有多张图 —— 兜底只返回 1 张，前端据此不显示轮播。
@@ -185,6 +185,8 @@ public class TourService {
             decorateBooking(a);
             String id = text(a.get("id"));
             a.put("myBooked", me != null && me.isBuyer() && myBooking(me.userId(), id) != null);
+            // 图集：与点位/商品同一套约定（images 列 + cover 兜底），前端据此决定显不显示轮播
+            a.put("images", imagesOf(a));
             (isPast(a) ? past : upcoming).add(a);
         }
         upcoming.addAll(past);
@@ -199,6 +201,7 @@ public class TourService {
         }
         Map<String, Object> out = new LinkedHashMap<>(act);
         decorateBooking(out);
+        out.put("images", imagesOf(act));
         out.put("myBooking", me != null && me.isBuyer() ? myBooking(me.userId(), id) : null);
         return out;
     }

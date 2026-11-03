@@ -66,9 +66,11 @@ public final class Tables {
                 "logisticsUpdatedAt", "shippedAt", "bookingSlot", "checkOutDate", "roomType",
                 "completedAt", "refundAmount", "refundedAt", "refundNote"), Set.of());
 
+        // images 是 JSON 数组列，必须同时在 columns 与 jsonColumns 里登记：
+        // 只登记 columns 会被当成普通字符串写回，后台一保存就变成 "[...]" 字面量。
         put("activities", "a", List.of(
                 "id", "title", "date", "endDate", "place", "tag", "capacity", "desc", "cover",
-                "mapX", "mapY"), Set.of());
+                "images", "mapX", "mapY"), Set.of("images"));
 
         put("activityBookings", "ab", List.of(
                 "id", "activityId", "activityTitle", "userId", "userName", "phone",

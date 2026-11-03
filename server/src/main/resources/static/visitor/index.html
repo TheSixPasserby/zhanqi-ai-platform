@@ -177,10 +177,8 @@
           </nav>
 
           <div class="nav-right">
-            <div class="nav-search">
-              <svg class="i" aria-hidden="true"><use :href="iconHref('i-search')"></use></svg>
-              <input v-model.trim="keyword" placeholder="搜商品" @keyup.enter="go('shop', true); loadProducts()">
-            </div>
+            <!-- 搜索框已按需求移除：导航右侧只留消息/购物车/头像三件套，
+                 避免 8 项导航 + 搜索框在 1228px 以下挤成两行（见 visitor.css 断点注释）。 -->
             <button class="icon-btn" title="我的消息" @click="go('chatList', true)">
               <svg class="i" aria-hidden="true"><use :href="iconHref('i-mail')"></use></svg>
             </button>
@@ -331,8 +329,12 @@
         <div class="pad-x" v-if="spotTab === 'spots'">
           <div v-if="loadingSpots" class="empty-box"><b>正在加载点位…</b></div>
           <div v-else-if="!spots.length" class="empty-box"><b>暂时没有点位数据</b></div>
-          <div v-else class="card spot-item" v-for="s in spots" :key="s.id">
-            <img class="spot-item-cover" :src="asset(s.cover)" :alt="s.name" loading="lazy" @click="openSpot(s.id)">
+          <!-- 整卡片可点：原来只有封面图绑了 openSpot，点标题/介绍/空白处毫无反应，
+               于是「点位列表点不动」被当成 bug 报上来。打卡按钮上加 .stop，
+               否则点「立即打卡」会连带打开详情页。 -->
+          <div v-else class="card spot-item" v-for="s in spots" :key="s.id"
+               role="button" tabindex="0" @click="openSpot(s.id)" @keyup.enter="openSpot(s.id)">
+            <img class="spot-item-cover" :src="asset(s.cover)" :alt="s.name" loading="lazy">
             <div class="spot-item-body">
               <div class="spot-item-top">
                 <b>{{ s.name }}</b>
@@ -342,7 +344,7 @@
               <p class="ell2 small">{{ s.intro }}</p>
               <div class="spot-item-foot">
                 <span class="dim tiny">{{ s.checked ? ago(s.checkedAt) + '打卡' : '盖「' + s.stamp + '」印章' }}</span>
-                <button class="btn btn-sm" :class="s.checked ? 'btn-ghost' : ''" @click="checkin(s)">
+                <button class="btn btn-sm" :class="s.checked ? 'btn-ghost' : ''" @click.stop="checkin(s)">
                   {{ s.checked ? '再打一次' : '立即打卡' }}
                 </button>
               </div>
@@ -1356,7 +1358,19 @@
         <div v-if="actLoading && !currentAct.id" class="loading-line"><i></i></div>
 
         <div v-if="currentAct.id">
-          <div class="cover-lg"><img :src="asset(currentAct.cover)" :alt="currentAct.title" @error="imgFail"></div>
+          <!-- 活动图集：与点位/商品详情同一套轮播结构。
+               以前活动页只有一张 cover，三张实景图躺在 photo 目录里没人用；
+               活动是「看图决定去不去」的场景，单图说服力不够。 -->
+          <div class="cover-lg spot-gallery">
+            <img :src="asset(actGalleryImage)" :alt="currentAct.title" @error="imgFail">
+            <span v-if="actImages.length > 1" class="sg-count">{{ actGalleryIndex + 1 }} / {{ actImages.length }}</span>
+            <button v-if="actImages.length > 1" class="sg-nav prev" @click="stepActImage(-1)">‹</button>
+            <button v-if="actImages.length > 1" class="sg-nav next" @click="stepActImage(1)">›</button>
+            <div v-if="actImages.length > 1" class="sg-dots">
+              <i v-for="(img, i) in actImages" :key="i" :class="{ on: i === actGalleryIndex }"
+                 @click="actGalleryIndex = i"></i>
+            </div>
+          </div>
 
           <div class="pad-x">
             <div class="card">
@@ -1367,6 +1381,18 @@
                 <span><svg class="ico"><use :href="iconHref('i-user')"></use></svg>已约 {{ currentAct.bookedPeople || 0 }} 人<template v-if="currentAct.seatsLeft >= 0">，余 {{ currentAct.seatsLeft }} 位</template></span>
               </div>
               <p class="para mt10">{{ currentAct.desc }}</p>
+            </div>
+
+            <!-- 活动地点：活动都在村里的某个点位办，把那个点位画出来，
+                 用户才知道「十八坊竹编铺」到底在村里什么位置、离自己多远。 -->
+            <div class="card" v-if="currentAct.mapX != null && currentAct.mapY != null">
+              <div class="card-title"><i class="accent"></i>活动地点</div>
+              <div class="detail-map" ref="actMapBox"></div>
+              <p class="dim tiny detail-map-tip">
+                <svg class="ico"><use :href="iconHref('i-location')"></use></svg>
+                {{ currentAct.place || '战旗村' }}
+                <a class="detail-map-more" @click="openMapFocus(currentAct.mapX, currentAct.mapY)">在村内地图中查看 ›</a>
+              </p>
             </div>
 
             <!-- 已预约：展示登记信息 -->

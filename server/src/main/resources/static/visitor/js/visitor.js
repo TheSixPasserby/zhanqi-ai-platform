@@ -265,16 +265,15 @@
         themeMode: (window.ZQTheme ? window.ZQTheme.get() : 'light'),
         themeOptions: (window.ZQTheme ? window.ZQTheme.options : []),
         // 桌面顶部导航（宽屏才显示，样式见 visitor.css 的 @media(min-width:1024px)）
-        // 文字必须包在 span 里：窄屏靠 CSS 把它隐藏，只留图标，否则 8 项会挤成一团
+        // 文字必须包在 span 里：窄屏靠 CSS 把它隐藏，只留图标，否则多项会挤成一团。
+        // 只放「浏览类」五个入口：「我的订单 / AI 助手 / 行程规划」从导航移除，
+        // 前两者在头像悬浮菜单与个人中心里，行程规划归到 AI 助手页内跳转。
         navLinks: [
           { view: 'home', text: '首页', icon: 'i-home' },
           { view: 'spots', text: '点位打卡', icon: 'i-stamp' },
           { view: 'shop', text: '商城', icon: 'i-shop' },
           { view: 'activities', text: '活动', icon: 'i-calendar' },
-          { view: 'orders', text: '我的订单', icon: 'i-ticket' },
           { view: 'map', text: '村内地图', icon: 'i-map' },
-          { view: 'ai', text: 'AI 助手', icon: 'i-ai' },
-          { view: 'plan', text: '行程规划', icon: 'i-route' },
         ],
         // 头像悬浮菜单：与商家端 / 管理端保持同一套（带图标、无「修改密码」——
         // 改密是个人中心里的操作，不该混进导航菜单）
@@ -298,6 +297,8 @@
         spotGalleryIndex: 0,     // 点位图集当前第几张
         spotGalleryTimer: null,  // 点位图集自动轮播定时器
         productGalleryIndex: 0,  // 商品图集当前第几张
+        actGalleryIndex: 0,      // 活动图集当前第几张
+        actGalleryTimer: null,   // 活动图集自动轮播定时器
         speaking: false,
         showScript: false,
         voiceName: '',       // 当前语音音色名（语音讲解卡片右上角展示）
@@ -594,15 +595,13 @@
         ];
       },
 
+      // 个人中心菜单：只留「订单 / 印章墙 / 举报」三类账户相关入口。
+      // AI 助手、行程规划、地图、活动日历、逛商城都是「浏览」动作，首页宫格与顶部导航已能到达，
+      // 放进个人中心会让这张卡变成第二份导航，找账户信息反而更费劲。
       menus: function () {
         return [
           { key: 'orders', text: '我的订单', desc: '查看订单状态与取消', icon: 'i-ticket', view: 'orders', bg: '#E6F2ED', color: '#146B57' },
           { key: 'wall', text: '我的印章墙', desc: '集齐全部印章领纪念品', icon: 'i-stamp', view: 'spots', tab: true, bg: '#FBEDE7', color: '#BE5230' },
-          { key: 'ai', text: 'AI 文旅助手', desc: '问村内的事，有知识库出处', icon: 'i-ai', view: 'ai', bg: '#EAF1F9', color: '#2F6BA8' },
-          { key: 'plan', text: 'AI 行程规划', desc: '按偏好编排 1-3 天路线', icon: 'i-map', view: 'plan', bg: '#FCF4E2', color: '#B07A18' },
-          { key: 'map', text: '战旗村地图', desc: '点位、民宿、研学与活动位置', icon: 'i-map', view: 'map', bg: '#E8F1F7', color: '#2C5F7A' },
-          { key: 'acts', text: '村内活动日历', desc: '非遗节庆与农事体验', icon: 'i-calendar', view: 'activities', bg: '#F1EEE7', color: '#5C6B65' },
-          { key: 'shop', text: '去逛商城', desc: '农产文创好物', icon: 'i-shop', view: 'shop', tab: true, bg: '#E8F4EE', color: '#2C7A57' },
           { key: 'reports', text: '举报中心', desc: '商家违规反馈与处理进度', icon: 'i-shield', view: 'reports', bg: '#FBEDE7', color: '#BE5230' },
         ];
       },
@@ -739,6 +738,19 @@
         var list = this.productImages;
         if (!list.length) { return ''; }
         var i = Math.min(Math.max(0, this.productGalleryIndex || 0), list.length - 1);
+        return list[i];
+      },
+      /** 当前活动图集：后端 images 已含 cover 兜底；只有 1 张时不轮播 */
+      actImages: function () {
+        var a = this.currentAct || {};
+        var list = (a.images || []).filter(function (x) { return !!x; });
+        if (!list.length && a.cover) { list = [a.cover]; }
+        return list;
+      },
+      actGalleryImage: function () {
+        var list = this.actImages;
+        if (!list.length) { return ''; }
+        var i = Math.min(Math.max(0, this.actGalleryIndex || 0), list.length - 1);
         return list[i];
       },
     },
@@ -1120,20 +1132,25 @@
       refreshMapMarkers: function () {
         if (this.mapInstance) { this.mapInstance.setMarkers(this.mapMarkers); }
       },
+      /**
+       * 点地图上的标记 → 打开对应详情。
+       *
+       * 注意三个 openXxx 的第一个参数都是 **id 字符串**，不是对象：
+       * 它们内部会拼 `/api/tour/spots/' + id` 这种路径。以前这里把整个对象传进去，
+       * 拼出来是 `/api/tour/spots/[object Object]`，Tomcat 直接回 400 的 HTML 错误页，
+       * 前端解析失败后只弹一句「未找到商品和服务」，看起来像后端坏了，其实是参数传错。
+       */
       openMapMarker: function (m) {
         if (!m) { return; }
         if (m.kind === 'spot') {
-          var sp = (this.spots || []).filter(function (s) { return s.id === m.refId; })[0];
-          if (sp) { this.openSpot(sp); } else { this.toast('点位不存在'); }
+          this.openSpot(m.refId);
           return;
         }
         if (m.kind === 'activity') {
-          var act = (this.activities || []).filter(function (a) { return a.id === m.refId; })[0];
-          if (act) { this.openActivity(act); } else { this.toast('活动不存在'); }
+          this.openActivity(m.refId);
           return;
         }
-        var prod = (this.products || []).filter(function (p) { return p.id === m.refId; })[0];
-        if (prod) { this.openProduct(prod); } else { this.toast('商品不存在'); }
+        this.openProduct(m.refId);
       },
 
       /** 打开购物车抽屉（桌面导航的购物车按钮用） */
@@ -1157,17 +1174,21 @@
         this.$nextTick(function () {
           setTimeout(function () {
             if (!window.ZQMap) { return; }
+            // 三种详情页共用这一份实现：点位 / 商品 / 活动。
+            // 活动页的标题字段叫 title 而不是 name，所以这里按页面取，不能统一读 name。
             var isSpot = self.view === 'spotDetail';
-            var box = isSpot ? self.$refs.spotMapBox : self.$refs.productMapBox;
+            var isAct = self.view === 'activityDetail';
+            var box = isSpot ? self.$refs.spotMapBox
+              : (isAct ? self.$refs.actMapBox : self.$refs.productMapBox);
             if (!box) { return; }
-            var src = isSpot ? self.current : self.product;
+            var src = isSpot ? self.current : (isAct ? self.currentAct : self.product);
             if (!src || src.mapX == null || src.mapY == null) { return; }
             self.detailMapInstance = window.ZQMap.create({
               el: box,
               markers: [{
                 id: src.id,
-                kind: isSpot ? 'spot' : (src.category || 'experience'),
-                name: src.name || '',
+                kind: isSpot ? 'spot' : (isAct ? 'activity' : (src.category || 'experience')),
+                name: src.name || src.title || '',
                 x: src.mapX,
                 y: src.mapY,
               }],
@@ -1216,9 +1237,12 @@
         if (view === 'map') { this.initMap(); }
         else if (this.mapInstance) { this.mapInstance.destroy(); this.mapInstance = null; }
         // 详情页的小地图同理：离开就销毁，否则 ResizeObserver 会一直挂在隐藏节点上
-        if (view !== 'spotDetail' && view !== 'productDetail') { this.destroyDetailMap(); }
-        // 离开点位详情就停图集轮播，别让定时器在后台一直跑
+        if (view !== 'spotDetail' && view !== 'productDetail' && view !== 'activityDetail') {
+          this.destroyDetailMap();
+        }
+        // 离开详情页就停图集轮播，别让定时器在后台一直跑
         if (view !== 'spotDetail') { this.stopSpotGallery(); }
+        if (view !== 'activityDetail') { this.stopActGallery(); }
 
         /**
          * 退出未提交的结算去「我的订单」时必须同时退出结算模式。
@@ -1260,8 +1284,9 @@
           this.orderLogs = [];
           this.logistics = null;
         }
-        // 返回时同样要销毁详情页小地图
+        // 返回时同样要销毁详情页小地图、停掉图集轮播
         this.destroyDetailMap();
+        this.stopActGallery();
         this.viewStack.pop();
         var prev = this.viewStack[this.viewStack.length - 1];
         // 返回栈空了就回到对应顶层页
@@ -1529,12 +1554,16 @@
         var self = this;
         this.go('activityDetail');
         this.currentAct = {};
+        this.actGalleryIndex = 0;
+        this.stopActGallery();
         this.actLoading = true;
         api.get('/api/tour/activities/' + id).then(function (res) {
           self.actLoading = false;
           if (!res || !res.ok) { return; }
           var a = res.activity || {};
           self.currentAct = a;
+          self.initDetailMap();     // 活动也有坐标，详情页要能看它在村里哪一片
+          self.startActGallery();
           self.actForm = {
             date: (a.date || ''),
             people: a.myBooking ? a.myBooking.people : 2,
@@ -1679,6 +1708,33 @@
         var n = this.productImages.length;
         if (n <= 1) { return; }
         this.productGalleryIndex = ((this.productGalleryIndex + delta) % n + n) % n;
+      },
+
+      /** 活动图集翻页；手动翻页后重新计时，别刚点完就被自动切走 */
+      stepActImage: function (delta) {
+        var n = this.actImages.length;
+        if (n <= 1) { return; }
+        this.actGalleryIndex = ((this.actGalleryIndex + delta) % n + n) % n;
+        this.startActGallery();
+      },
+      /** 活动图集自动轮播：与点位详情同一节奏（4.2s），活动页也配了语音/文字说明 */
+      startActGallery: function () {
+        var self = this;
+        this.stopActGallery();
+        if (this.actImages.length <= 1) { return; }
+        this.actGalleryTimer = setInterval(function () {
+          if (self.view !== 'activityDetail' || self.actImages.length <= 1) {
+            self.stopActGallery();
+            return;
+          }
+          self.actGalleryIndex = (self.actGalleryIndex + 1) % self.actImages.length;
+        }, 4200);
+      },
+      stopActGallery: function () {
+        if (this.actGalleryTimer) {
+          clearInterval(this.actGalleryTimer);
+          this.actGalleryTimer = null;
+        }
       },
 
       checkin: function (spot) {
