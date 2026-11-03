@@ -1315,17 +1315,6 @@ html[data-theme="ink"] .suggests button {
 
   .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex: none; }
 
-  .nav-search {
-    display: flex; align-items: center; gap: 8px;
-    height: 38px; padding: 0 12px; border-radius: 10px;
-    background: var(--surface-3); color: var(--text-3);
-  }
-  .nav-search .i { width: 16px; height: 16px; flex: none; }
-  .nav-search input {
-    border: 0; outline: 0; background: transparent; color: var(--text);
-    font-size: 13px; font-family: inherit; width: 120px;
-  }
-
   .icon-btn {
     position: relative; width: 38px; height: 38px; border-radius: 10px;
     border: 1px solid var(--line); background: var(--surface);
@@ -1383,6 +1372,26 @@ html[data-theme="ink"] .suggests button {
   /* 正文区域：内容仍限宽（一行太长不好读），但比手机宽得多 */
   .page-body { max-width: 1180px; margin: 0 auto; padding-bottom: 40px; }
   .pad-x { padding: 0 26px; }
+
+  /* 详情页大图（点位 / 商品 / 活动共用）。
+     手机上 .cover-lg 是 240px 高的通栏封面，那时屏幕才 414px 宽，比例还算正常；
+     搬到 1180px 的电脑页面后同样的 240px 高会变成 4.9:1 的超宽扁条 ——
+     图被裁得只剩中间一条，而且左右顶到页面边缘，比下面带 26px 内边距的卡片还宽，
+     视觉上像是「图和内容不是一套」。所以电脑上改成：
+     · 与 .pad-x 对齐（左右各留 26px 的同一距离）
+     · 固定 16:10 比例（素材原图 1200×751，接近 16:10，按原比例裁切最少）
+     · 再给个上限高度，超宽屏上不会变成一张巨幅海报
+     · 圆角收敛，和下面的 .card 用同一套语言 */
+  .cover-lg {
+    width: auto;
+    height: auto;
+    aspect-ratio: 2.4 / 1;
+    max-height: 470px;
+    margin: 6px 26px 18px;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .cover-lg img { height: 100%; object-position: center 58%; }
 
   /* 顶部总览区：手机上的深绿渐变条是「替代标题栏」的省空间做法，
      放到 1180px 宽的电脑页面上就成了一整条突兀的色带，和下面浅色卡片区割裂。
@@ -1557,20 +1566,16 @@ html[data-theme="ink"] .suggests button {
   .toast-wrap { bottom: 28px; }
 }
 
-/* 1024~1228 之间：8 项导航全带文字时，导航条本身要约 1091px，
-   再加上品牌、搜索框、消息/购物车按钮、头像，整行实测需要 1227px
-   （视口 1227 时 scrollWidth 正好 1227，1226 及以下开始溢出）。
-   所以断点上界必须盖到 1228 —— 只写到 1160 的话，1161~1227 这一段
-   文字收不回去，.nav-right 会被顶出屏幕（实测 1200px 宽时溢出 27px）。
-   这一段把导航项的文字收起来只留图标 —— 这也正是当初给文字包 span 的原因：
-   选择器 `.nav-links a span{display:none}` 只有文字真的在 span 里才生效。
-   悬停有 title 提示，功能不受影响；窗口拉到 1228 以上文字自动回来。 */
-@media (min-width: 1024px) and (max-width: 1228px) {
+/* 1024~1120 之间：导航项收到 5 项、且去掉了搜索框后，整行实测约 900px 就够；
+   但 1024 这一档留的余量很小（品牌 + 5 项 + 消息/购物车/头像），
+   所以 1120 以下仍把文字收成图标，避免在部分系统字体下换行。
+   这也正是当初给文字包 span 的原因：选择器 `.nav-links a span{display:none}`
+   只有文字真的在 span 里才生效。悬停有 title 提示，功能不受影响。 */
+@media (min-width: 1024px) and (max-width: 1120px) {
   .nav-inner { gap: 16px; padding: 0 18px; }
   .nav-links a { padding: 9px 11px; }
   .nav-links a span { display: none; }
   .nav-links a .i { width: 19px; height: 19px; }
-  .nav-search input { width: 96px; }
   .brand-text em { display: none; }
 }
 

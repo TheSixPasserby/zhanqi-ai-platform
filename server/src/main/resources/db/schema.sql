@@ -246,6 +246,7 @@ CREATE TABLE IF NOT EXISTS `activities` (
   `capacity`  INT          DEFAULT 30      COMMENT '可预约人数上限',
   `desc`      TEXT                     COMMENT '活动说明',
   `cover`     VARCHAR(128) DEFAULT NULL COMMENT '活动配图',
+  `images`    JSON         DEFAULT NULL COMMENT '多图数组：活动详情图集（至少 3 张，首张通常等于 cover）',
   `mapX`      DECIMAL(6,2) DEFAULT NULL COMMENT '虚拟地图横坐标 0-100',
   `mapY`      DECIMAL(6,2) DEFAULT NULL COMMENT '虚拟地图纵坐标 0-100',
   PRIMARY KEY (`id`),

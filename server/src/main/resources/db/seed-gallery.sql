@@ -339,9 +339,46 @@ UPDATE `products` SET `images` = JSON_ARRAY(
   '/assets/img/photos/goods-douban.jpg', '/assets/img/photos/goods-douban-p2.jpg', '/assets/img/photos/goods-douban-p3.jpg'
 ) WHERE `id` = 'p27';
 
+-- --------------------------- 活动图集（10 个活动 × 3 张） ---------------------------
+-- 活动的三张图和点位共用同一批实景照（活动就办在那个点位上），
+-- 所以按 cover 所属主题取 -p2 / -p3 变体即可，不额外造图。
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-rice.jpg', '/assets/img/photos/spot-rice-p2.jpg', '/assets/img/photos/spot-rice-p3.jpg'
+) WHERE `id` = 'a1';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-buxie.jpg', '/assets/img/photos/spot-buxie-p2.jpg', '/assets/img/photos/spot-buxie-p3.jpg'
+) WHERE `id` = 'a2';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-linpan.jpg', '/assets/img/photos/spot-linpan-p2.jpg', '/assets/img/photos/spot-linpan-p3.jpg'
+) WHERE `id` = 'a3';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-study.jpg', '/assets/img/photos/spot-study-p2.jpg', '/assets/img/photos/spot-study-p3.jpg'
+) WHERE `id` = 'a4';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-radish.jpg', '/assets/img/photos/spot-radish-p2.jpg', '/assets/img/photos/spot-radish-p3.jpg'
+) WHERE `id` = 'a5';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-douban.jpg', '/assets/img/photos/spot-douban-p2.jpg', '/assets/img/photos/spot-douban-p3.jpg'
+) WHERE `id` = 'a6';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-bamboo.jpg', '/assets/img/photos/spot-bamboo-p2.jpg', '/assets/img/photos/spot-bamboo-p3.jpg'
+) WHERE `id` = 'a7';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-teahouse.jpg', '/assets/img/photos/spot-teahouse-p2.jpg', '/assets/img/photos/spot-teahouse-p3.jpg'
+) WHERE `id` = 'a8';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-rice.jpg', '/assets/img/photos/spot-rice-p2.jpg', '/assets/img/photos/spot-rice-p3.jpg'
+) WHERE `id` = 'a9';
+UPDATE `activities` SET `images` = JSON_ARRAY(
+  '/assets/img/photos/spot-radish.jpg', '/assets/img/photos/spot-radish-p2.jpg', '/assets/img/photos/spot-radish-p3.jpg'
+) WHERE `id` = 'a10';
+
 -- --------------------------- 完成校验 ---------------------------
 SELECT '点位缺图' AS chk, COUNT(*) AS n FROM `spots`
   WHERE `images` IS NULL OR JSON_LENGTH(`images`) < 3
 UNION ALL
 SELECT '商品缺图', COUNT(*) FROM `products`
+  WHERE `images` IS NULL OR JSON_LENGTH(`images`) < 3
+UNION ALL
+SELECT '活动缺图', COUNT(*) FROM `activities`
   WHERE `images` IS NULL OR JSON_LENGTH(`images`) < 3;

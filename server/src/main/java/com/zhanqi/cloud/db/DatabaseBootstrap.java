@@ -121,6 +121,9 @@ public class DatabaseBootstrap {
         // 多图：详情页图集与点位轮播都读这一列。老库自动补列，内容为空时前端回落到 cover。
         ensureColumn(conn, "spots", "images", "JSON NULL COMMENT '多图数组'");
         ensureColumn(conn, "products", "images", "JSON NULL COMMENT '多图数组'");
+        // 活动图集：活动详情页也要像点位、商品那样能放多张现场图。
+        // 单独一行是因为 activities 的 images 是最后补的，混在上一批里容易被误读成同一次迁移。
+        ensureColumn(conn, "activities", "images", "JSON NULL COMMENT '多图数组'");
         ensureColumn(conn, "spots", "voice",
                         "VARCHAR(16) NULL DEFAULT 'auto' COMMENT '讲解语音包：auto/male/female'");
                 ensureColumn(conn, "products", "timeSlots",

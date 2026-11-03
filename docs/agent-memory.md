@@ -624,8 +624,8 @@
 - **flex 容器里做「内容不足时垂直居中、内容超出时可滚动」要用 auto 外边距，不能用 `justify-content: center`**。`overflow-y:auto` 的 flex 容器上，`justify-content:center` 会在内容高于容器时把顶部裁掉且滚不上去；auto 外边距按规范在空间不足时归一为 0，天然安全。
   （2026-11-01，来源：同上）
 
-- **游客端导航「收文字」的断点上界是 1228px，不是 1160px**。8 项导航全带文字时整行实测需要 1227px（品牌 + 8 项 + 搜索框 + 消息/购物车按钮 + 头像）。断点写到 1160 会让 1161~1227 这一段溢出，表现为整页可横向滚动、右上角头像被顶出屏幕（1200px 时溢出 27px）。改 `visitor/css/visitor.css` 的 `@media (min-width:1024px) and (max-width:1228px)` 时别把上界调小。
-  （2026-11-01，来源：同上）
+- **游客端导航「收文字」断点的上界跟着导航内容走，不是一个固定数字**。8 项导航 + 搜索框时整行实测需要 1227px（曾把上界定在 1228）；第 50 轮砍到 5 项并删掉搜索框后只需要约 900px，上界随之收到 1120px。**改导航项数或增删搜索框，必须重新量一遍整行最小宽度并同步断点**，否则要么白收文字、要么溢出（表现为整页可横向滚动、右上角头像被顶出屏幕）。
+  （2026-11-01 立，2026-11-03 更新，来源：2026-11-01-visitor-desktop-polish / 2026-11-03-visitor-round50-nav-map-gallery）
 
 ## 协作流程约定（2026-10-31 起长期有效）
 
@@ -636,7 +636,23 @@
   三者齐备才用 **squash** 合并，合并后**删除远程功能分支**；
   任一不满足就停止并报告原因，**不强行合并、不绕过分支保护**。
 - 完成后只报告三项：PR 链接、合并 commit、远程分支是否已删除。
-- 注意：本机当前**没有配置 `GITHUB_TOKEN`**（shell / PowerShell User+Machine+Process
-  三个作用域、`.env`、`~/.config/gh/hosts.yml` 均无）。缺 token 时该流程会停在第 1 步，
-  需要先由人注入环境变量。
-  （2026-10-31，来源：用户第 33 轮指令）
+- **本机建 PR 的可用法子（2026-11-01 实测通过，推翻了上面「禁止 gh CLI」那条）**：
+  `git config --list --show-origin | grep credential` 指向
+  `C:\Users\13541\.workbuddy\binaries\gh\bin\gh.exe auth git-credential`，
+  这个 gh 2.101.0 已用 keyring 登录（`gh auth status` → account spsCiallo，scopes 含 repo）。
+  gh 不在 PATH 里，但绝对路径可用。建 PR 用
+  `gh api --method POST repos/<owner>/<repo>/pulls -f title=... -f head=... -f base=... -F body=@file`
+  （`gh pr create` 直调会挂起超时），合并用 `gh pr merge <n> --squash --delete-branch`。
+  环境变量 `GITHUB_TOKEN` 时常为空、此前那串细粒度 `github_pat_...C8Uj` 缺 `pull_requests:write`，
+  两条都不可依赖。**找 GitHub 凭据先查 `git config` 的 credential.helper，不要只查环境变量。**
+  （2026-11-01，来源：用户要求「提交到 GitHub」那一轮）
+
+## 第 50 轮沉淀（2026-11-03）
+
+- **前端把对象当 id 传，后端回的是 400 HTML 而不是 404**。游客端地图点标记弹「未找到商品和服务」，实际 URL 是 `/api/tour/spots/[object Object]`，Tomcat 对这种路径返回 400 + HTML 错误页，`api.js` 用 `JSON.parse` 解析 HTML 失败后落到兜底文案。**排查这类「接口报没数据」先看 Network 里的真实 URL，不要跟着文案去查业务接口。**（2026-11-03，来源：2026-11-03-visitor-round50-nav-map-gallery）
+- **`width:auto` 与 `aspect-ratio` 组合时，元素宽度由高度反推，不会撑满父容器**。想让「宽度跟随父容器、高度按固定比例算」必须显式 `width:100%`（或让宽度先由文档流确定），只写 `aspect-ratio` + `max-height` 会出现「图片比下方卡片窄一截、左右内缩」。（2026-11-03，来源：同上）
+- **给 JSON 列做前后端打通，`Tables.java` 的 `jsonColumns` 必须同步登记**，否则列能读出来但是字符串（`"[]"`）而非数组，前端 `v-for` 静默不渲染、不报错，排查成本很高。（2026-11-03，来源：同上）
+- **headless Chrome 的 CDP 端口会互相抢**：已有实例占着端口时，新进程 `--remote-debugging-port` 起不来且不报错，脚本只会一直等到超时。起 Chrome 前先 `netstat -ano | grep <port>` 确认空闲，端口冲突换一个就能解决。（2026-11-03，来源：同上）
+- **单次 CDP `Runtime.evaluate` 里串行等 40+ 次（每次数百毫秒）会超 25s 调用超时返回 undefined**，后续 `.length` 直接 TypeError。批量遍历（如 43 个地图标记逐个点击验证）要分批，且返回值先判 `Array.isArray`。（2026-11-03，来源：同上）
+- **导航断了/个人中心塞满，是同一类问题：某个入口该不该在这里出现，没有判断标准**。本轮定的口径写进了代码注释：导航只放「跨页面的主干功能」，个人中心只放「跟我账号相关的（订单/印章/举报/改密码）」，浏览类入口交给首页宫格。（2026-11-03，来源：同上）
+
