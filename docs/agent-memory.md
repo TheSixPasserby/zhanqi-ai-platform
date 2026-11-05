@@ -656,3 +656,10 @@
 - **单次 CDP `Runtime.evaluate` 里串行等 40+ 次（每次数百毫秒）会超 25s 调用超时返回 undefined**，后续 `.length` 直接 TypeError。批量遍历（如 43 个地图标记逐个点击验证）要分批，且返回值先判 `Array.isArray`。（2026-11-03，来源：同上）
 - **导航断了/个人中心塞满，是同一类问题：某个入口该不该在这里出现，没有判断标准**。本轮定的口径写进了代码注释：导航只放「跨页面的主干功能」，个人中心只放「跟我账号相关的（订单/印章/举报/改密码）」，浏览类入口交给首页宫格。（2026-11-03，来源：同上）
 
+
+## 游客端返回栈与地图生命周期（2026-11-03 第 51 轮）
+
+- **`viewStack` 的语义是「栈底恒为来源顶层页」，不是「子页列表」。** 历史上 `go()` 切顶层 Tab 时把栈清空、进子页只 push，导致栈底为空，`goBack()` 里 `prev || 'home'` 恒成立 —— **所有详情页返回都掉首页**。修法是切顶层 Tab 写 `viewStack = [view]` 而非 `[]`。改返回相关逻辑前先确认栈底有没有东西。（2026-11-03，来源：2026-11-03-visitor-back-nav-and-cart-icon）
+- **地图页「进就 initMap、离开就 destroy」必须成对出现，goBack 不走 go()，最容易漏。** `go()` 离开 map 会 destroy（v-if 摘掉节点后 ResizeObserver 仍挂在隐藏节点上），但 `goBack()` 只改 `view`、不经 `go()`，于是「地图 → 详情 → 返回」是空壳地图（底图/标记/缩放按钮全无、点不动）。**别用 keep-alive 解决**：模板是 v-if + v-show 混用，套上去会改掉所有子页生命周期，详情图集轮播和小地图的 init/destroy 都会错位。（2026-11-03，来源：同上）
+- **`static/visitor/js/visitor.js` 是 CRLF 换行**，用 `fs.readFileSync` + `replace` 且替换串里带 `\n` 会**静默匹配不上**。改它用 `tools.edit` 工具（对 CRLF 正常）。（2026-11-03，来源：同上）
+- **`tools/browser-check.js` 在本机有 18 项既有失败，且在 `:999` 崩 `TypeError: Cannot read properties of undefined (reading 'attr')`（`window.ZQTheme.set('dark')`）**，后面的断言根本没跑完；它**没有** viewStack / cart-fab 类断言。**改导航/返回逻辑不能靠它验收**：把改动后的结果与改动前的基线逐条对比，再用 `vm.runInNewContext` 加载真实 visitor.js、拦截 `new Vue(opts)` 拿到真实 methods（只桩掉 DOM/网络依赖）做定向断言。（2026-11-03，来源：同上）

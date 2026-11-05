@@ -486,8 +486,16 @@ body {
   position: fixed; right: 16px; bottom: 84px; width: 52px; height: 52px; border-radius: 50%;
   border: 3px solid var(--brand-soft); background: #fff; cursor: pointer;
   box-shadow: 0 8px 22px rgba(31, 42, 38, .16); z-index: 40;
+  /* 图标居中：尺寸 / 位置 / 点击区域都不动，只是把内容从「文字居中」换成 flex 居中，
+     这样 svg 图标在 52×52 圆里水平和垂直都居中（角标是 absolute，不受影响）。 */
+  display: flex; align-items: center; justify-content: center;
 }
-.cart-fab span { color: var(--brand); font-size: 18px; font-weight: 700; }
+/* 购物车图标：沿用品牌色，居中放在 52×52 的圆里（原来是「车」字）。
+   只定义图标本身，不动 .cart-fab 的尺寸 / 位置 / 点击区域。 */
+.cart-fab .cart-fab-ico {
+  width: 24px; height: 24px; margin: auto;
+  color: var(--brand); stroke: currentColor;
+}
 .cart-fab i {
   position: absolute; right: -2px; top: -2px; min-width: 20px; height: 20px; padding: 0 5px;
   border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px;
