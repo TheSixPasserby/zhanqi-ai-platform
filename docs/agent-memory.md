@@ -10,9 +10,7 @@
   `.bat` 的 CRLF+ASCII 约束就是为了防止 macOS 侧编辑器改坏换行与编码。
   （2026-09-28，来源：2026-09-28-init-repo.md）
 - `dist/zhanqi-cloud-server.jar` 是交付物而非构建产物，**刻意入库**；
-  改了 Java 却忘了重编译同步，等于交付旧版本，且自检脚本测的是 jar 的行为。
-  重编译要用 JDK 17/21 标准环境，别用本机碰巧装的高版本 JDK。
-  （2026-09-28，来源：2026-09-28-init-repo.md / 2026-09-28-unix-support.md）
+  改了 Java **或 `server/src/main/resources` 下的静态资源**却忘了重编译同步，等于交付旧版本，且自检脚本测的是 jar 的行为（游客端 JS 就在 jar 里）。重编译要用 JDK 17/21 标准环境，别用本机碰巧装的高版本 JDK。**「只改了 static、未改 Java，不需同步」是错的**——#23 修地图返回空白只提交了源码没重打 jar，用户拿到的 dist 仍是旧包，2026-11-06 才补上。（2026-09-28，来源：2026-09-28-init-repo.md / 2026-09-28-unix-support.md；2026-11-06 更新，来源：2026-11-06-visitor-map-back-blank.md）
 - 部署逻辑有两套对等实现：`tools/deploy.ps1`（Windows）与 `tools/deploy.sh`
   （macOS/Linux），改一边必须同步另一边，行为与文案都要一致。
   （2026-09-28，来源：2026-09-28-unix-support.md）
@@ -660,6 +658,12 @@
 ## 游客端返回栈与地图生命周期（2026-11-03 第 51 轮）
 
 - **`viewStack` 的语义是「栈底恒为来源顶层页」，不是「子页列表」。** 历史上 `go()` 切顶层 Tab 时把栈清空、进子页只 push，导致栈底为空，`goBack()` 里 `prev || 'home'` 恒成立 —— **所有详情页返回都掉首页**。修法是切顶层 Tab 写 `viewStack = [view]` 而非 `[]`。改返回相关逻辑前先确认栈底有没有东西。（2026-11-03，来源：2026-11-03-visitor-back-nav-and-cart-icon）
-- **地图页「进就 initMap、离开就 destroy」必须成对出现，goBack 不走 go()，最容易漏。** `go()` 离开 map 会 destroy（v-if 摘掉节点后 ResizeObserver 仍挂在隐藏节点上），但 `goBack()` 只改 `view`、不经 `go()`，于是「地图 → 详情 → 返回」是空壳地图（底图/标记/缩放按钮全无、点不动）。**别用 keep-alive 解决**：模板是 v-if + v-show 混用，套上去会改掉所有子页生命周期，详情图集轮播和小地图的 init/destroy 都会错位。（2026-11-03，来源：同上）
+- **地图页「进就 initMap、离开就 destroy」必须成对出现，goBack 不走 go()，最容易漏。** `go()` 离开 map 会 destroy（v-if 摘掉节点后 ResizeObserver 仍挂在隐藏节点上），但 `goBack()` 只改 `view`、不经 `go()`，于是「地图 → 详情 → 返回」是空壳地图（底图/标记/缩放按钮全无、点不动）。**别用 keep-alive 解决**：模板是 v-if + v-show 混用，套上去会改掉所有子页生命周期，详情图集轮播和小地图的 init/destroy 都会错位。browser-check 已有 4 条回归哨兵（visitor-35-map-back.png）。（2026-11-03，来源：同上；2026-11-06 补哨兵）
 - **`static/visitor/js/visitor.js` 是 CRLF 换行**，用 `fs.readFileSync` + `replace` 且替换串里带 `\n` 会**静默匹配不上**。改它用 `tools.edit` 工具（对 CRLF 正常）。（2026-11-03，来源：同上）
-- **`tools/browser-check.js` 在本机有 18 项既有失败，且在 `:999` 崩 `TypeError: Cannot read properties of undefined (reading 'attr')`（`window.ZQTheme.set('dark')`）**，后面的断言根本没跑完；它**没有** viewStack / cart-fab 类断言。**改导航/返回逻辑不能靠它验收**：把改动后的结果与改动前的基线逐条对比，再用 `vm.runInNewContext` 加载真实 visitor.js、拦截 `new Vue(opts)` 拿到真实 methods（只桩掉 DOM/网络依赖）做定向断言。（2026-11-03，来源：同上）
+- **`tools/browser-check.js` 已恢复全绿（2026-11-06 实测 123/123），并已补上 viewStack / 地图返回 / 购物车浮标等断言**。历史上曾有 18 项既有失败 + `:999` 崩溃，后被 #21/#22 清掉。改导航/返回逻辑以它为准；若再出现「既有失败」，先与上一轮基线逐条对比再下结论。（2026-11-03 记录既有失败；2026-11-06 更新为全绿，来源：2026-11-06-visitor-map-back-blank.md）
+
+## 交付包与本机多实例（2026-11-06）
+
+- **本机同时跑着 4 个 java，端口与身份先 `netstat` + 查命令行再动**：8081 = 慧棚云部署包（毕业设计旧部署）；8082 = 本仓库 dist jar（战旗云，改代码要重启这个）；8083 = D:\毕业设计\datong-ai-platform（大同村，另一套 village-map 实现，没有 ZQMap/virtual-map.js）；8084 = Downloads 里 GitHub zip 另一副本。测「游客端」前先确认打的是哪个端口，别把 8083 的现象算到本仓库头上。（2026-11-06，来源：2026-11-06-visitor-map-back-blank.md）
+- **`deploy.ps1 rebuild` 只认 PATH 里的 `mvn`**，本机 Maven 在 `C:\Users\13541\.workbuddy\binaries\maven\apache-maven-3.9.16\bin\mvn.cmd`（不在 PATH），直接调它会报「没有 Maven 无法现场编译」。手工编译：设 JAVA_HOME 指向 Adoptium JDK 17 后跑 `mvn.cmd -o -f server/pom.xml -DskipTests package`，再把 target jar 拷到 dist/。编译/覆盖 dist 前先停 8082（jar 被运行中的 java 锁住）。（2026-11-06，来源：同上）
+- **游客端所有业务页（含地图）都挂在「已登录」的 v-else 分支里**，未登录时 `$refs.mapBox` 不存在、`go('map')` 只改数据不渲染。自动化驱动地图必须先注入登录态（同 browser-check 的 visitVisitorSignedIn：先落同源页写 localStorage 再导航）。（2026-11-06，来源：同上）
