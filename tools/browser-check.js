@@ -1221,6 +1221,56 @@ function check(name, ok, detail) {
       await screenshot('visitor-31-spot-detail-map.png');
     }
 
+    /* ---- d2. 村内地图 → 点标记进详情 → 返回，地图必须重新渲染 ----
+     * 守的是 2026-11-06 用户报的「返回后地图空白」：go() 离开地图会 destroy
+     * （v-if 摘掉节点后 ResizeObserver 不能挂在尸体上），goBack 如果不对称地
+     * initMap，回到的 mapBox 就是 innerHTML=0 的空壳。#23 修过一次但只改了
+     * 静态源码、没同步进交付 jar，用户拿着旧包一直复现。这条断言防它再退化。 */
+    const mapBack = await v.evalJs(`(async () => {
+      const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
+      if (!vm) { return { skip: 'not mounted' }; }
+      vm.go('map');
+      await new Promise(r => setTimeout(r, 900));
+      const firstSvg = !!document.querySelector('.vmap-svg');
+      const firstPins = document.querySelectorAll('.vmap-pin').length;
+      const firstInst = !!vm.mapInstance;
+      const pin = document.querySelector('.vmap-pin');
+      if (!pin) { return { skip: 'no pin', firstSvg: firstSvg, firstPins: firstPins, firstInst: firstInst }; }
+      pin.click();
+      await new Promise(r => setTimeout(r, 1600));
+      const detailView = vm.view;
+      vm.goBack();
+      await new Promise(r => setTimeout(r, 1100));
+      const box = vm.$refs.mapBox;
+      return {
+        firstSvg: firstSvg, firstPins: firstPins, firstInst: firstInst, detailView: detailView,
+        view: vm.view,
+        hasInst: !!vm.mapInstance,
+        hasSvg: !!document.querySelector('.vmap-svg'),
+        pins: document.querySelectorAll('.vmap-pin').length,
+        toolbar: !!document.querySelector('.vmap-toolbar'),
+        htmlLen: box ? box.innerHTML.length : -1,
+      };
+    })()`);
+    if (mapBack && mapBack.skip) {
+      note('村内地图返回检查跳过：' + mapBack.skip);
+      check('地图→详情→返回后地图重新渲染', false, 'skip=' + mapBack.skip);
+    } else {
+      check('地图页首次进入已渲染（svg + 标记 + 实例）',
+        !!(mapBack.firstSvg && mapBack.firstPins > 0 && mapBack.firstInst),
+        'svg=' + mapBack.firstSvg + ' pins=' + mapBack.firstPins + ' instance=' + mapBack.firstInst);
+      check('点地图标记进入点位详情',
+        ['spotDetail', 'productDetail', 'activityDetail'].indexOf(mapBack.detailView) >= 0,
+        'view=' + mapBack.detailView);
+      check('详情返回后落在地图页', mapBack.view === 'map', 'view=' + mapBack.view);
+      check('返回后地图重新渲染（空白地图回归哨兵）',
+        !!(mapBack.hasSvg && mapBack.pins > 0 && mapBack.toolbar && mapBack.hasInst && mapBack.htmlLen > 200),
+        'view=' + mapBack.view + ' svg=' + mapBack.hasSvg + ' pins=' + mapBack.pins
+          + ' toolbar=' + mapBack.toolbar + ' instance=' + mapBack.hasInst
+          + ' htmlLen=' + mapBack.htmlLen);
+      await screenshot('visitor-35-map-back.png');
+    }
+
     /* ---- e. 三类需位置商品详情也显示地图 ---- */
     const prodMap = await v.evalJs(`(async () => {
       const vm = document.querySelector('#app') && document.querySelector('#app').__vue__;
